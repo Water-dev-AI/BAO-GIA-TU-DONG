@@ -21,73 +21,148 @@
   body {
     margin: 0;
     padding: 24px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-family: "Google Sans", "Roboto", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
+    font-size: 14px;
   }
-  .wrap { max-width: 1200px; margin: 0 auto; }
-  h1 { margin: 0 0 6px; font-size: 28px; }
-  h2 { margin: 0 0 12px; font-size: 18px; }
-  .sub { color: var(--muted); margin-bottom: 18px; line-height: 1.45; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 26px; font-weight: 600; }
+  h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+  .sub { color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
   .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
   .card {
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 16px;
-    box-shadow: 0 2px 10px rgba(16, 24, 40, .05);
+    box-shadow: 0 1px 4px rgba(16,24,40,.06);
   }
   textarea {
     width: 100%;
-    min-height: 92px;
+    min-height: 88px;
     resize: vertical;
     border: 1px solid #cfd5df;
-    border-radius: 12px;
-    padding: 12px;
-    font-size: 14px;
-    line-height: 1.45;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: "Roboto Mono", ui-monospace, monospace;
   }
   button {
     cursor: pointer;
     border: 0;
-    border-radius: 10px;
-    padding: 10px 13px;
-    margin: 8px 6px 0 0;
-    font-weight: 700;
+    border-radius: 8px;
+    padding: 9px 14px;
+    margin: 6px 5px 0 0;
+    font-weight: 600;
     background: var(--dark);
     color: white;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: inherit;
   }
-  button:hover { filter: brightness(.96); }
-  button.green { background: var(--green); }
-  button.red { background: var(--red); }
-  button.blue { background: var(--blue); }
-  button.amber { background: var(--amber); }
-  button.light { background: #eef2f7; color: #111827; }
-  .status { margin-top: 10px; font-weight: 700; color: var(--blue); }
-  table { width: 100%; border-collapse: collapse; background: white; }
-  th, td { border-bottom: 1px solid var(--line); padding: 10px; vertical-align: top; text-align: left; }
-  th { background: #f9fafb; font-size: 13px; color: #344054; }
-  .mono { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; }
-  input.qty { width: 76px; padding: 8px; font-size: 15px; border: 1px solid #cfd5df; border-radius: 10px; }
-  input.note { width: 100%; padding: 8px; font-size: 13px; border: 1px solid #cfd5df; border-radius: 10px; }
+  button:hover { filter: brightness(.93); }
+  button.green  { background: var(--green); }
+  button.red    { background: var(--red); }
+  button.blue   { background: var(--blue); }
+  button.amber  { background: var(--amber); }
+  button.light  { background: #eef2f7; color: #111827; }
+  button.danger { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+  .status { margin-top: 8px; font-weight: 600; color: var(--blue); font-size: 13px; }
+
+  /* ── Cart table ── */
+  .cart-wrap { overflow-x: auto; }
+  table.cart-table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; table-layout: fixed; }
+  table.cart-table th {
+    background: #f0f4f8;
+    font-size: 12px;
+    font-weight: 600;
+    color: #444d5a;
+    padding: 8px 10px;
+    border-bottom: 2px solid #d0d7e0;
+    text-align: left;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+  }
+  table.cart-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  table.cart-table tr:hover td { background: #f7fafc; }
+  table.cart-table td.td-no  { width: 48px;  color: var(--muted); font-size: 12px; text-align: center; }
+  table.cart-table td.td-pkg { min-width: 220px; }
+  table.cart-table td.td-qty { width: 88px; }
+  table.cart-table td.td-note { width: 180px; }
+  table.cart-table td.td-del  { width: 72px; text-align: center; }
+  .pkg-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
+
+  input.qty  { width: 72px;  padding: 6px 8px; font-size: 14px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; text-align: center; }
+  input.note { width: 100%;  padding: 6px 8px; font-size: 12px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; }
+
   pre {
     margin: 0;
-    background: #111827;
-    color: #fff;
+    background: #1e2736;
+    color: #e2e8f0;
     padding: 14px;
-    border-radius: 12px;
+    border-radius: 10px;
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.45;
-    min-height: 72px;
+    line-height: 1.55;
+    font-family: "Roboto Mono", ui-monospace, monospace;
+    font-size: 13px;
+    min-height: 64px;
   }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eef2f7; color: #344054; font-size: 12px; font-weight: 700; }
-  .row-actions button { padding: 7px 10px; margin-top: 0; }
-  .totals { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  @media (max-width: 850px) { .cols { grid-template-columns: 1fr; } body { padding: 14px; } }
+  .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; background: #eef2f7; color: #344054; font-size: 12px; font-weight: 600; }
+  .row-actions button { padding: 5px 10px; margin: 0; font-size: 12px; }
+  .totals { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+
+  /* ── Picker modal ── */
+  .picker-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .picker-overlay.open { display: flex; }
+  .picker-modal {
+    background: white; border-radius: 14px;
+    width: min(96vw, 980px); max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    overflow: hidden;
+  }
+  .picker-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .picker-header h3 { margin: 0; font-size: 16px; flex: 1; }
+  .picker-body { flex: 1; overflow-y: auto; }
+  .picker-footer {
+    padding: 12px 18px; border-top: 1px solid var(--line);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  table.picker-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.picker-table th {
+    background: #f0f4f8; padding: 8px 12px;
+    font-size: 12px; font-weight: 600; color: #444;
+    border-bottom: 2px solid #d0d7e0; text-align: left;
+    position: sticky; top: 0;
+  }
+  table.picker-table td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.picker-table tr.selected td { background: #ebf5ff; }
+  table.picker-table tr:hover td { background: #f5f9ff; cursor: pointer; }
+  table.picker-table td.col-cb { width: 36px; text-align: center; }
+  table.picker-table td.col-no { width: 46px; color: var(--muted); font-size: 12px; text-align: right; padding-right: 8px; }
+  table.picker-table td.col-name { min-width: 200px; }
+  table.picker-table td.col-type { width: 100px; }
+  table.picker-table td.col-days { width: 90px; }
+  table.picker-table td.col-price { width: 90px; font-weight: 600; color: var(--green); }
+  table.picker-table input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--blue); }
+  .picker-sel-count { font-size: 13px; color: var(--muted); flex: 1; }
+
+  @media (max-width: 850px) { .cols { grid-template-columns: 1fr; } body { padding: 12px; } }
 </style>
 </head>
 <body>
@@ -110,61 +185,60 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
       </div>
 
-      <div class="gs-box" style="margin-top:14px; border-top:1px solid var(--line); padding-top:14px;">
-        <div style="font-weight:700; margin-bottom:8px; font-size:14px;">📊 Import từ Google Sheet</div>
-        <div style="color:var(--muted); font-size:12px; margin-bottom:10px; line-height:1.5;">
-Sheet phải được <b>Publish to web</b> (File → Share → Publish to web → chọn tab → CSV → Publish). 
-          Sau đó dán link <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">/pub?output=csv</code> hoặc link <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">pubhtml</code> vào đây.
-        </div>
-        <input id="gsUrl" type="text"
-          style="width:100%; padding:10px 12px; border:1px solid #cfd5df; border-radius:10px; font-size:13px; margin-bottom:8px;"
-          placeholder="https://docs.google.com/spreadsheets/d/...  hoặc link CSV" />
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
-          <div style="font-size:13px; color:var(--muted);">Tab (GID):</div>
-          <input id="gsGid" type="text"
-            style="width:120px; padding:8px 10px; border:1px solid #cfd5df; border-radius:10px; font-size:13px;"
-            placeholder="0 (mặc định)" />
-          <button class="light" onclick="App.gsFetchSheetInfo()" style="margin:0;">🔍 Xem danh sách tab</button>
-        </div>
-
-        <div id="gsTabList" style="display:none; margin-bottom:8px; flex-wrap:wrap; gap:6px;"></div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:4px;">
-          <div style="font-size:13px; color:var(--muted);">Từ hàng:</div>
-          <input id="gsStartRow" type="number" value="1" min="1"
-            style="width:70px; padding:8px; border:1px solid #cfd5df; border-radius:10px; font-size:13px;" />
-          <div style="font-size:13px; color:var(--muted);">đến hàng:</div>
-          <input id="gsEndRow" type="number" value=""
-            style="width:70px; padding:8px; border:1px solid #cfd5df; border-radius:10px; font-size:13px;"
-            placeholder="hết" />
-        </div>
-
-        <div>
-          <button class="green" onclick="App.gsImport()" style="margin-top:10px;">⬇️ Import vào giỏ</button>
-          <button class="light" onclick="App.gsPreview()" style="margin-top:10px;">👁 Xem trước</button>
-        </div>
-        <div id="gsStatus" class="status" style="font-size:13px;"></div>
-        <pre id="gsPreviewBox" style="display:none; margin-top:10px; font-size:12px; max-height:180px; overflow-y:auto;"></pre>
-      </div>
-
       <div id="status" class="status"></div>
     </div>
 
     <div class="card">
-      <h2>2) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
-      <table>
-        <thead>
-          <tr>
-            <th style="width:46px">#</th>
-            <th>Gói</th>
-            <th style="width:90px">SL</th>
-            <th style="width:180px">Note riêng</th>
-            <th style="width:88px">Xoá</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
+      <h2>📋 Danh sách bảng giá</h2>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;">
+        Lưu sẵn link từng nước. Bấm <b>Import</b> để tự động tải vào giỏ theo data mới nhất.
+      </div>
+
+      <div id="sheetListWrap" style="display:grid;gap:8px;margin-bottom:12px;"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1;min-width:140px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tên nước / nhãn</div>
+          <input id="slName" type="text" placeholder="VD: Trung Quốc, Thái Lan..."
+            style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+        </div>
+        <div style="flex:2;min-width:200px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet</div>
+          <input id="slUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."
+            style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+        </div>
+        <div style="min-width:60px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">GID (tab)</div>
+          <input id="slGid" type="text" placeholder="0"
+            style="width:70px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+        </div>
+        <button class="blue" onclick="App.slAdd()" style="margin-top:0;white-space:nowrap;">➕ Thêm</button>
+      </div>
+      <div id="slStatus" class="status" style="font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h2 style="margin:0;">2) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
+        <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
+      </div>
+      <div class="cart-wrap">
+        <table class="cart-table">
+          <thead>
+            <tr>
+              <th style="width:52px;text-align:center;">#</th>
+              <th>Tên gói</th>
+              <th style="width:80px;text-align:center;">Loại</th>
+              <th style="width:90px;text-align:center;">Ngày</th>
+              <th style="width:95px;text-align:right;">Giá</th>
+              <th style="width:88px;text-align:center;">SL</th>
+              <th style="width:170px;">Note</th>
+              <th style="width:68px;text-align:center;">Xoá</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
       <div class="totals" id="quickTotals"></div>
     </div>
 
@@ -185,6 +259,41 @@ Sheet phải được <b>Publish to web</b> (File → Share → Publish to web �
         <h2>Notes phân bố giảm giá</h2>
         <pre id="notesOutput">Chưa có notes.</pre>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Picker modal -->
+<div class="picker-overlay" id="pickerOverlay" onclick="if(event.target===this)App.pickerClose()">
+  <div class="picker-modal">
+    <div class="picker-header">
+      <h3 id="pickerTitle">Chọn gói</h3>
+      <input id="pickerSearch" type="text" placeholder="🔍 Tìm kiếm..."
+        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:220px;"
+        oninput="App.pickerFilter()" />
+      <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
+      <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
+      <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div class="picker-body">
+      <table class="picker-table">
+        <thead>
+          <tr>
+            <th class="col-cb"></th>
+            <th class="col-no">#</th>
+            <th class="col-name">Tên gói</th>
+            <th class="col-type">Loại</th>
+            <th class="col-days">Ngày</th>
+            <th class="col-price">Giá</th>
+          </tr>
+        </thead>
+        <tbody id="pickerTbody"></tbody>
+      </table>
+    </div>
+    <div class="picker-footer">
+      <div class="picker-sel-count" id="pickerSelCount">Chưa chọn gói nào</div>
+      <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
+      <button class="light" onclick="App.pickerClose()">Huỷ</button>
     </div>
   </div>
 </div>
@@ -563,20 +672,64 @@ const App = (() => {
     }
   }
 
+  // Parse line thành các phần để hiển thị thẳng cột
+  function parseLineForDisplay(line) {
+    const priceRe = ComboLogic.priceRe;
+    const priceMatch = line.match(priceRe);
+    const price = priceMatch ? priceMatch[1].replace(/\s+/g,'') : "";
+    const beforePrice = line.replace(priceRe, "").trim();
+    const parts = beforePrice.split("\t").map(s => s.trim()).filter(Boolean);
+
+    let name = "", type = "", days = "";
+    if (parts.length >= 3) {
+      name = parts[0]; type = parts[1]; days = parts[2];
+    } else if (parts.length === 2) {
+      name = parts[0]; type = parts[1]; days = "";
+    } else {
+      name = parts[0] || beforePrice; type = ""; days = "";
+    }
+    // Nếu type trông như ngày (chứa "ngày" hoặc số ngày) → swap
+    const normType = (type||"").toLowerCase();
+    if (!days && (normType.includes("ngày") || /^\d+\s*(ngay|days?)$/i.test(normType))) {
+      days = type; type = "";
+    }
+    return { name, type, days, price };
+  }
+
   function render() {
     const tbody = $("tbody");
     tbody.innerHTML = "";
     cart.forEach((item, idx) => {
+      const rowNum = idx + 2; // bắt đầu từ 2 như google sheet
+      const p = parseLineForDisplay(item.line);
       const tr = document.createElement("tr");
 
       const tdNo = document.createElement("td");
-      tdNo.textContent = String(idx + 1);
+      tdNo.className = "td-no";
+      tdNo.textContent = rowNum;
 
-      const tdLine = document.createElement("td");
-      tdLine.className = "mono";
-      tdLine.textContent = item.line;
+      const tdName = document.createElement("td");
+      tdName.className = "td-pkg";
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "pkg-text";
+      nameDiv.textContent = p.name || item.line;
+      tdName.appendChild(nameDiv);
+
+      const tdType = document.createElement("td");
+      tdType.style.cssText = "text-align:center;font-size:12px;color:#444;";
+      tdType.textContent = p.type;
+
+      const tdDays = document.createElement("td");
+      tdDays.style.cssText = "text-align:center;font-size:12px;color:#444;white-space:nowrap;";
+      tdDays.textContent = p.days;
+
+      const tdPrice = document.createElement("td");
+      tdPrice.style.cssText = "text-align:right;font-weight:600;color:var(--green);white-space:nowrap;";
+      tdPrice.textContent = p.price;
 
       const tdQty = document.createElement("td");
+      tdQty.className = "td-qty";
+      tdQty.style.textAlign = "center";
       const qty = document.createElement("input");
       qty.className = "qty";
       qty.type = "number";
@@ -586,6 +739,7 @@ const App = (() => {
       tdQty.appendChild(qty);
 
       const tdNote = document.createElement("td");
+      tdNote.className = "td-note";
       const note = document.createElement("input");
       note.className = "note";
       note.placeholder = "tuỳ chọn";
@@ -594,14 +748,15 @@ const App = (() => {
       tdNote.appendChild(note);
 
       const tdDel = document.createElement("td");
-      tdDel.className = "row-actions";
+      tdDel.className = "td-del row-actions";
       const del = document.createElement("button");
       del.className = "red";
-      del.textContent = "Xoá";
+      del.textContent = "✕";
+      del.title = "Xoá dòng này";
       del.onclick = () => { cart.splice(idx, 1); saveCart(); render(); };
       tdDel.appendChild(del);
 
-      tr.append(tdNo, tdLine, tdQty, tdNote, tdDel);
+      tr.append(tdNo, tdName, tdType, tdDays, tdPrice, tdQty, tdNote, tdDel);
       tbody.appendChild(tr);
     });
     $("cartCount").textContent = cart.length + " dòng";
@@ -684,6 +839,172 @@ const App = (() => {
     $("notesOutput").textContent = "Chưa có notes.";
     showStatus("✅ Đã xoá giỏ.");
   }
+
+  /* ===== SHEET LIST (danh sách bảng giá) ===== */
+  const SL_KEY = "combo_bill_sheet_list_v1";
+
+  function slLoad() {
+    try { return JSON.parse(localStorage.getItem(SL_KEY) || "[]"); } catch { return []; }
+  }
+  function slSave(list) { localStorage.setItem(SL_KEY, JSON.stringify(list)); }
+
+  function slRender() {
+    const list = slLoad();
+    const wrap = document.getElementById("sheetListWrap");
+    if (!list.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;">Chưa có sheet nào. Thêm bên dưới.</div>';
+      return;
+    }
+    wrap.innerHTML = list.map((item, idx) => `
+      <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:100px;">
+          <div style="font-weight:700;font-size:14px;">${item.name}</div>
+          <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px;">${item.url}</div>
+        </div>
+        <button class="green" style="margin:0;padding:8px 14px;" onclick="App.slImport(${idx})">⬇️ Import</button>
+        <button class="light" style="margin:0;padding:8px 14px;" onclick="App.slPreview(${idx})">👁 Xem</button>
+        <button class="red" style="margin:0;padding:8px 10px;" onclick="App.slDelete(${idx})">✕</button>
+      </div>
+    `).join("");
+  }
+
+  function slAdd() {
+    const name = document.getElementById("slName").value.trim();
+    const url  = document.getElementById("slUrl").value.trim();
+    const gid  = document.getElementById("slGid").value.trim() || "0";
+    if (!name) { document.getElementById("slStatus").textContent = "⚠️ Cần nhập tên nước."; return; }
+    if (!url)  { document.getElementById("slStatus").textContent = "⚠️ Cần nhập link sheet."; return; }
+    const list = slLoad();
+    list.push({ name, url, gid });
+    slSave(list);
+    slRender();
+    document.getElementById("slName").value = "";
+    document.getElementById("slUrl").value = "";
+    document.getElementById("slGid").value = "";
+    document.getElementById("slStatus").textContent = `✅ Đã thêm "${name}".`;
+  }
+
+  function slDelete(idx) {
+    const list = slLoad();
+    const name = list[idx]?.name || "";
+    if (!confirm(`Xoá "${name}" khỏi danh sách?`)) return;
+    list.splice(idx, 1);
+    slSave(list);
+    slRender();
+    document.getElementById("slStatus").textContent = `✅ Đã xoá "${name}".`;
+  }
+
+  /* Picker state */
+  let pickerItems = [];
+  let pickerChecked = new Set();
+  let pickerSearchKw = "";
+
+  async function slOpen(idx) {
+    const list = slLoad();
+    const item = list[idx];
+    if (!item) return;
+    document.getElementById("slStatus").textContent = "Dang tai " + item.name + "...";
+    // Set values directly for gsGetLines
+    const _gsUrlEl = document.getElementById("gsUrl");
+    const _gsGidEl = document.getElementById("gsGid");
+    const _gsStartEl = document.getElementById("gsStartRow");
+    const _gsEndEl = document.getElementById("gsEndRow");
+    if (_gsUrlEl) _gsUrlEl.value = item.url;
+    if (_gsGidEl) _gsGidEl.value = item.gid || "0";
+    if (_gsStartEl) _gsStartEl.value = "1";
+    if (_gsEndEl) _gsEndEl.value = "";
+    // If elements don't exist (manual import section removed), fetch directly
+    const _csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+    const lines = await (async () => {
+      if (!_csvUrl) { return null; }
+      try {
+        const csvText = await gsFetch(_csvUrl);
+        if (!csvText) return null;
+        return gsCsvToLines(csvText, "1", "");
+      } catch(e) {
+        document.getElementById("slStatus").textContent = "Loi: " + e.message;
+        return null;
+      }
+    })();
+    if (!lines) { document.getElementById("slStatus").textContent = "Khong tai duoc. Kiem tra link/Apps Script."; return; }
+    const { good } = ComboLogic.buildCartFromText(lines.join("\n"));
+    if (!good.length) { document.getElementById("slStatus").textContent = "Tai duoc nhung khong parse duoc goi nao."; return; }
+    pickerItems = good.map(g => ({ line: g.line, qty: g.qty, parsed: parseLineForDisplay(g.line) }));
+    pickerChecked = new Set();
+    pickerSearchKw = "";
+    document.getElementById("pickerSearch").value = "";
+    document.getElementById("pickerTitle").textContent = "Chon goi - " + item.name + " (" + pickerItems.length + " goi)";
+    document.getElementById("slStatus").textContent = "Da tai " + pickerItems.length + " goi tu [" + item.name + "]. Tick chon roi bam Them vao gio.";
+    pickerRender();
+    document.getElementById("pickerOverlay").classList.add("open");
+  }
+
+  function pickerRender() {
+    const tbody = document.getElementById("pickerTbody");
+    const kw = pickerSearchKw.toLowerCase();
+    tbody.innerHTML = "";
+    let shown = 0;
+    pickerItems.forEach((item, idx) => {
+      const p = item.parsed;
+      const text = (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase();
+      if (kw && !text.includes(kw)) return;
+      shown++;
+      const checked = pickerChecked.has(idx);
+      const tr = document.createElement("tr");
+      if (checked) tr.classList.add("selected");
+      tr.onclick = (e) => { if (e.target.type !== "checkbox") pickerToggle(idx, tr); };
+      const tdCb = document.createElement("td"); tdCb.className = "col-cb";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked;
+      cb.onchange = () => pickerToggle(idx, tr);
+      tdCb.appendChild(cb); tr.appendChild(tdCb);
+      const tdNo = document.createElement("td"); tdNo.className = "col-no"; tdNo.textContent = idx + 2; tr.appendChild(tdNo);
+      const tdName = document.createElement("td"); tdName.className = "col-name"; tdName.textContent = p.name || item.line; tr.appendChild(tdName);
+      const tdType = document.createElement("td"); tdType.className = "col-type"; tdType.textContent = p.type; tr.appendChild(tdType);
+      const tdDays = document.createElement("td"); tdDays.className = "col-days"; tdDays.textContent = p.days; tr.appendChild(tdDays);
+      const tdPrice = document.createElement("td"); tdPrice.className = "col-price"; tdPrice.textContent = p.price; tr.appendChild(tdPrice);
+      tbody.appendChild(tr);
+    });
+    const cnt = pickerChecked.size;
+    document.getElementById("pickerSelCount").textContent = cnt ? ("Da chon " + cnt + " goi") : ("Chua chon (" + shown + " goi hien thi)");
+  }
+
+  function pickerToggle(idx, tr) {
+    if (pickerChecked.has(idx)) { pickerChecked.delete(idx); tr.classList.remove("selected"); }
+    else { pickerChecked.add(idx); tr.classList.add("selected"); }
+    const cb = tr.querySelector("input[type=checkbox]");
+    if (cb) cb.checked = pickerChecked.has(idx);
+    document.getElementById("pickerSelCount").textContent = pickerChecked.size ? ("Da chon " + pickerChecked.size + " goi") : "Chua chon goi nao";
+  }
+
+  function pickerFilter() {
+    pickerSearchKw = document.getElementById("pickerSearch").value;
+    pickerRender();
+  }
+
+  function pickerSelectAll() {
+    const kw = pickerSearchKw.toLowerCase();
+    pickerItems.forEach((item, idx) => {
+      const p = item.parsed;
+      if (!kw || (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase().includes(kw)) pickerChecked.add(idx);
+    });
+    pickerRender();
+  }
+
+  function pickerDeselectAll() { pickerChecked.clear(); pickerRender(); }
+  function pickerClose() { document.getElementById("pickerOverlay").classList.remove("open"); }
+
+  function pickerConfirm() {
+    if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
+    const selected = [...pickerChecked].sort((a,b)=>a-b).map(idx => ({ line: pickerItems[idx].line, qty: pickerItems[idx].qty || 1 }));
+    const added = addItems(selected);
+    document.getElementById("slStatus").textContent = "Da them " + added + " goi vao gio!";
+    pickerClose();
+  }
+
+  async function slImport(idx)  { await slOpen(idx); }
+  async function slPreview(idx) { await slOpen(idx); }
+
+  slRender();
 
   /* ===== GOOGLE SHEET IMPORT ===== */
 
@@ -1004,6 +1325,15 @@ const App = (() => {
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
+    slAdd,
+    slDelete,
+    slImport,
+    slPreview,
+    pickerFilter,
+    pickerSelectAll,
+    pickerDeselectAll,
+    pickerClose,
+    pickerConfirm,
   };
 })();
 </script>
