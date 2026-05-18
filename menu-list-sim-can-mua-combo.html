@@ -93,12 +93,13 @@
   table.cart-table tr:hover td { background: #f7fafc; }
   table.cart-table td.td-no  { width: 48px;  color: var(--muted); font-size: 12px; text-align: center; }
   table.cart-table td.td-pkg { min-width: 220px; }
-  table.cart-table td.td-qty { width: 88px; }
+  table.cart-table td.td-qty { width: 108px; }
   table.cart-table td.td-note { width: 180px; }
   table.cart-table td.td-del  { width: 72px; text-align: center; }
   .pkg-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
 
-  input.qty  { width: 72px;  padding: 6px 8px; font-size: 14px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; text-align: center; }
+  input.qty  { width: 92px;  padding: 6px 8px; font-size: 13px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; text-align: center; }
+  input.qty.invalid { border-color: var(--red); background: #fef2f2; }
   input.note { width: 100%;  padding: 6px 8px; font-size: 12px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; }
 
   pre {
@@ -169,7 +170,10 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div class="sub">
-    Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.
+    Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
+    <b>Cú pháp SL:</b> <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">2</code> = 2 SIM,
+    <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">N3</code> = nạp gói 3 SIM (chỉ SIM VẬT LÝ, -20k/SIM),
+    <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">2+N3</code> = 2 SIM mới + 3 nạp gói.
   </div>
 
   <div class="grid">
@@ -191,37 +195,27 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <h2>📋 Danh sách bảng giá</h2>
       <div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;">
-        Lưu sẵn link từng nước. Bấm <b>Import</b> để tự động tải vào giỏ theo data mới nhất.
+        Bấm <b>Import</b> để mở picker chọn gói. Tên từng bộ giá trong sheet được auto-detect từ hàng 1.
+        <br>📌 = Preset từ <code style="background:#eef2f7;padding:1px 4px;border-radius:3px;">sheets.json</code> (mặc định khi load).
       </div>
 
       <div id="sheetListWrap" style="display:grid;gap:8px;margin-bottom:12px;"></div>
 
-      <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px;align-items:end;flex-wrap:wrap;">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;align-items:end;flex-wrap:wrap;">
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tên nước / nhãn</div>
           <input id="slName" type="text" placeholder="VD: Trung Quốc..."
             style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
         </div>
         <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet (publish CSV)</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet (đã publish web CSV)</div>
           <input id="slUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."
             style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
         </div>
-        <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">GID</div>
-          <input id="slGid" type="text" placeholder="0"
-            style="width:72px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
-        </div>
       </div>
-      <div style="margin-top:8px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
-          Tên từng bộ bảng giá <span style="font-weight:400;">(ngăn cách bằng <code style="background:#eef2f7;padding:1px 4px;border-radius:3px;">|</code> theo thứ tự từ trái sang phải — để trống nếu chỉ có 1 bộ)</span>
-        </div>
-        <input id="slTabNames" type="text" placeholder="VD: China Mobile | China Unicom | APAC Multi-region"
-          style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
-      </div>
-      <div style="margin-top:8px;">
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="blue" onclick="App.slAdd()" style="margin:0;white-space:nowrap;">➕ Thêm vào danh sách</button>
+        <button class="light" onclick="App.slRestorePresets()" style="margin:0;white-space:nowrap;">↺ Khôi phục preset đã xoá</button>
       </div>
       <div id="slStatus" class="status" style="font-size:13px;"></div>
     </div>
@@ -240,7 +234,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
               <th style="width:80px;text-align:center;">Loại</th>
               <th style="width:90px;text-align:center;">Ngày</th>
               <th style="width:95px;text-align:right;">Giá</th>
-              <th style="width:88px;text-align:center;">SL</th>
+              <th style="width:108px;text-align:center;">SL <span style="font-weight:400;color:var(--muted);font-size:11px;">(N=nạp)</span></th>
               <th style="width:170px;">Note</th>
               <th style="width:68px;text-align:center;">Xoá</th>
             </tr>
@@ -284,7 +278,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div id="pickerTabBar" style="padding:12px 18px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;"></div>
+    <div id="pickerTabBar" style="padding:12px 18px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:flex-start;max-height:280px;overflow-y:auto;"></div>
     <div class="picker-body">
       <table class="picker-table">
         <thead>
@@ -311,7 +305,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 <script>
 /* COMBO_LOGIC_START */
 const ComboLogic = (() => {
-  const priceRe = /(\d[\d.,]*\s*k)(?:\s*\*\s*(\d+))?\s*$/i;
+  // Qty syntax sau dấu *: số thường (2), hoặc N3 (nạp), hoặc kết hợp 2+N3 / N2+3
+  const priceRe = /(\d[\d.,]*\s*k)(?:\s*\*\s*((?:N?\d+)(?:\+N?\d+)*))?\s*$/i;
   const discounts = [
     [4000, 200, "Trên 4tr"],
     [3000, 150, "Trên 3tr"],
@@ -319,6 +314,7 @@ const ComboLogic = (() => {
     [1000, 50, "Trên 1tr"],
     [500, 25, "Trên 500k"],
   ];
+  const RECHARGE_DISCOUNT_K = 20; // nạp gói SIM VẬT LÝ: giá -20k/SIM
 
   function stripAccents(s) {
     return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -363,16 +359,45 @@ const ComboLogic = (() => {
     const m = raw.match(priceRe);
     if (!m) return null;
     const price = cleanPrice(m[1]);
-    const qty = m[2] ? parseInt(m[2], 10) : 1;
+    const qty = m[2] ? m[2].toUpperCase().replace(/\s+/g, "") : "1";
     const base = raw.replace(priceRe, price).trim();
-    return { line: base, qty: Number.isFinite(qty) && qty > 0 ? qty : 1 };
+    return { line: base, qty };
   }
 
-  function getQty(v) {
-    if (v === "" || v === null || v === undefined) return 1;
-    const n = parseInt(v, 10);
-    if (!Number.isFinite(n) || n < 0) return 1;
-    return n;
+  // Parse số lượng dạng: "2", "N3", "2+N3", "N2+3", "" (=1)
+  // Trả { regular, recharge, raw, valid }
+  function parseQtyExpression(v) {
+    if (v === "" || v === null || v === undefined) {
+      return { regular: 1, recharge: 0, raw: "", valid: true };
+    }
+    if (typeof v === "number") {
+      if (!Number.isFinite(v) || v < 0) return { regular: 0, recharge: 0, raw: String(v), valid: false };
+      return { regular: Math.floor(v), recharge: 0, raw: String(v), valid: true };
+    }
+    const raw = String(v).trim();
+    if (!raw) return { regular: 0, recharge: 0, raw: "", valid: true };
+    const s = raw.toUpperCase().replace(/\s+/g, "");
+    if (s === "0") return { regular: 0, recharge: 0, raw, valid: true };
+
+    let regular = 0, recharge = 0;
+    const parts = s.split("+");
+    for (const p of parts) {
+      if (!p) return { regular: 0, recharge: 0, raw, valid: false };
+      const m = p.match(/^(N?)(\d+)$/);
+      if (!m) return { regular: 0, recharge: 0, raw, valid: false };
+      const n = parseInt(m[2], 10);
+      if (!Number.isFinite(n) || n < 0) return { regular: 0, recharge: 0, raw, valid: false };
+      if (m[1] === "N") recharge += n;
+      else regular += n;
+    }
+    return { regular, recharge, raw, valid: true };
+  }
+
+  // Build canonical qty string từ {regular, recharge}
+  function qtyToString(regular, recharge) {
+    if (regular > 0 && recharge > 0) return `${regular}+N${recharge}`;
+    if (recharge > 0) return `N${recharge}`;
+    return String(regular);
   }
 
   function discountFor(totalK) {
@@ -460,12 +485,15 @@ const ComboLogic = (() => {
   function buildLinesOnly(cart) {
     return (cart || [])
       .map(item => {
-        const qty = getQty(item.qty);
-        if (qty === 0) return null;
+        const qtyParsed = parseQtyExpression(item.qty);
+        if (!qtyParsed.valid) return null;
+        const { regular, recharge } = qtyParsed;
+        if (regular === 0 && recharge === 0) return null;
         const line = String(item.line || "").trim();
         if (!priceRe.test(line)) return null;
-        if (qty === 1) return line.replace(priceRe, (_, p) => cleanPrice(p));
-        return line.replace(priceRe, (_, p) => cleanPrice(p) + "*" + qty);
+        const qtyStr = qtyToString(regular, recharge);
+        if (qtyStr === "1") return line.replace(priceRe, (_, p) => cleanPrice(p));
+        return line.replace(priceRe, (_, p) => cleanPrice(p) + "*" + qtyStr);
       })
       .filter(Boolean)
       .join("\n");
@@ -494,6 +522,32 @@ const ComboLogic = (() => {
     return shares;
   }
 
+  // Build dòng NẠP GÓI cho bill output: thay loại → "NẠP GÓI", giá → "(GIÁ-20k)*N"
+  function buildRechargeLine(line, unitK, qty) {
+    const priceText = qty > 1
+      ? `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)*${qty}`
+      : `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)`;
+    // Thay giá ở cuối bằng expression mới
+    let newLine = String(line).replace(priceRe, priceText);
+    // Thay cột Loại (tab-separated: index 1) → "NẠP GÓI"
+    if (newLine.includes("\t")) {
+      const parts = newLine.split("\t");
+      if (parts.length >= 2) {
+        const typeNorm = norm(parts[1].trim());
+        if (typeNorm === "sim" || typeNorm.includes("sim vat ly") || typeNorm.includes("esim")) {
+          parts[1] = "NẠP GÓI";
+        }
+      }
+      newLine = parts.join("\t");
+    } else {
+      // Inline format: tìm và thay từ khoá loại
+      newLine = newLine
+        .replace(/SIM\s+V[ẬA]T\s+L[YÝ]/gi, "NẠP GÓI")
+        .replace(/\bESIM\b/gi, "NẠP GÓI");
+    }
+    return newLine;
+  }
+
   function calc(cart) {
     const outLines = [];
     const parsedItems = [];
@@ -505,9 +559,17 @@ const ComboLogic = (() => {
 
     (cart || []).forEach((item, index) => {
       const line = String(item.line || "").trim();
-      const qty = getQty(item.qty);
+      const qtyParsed = parseQtyExpression(item.qty);
       const rowNote = String(item.note || "").trim();
-      if (!line || qty === 0) return;
+      if (!line) return;
+
+      if (!qtyParsed.valid) {
+        errors.push(`Dòng ${index + 1}: SL không hợp lệ "${qtyParsed.raw}". Cú pháp: 2, N3, 2+N3, N2+3.`);
+        return;
+      }
+
+      let { regular, recharge } = qtyParsed;
+      if (regular === 0 && recharge === 0) return;
 
       const m = line.match(priceRe);
       if (!m) {
@@ -516,34 +578,64 @@ const ComboLogic = (() => {
       }
 
       const unitK = parseK(m[1]);
-      const isRecharge = isRechargeLine(line);
+      const isLegacyRechargeName = isRechargeLine(line);
       const isPhysical = isPhysicalLine(line);
       const isEsim = isEsimLine(line);
-      const effectiveUnitK = isRecharge ? Math.max(unitK - 20, 0) : unitK;
-      const amountK = effectiveUnitK * qty;
 
-      totalK += amountK;
-      if (isRecharge) rechargeQty += qty;
-
-      if (!isRecharge) {
-        if (isEsim || isPhysical) totalQtyForShip += qty;
-        if (isPhysical) regularPhysicalQty += qty;
+      // Tương thích ngược: nếu tên gói có chữ "nạp" và user nhập số thường (không có N)
+      // → coi toàn bộ là nạp gói (giữ hành vi cũ)
+      if (isLegacyRechargeName && recharge === 0 && regular > 0) {
+        recharge = regular;
+        regular = 0;
       }
 
-      let newLine = replaceFinalPrice(line, effectiveUnitK, qty);
-      if (isRecharge) newLine += "  (nạp -20k/SIM)";
-      if (rowNote) newLine += "  [" + rowNote + "]";
-      outLines.push(newLine);
+      // Cảnh báo: N (nạp gói) chỉ nên áp dụng cho SIM VẬT LÝ
+      if (recharge > 0 && !isPhysical && !isLegacyRechargeName) {
+        errors.push(`Dòng ${index + 1}: Cú pháp N (nạp gói) chỉ áp dụng cho SIM VẬT LÝ.`);
+      }
+
+      const rechargeUnitK = Math.max(unitK - RECHARGE_DISCOUNT_K, 0);
+      const regularAmount = regular * unitK;
+      const rechargeAmount = recharge * rechargeUnitK;
+
+      totalK += regularAmount + rechargeAmount;
+      rechargeQty += recharge;
+
+      // Ship: chỉ tính phần regular (nạp gói không phát sinh ship)
+      if (isEsim || isPhysical) totalQtyForShip += regular;
+      if (isPhysical) regularPhysicalQty += regular;
 
       const parts = splitPackageParts(line);
-      parsedItems.push({
-        packageName: parts.packageName,
-        productType: parts.productType,
-        qty,
-        amountK,
-        isRecharge,
-        note: rowNote,
-      });
+
+      // Dòng SIM thường
+      if (regular > 0) {
+        let regularLine = replaceFinalPrice(line, unitK, regular);
+        if (rowNote) regularLine += "  [" + rowNote + "]";
+        outLines.push(regularLine);
+        parsedItems.push({
+          packageName: parts.packageName,
+          productType: parts.productType,
+          qty: regular,
+          amountK: regularAmount,
+          isRecharge: false,
+          note: rowNote,
+        });
+      }
+
+      // Dòng NẠP GÓI
+      if (recharge > 0) {
+        let rechargeLine = buildRechargeLine(line, unitK, recharge);
+        if (rowNote) rechargeLine += "  [" + rowNote + "]";
+        outLines.push(rechargeLine);
+        parsedItems.push({
+          packageName: parts.packageName,
+          productType: parts.productType,
+          qty: recharge,
+          amountK: rechargeAmount,
+          isRecharge: true,
+          note: rowNote,
+        });
+      }
     });
 
     if (!parsedItems.length) {
@@ -618,6 +710,8 @@ const ComboLogic = (() => {
     fmtK,
     shouldSkipLine,
     normalizeLine,
+    parseQtyExpression,
+    qtyToString,
     buildCartFromText,
     buildLinesOnly,
     calc,
@@ -645,8 +739,16 @@ const App = (() => {
     let added = 0;
     items.forEach(item => {
       const found = cart.find(x => x.line === item.line);
-      if (found) found.qty = (parseInt(found.qty, 10) || 1) + (item.qty || 1);
-      else cart.push({ line: item.line, qty: item.qty || 1, note: "" });
+      if (found) {
+        // Merge regular + recharge của cả 2 bên để không mất N syntax
+        const a = ComboLogic.parseQtyExpression(found.qty);
+        const b = ComboLogic.parseQtyExpression(item.qty);
+        const reg = (a.valid ? a.regular : 0) + (b.valid ? b.regular : 0);
+        const rec = (a.valid ? a.recharge : 0) + (b.valid ? b.recharge : 0);
+        found.qty = ComboLogic.qtyToString(reg, rec);
+      } else {
+        cart.push({ line: item.line, qty: item.qty || "1", note: "" });
+      }
       added += 1;
     });
     saveCart();
@@ -742,10 +844,16 @@ const App = (() => {
       tdQty.style.textAlign = "center";
       const qty = document.createElement("input");
       qty.className = "qty";
-      qty.type = "number";
-      qty.min = "0";
+      qty.type = "text";
       qty.value = item.qty ?? 1;
-      qty.oninput = () => { cart[idx].qty = qty.value; saveCart(); updateQuickTotals(); };
+      qty.placeholder = "1";
+      qty.title = "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
+      const validateQty = () => {
+        const parsed = ComboLogic.parseQtyExpression(qty.value);
+        qty.classList.toggle("invalid", !parsed.valid);
+      };
+      qty.oninput = () => { cart[idx].qty = qty.value; saveCart(); validateQty(); updateQuickTotals(); };
+      validateQty();
       tdQty.appendChild(qty);
 
       const tdNote = document.createElement("td");
@@ -852,58 +960,140 @@ const App = (() => {
 
   /* ===== SHEET LIST (danh sách bảng giá) ===== */
   const SL_KEY = "combo_bill_sheet_list_v1";
+  const PRESET_BLACKLIST_KEY = "combo_bill_preset_blacklist_v1";
+
+  // In-memory presets loaded từ sheets.json
+  let presetSheets = [];
 
   function slLoad() {
     try { return JSON.parse(localStorage.getItem(SL_KEY) || "[]"); } catch { return []; }
   }
   function slSave(list) { localStorage.setItem(SL_KEY, JSON.stringify(list)); }
 
+  function loadPresetBlacklist() {
+    try { return new Set(JSON.parse(localStorage.getItem(PRESET_BLACKLIST_KEY) || "[]")); }
+    catch { return new Set(); }
+  }
+  function savePresetBlacklist(set) {
+    localStorage.setItem(PRESET_BLACKLIST_KEY, JSON.stringify([...set]));
+  }
+
+  function slugify(s) {
+    return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+
+  // Load preset sheets from sheets.json next to HTML file.
+  // Fails silently if file missing (vd: chạy file:// hoặc chưa tạo file)
+  async function loadSheetPresets() {
+    try {
+      const res = await fetch("./sheets.json", { cache: "no-cache" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+      return data
+        .filter(x => x && x.name)
+        .map(x => ({
+          name: String(x.name),
+          url: String(x.url || ""),
+          gid: "0",
+          tabNames: "",
+          isPreset: true,
+          presetId: x.id || slugify(x.name),
+        }));
+    } catch (e) {
+      console.warn("Không load được sheets.json:", e);
+      return [];
+    }
+  }
+
+  // Trả về list đã merge preset + local, đã filter blacklist, đã sort alphabet.
+  function slLoadAll() {
+    const blacklist = loadPresetBlacklist();
+    const presets = presetSheets
+      .filter(p => !blacklist.has(p.presetId))
+      .map(p => ({ ...p }));
+    const local = slLoad().map(l => ({ ...l, isPreset: false }));
+    const all = [...presets, ...local];
+    all.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+    return all;
+  }
+
   function slRender() {
-    const list = slLoad();
+    const list = slLoadAll();
     const wrap = document.getElementById("sheetListWrap");
     if (!list.length) {
-      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;">Chưa có sheet nào. Thêm bên dưới.</div>';
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;">Chưa có sheet nào. Thêm bên dưới hoặc tạo file <code>sheets.json</code> cùng folder.</div>';
       return;
     }
-    wrap.innerHTML = list.map((item, idx) => `
-      <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:100px;">
-          <div style="font-weight:700;font-size:14px;">${item.name}</div>
-          <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px;">${item.url}</div>
+    wrap.innerHTML = list.map((item, idx) => {
+      const badge = item.isPreset
+        ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;">📌 PRESET</span>'
+        : '';
+      const urlDisplay = item.url
+        ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px;">${item.url}</div>`
+        : '<div style="font-size:11px;color:var(--red);font-style:italic;">⚠️ Chưa có URL — sửa <code>sheets.json</code> để bổ sung</div>';
+      const importBtn = item.url
+        ? `<button class="green" style="margin:0;padding:8px 14px;" onclick="App.slImport(${idx})">⬇️ Import</button>`
+        : '<button class="light" style="margin:0;padding:8px 14px;opacity:.5;cursor:not-allowed;" disabled>⬇️ Import</button>';
+      return `
+        <div style="display:flex;align-items:center;gap:8px;background:${item.isPreset ? '#f0f7ff' : '#f9fafb'};border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-weight:700;font-size:14px;">${item.name}${badge}</div>
+            ${urlDisplay}
+          </div>
+          ${importBtn}
+          <button class="red" style="margin:0;padding:8px 10px;" onclick="App.slDelete(${idx})" title="Xoá khỏi danh sách">✕</button>
         </div>
-        <button class="green" style="margin:0;padding:8px 14px;" onclick="App.slImport(${idx})">⬇️ Import</button>
-        <button class="light" style="margin:0;padding:8px 14px;" onclick="App.slPreview(${idx})">👁 Xem</button>
-        <button class="red" style="margin:0;padding:8px 10px;" onclick="App.slDelete(${idx})">✕</button>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   }
 
   function slAdd() {
     const name = document.getElementById("slName").value.trim();
     const url  = document.getElementById("slUrl").value.trim();
-    const gid  = document.getElementById("slGid").value.trim() || "0";
-    const tabNames = document.getElementById("slTabNames").value.trim();
-    if (!name) { document.getElementById("slStatus").textContent = "Can nhap ten nuoc."; return; }
-    if (!url)  { document.getElementById("slStatus").textContent = "Can nhap link sheet."; return; }
+    if (!name) { document.getElementById("slStatus").textContent = "⚠️ Cần nhập tên."; return; }
+    if (!url)  { document.getElementById("slStatus").textContent = "⚠️ Cần nhập link sheet."; return; }
     const list = slLoad();
-    list.push({ name, url, gid, tabNames });
+    list.push({ name, url, gid: "0", tabNames: "" });
     slSave(list);
     slRender();
     document.getElementById("slName").value = "";
     document.getElementById("slUrl").value = "";
-    document.getElementById("slGid").value = "";
-    document.getElementById("slTabNames").value = "";
-    document.getElementById("slStatus").textContent = "Da them \"" + name + "\"";
+    document.getElementById("slStatus").textContent = `✅ Đã thêm "${name}".`;
   }
 
   function slDelete(idx) {
-    const list = slLoad();
-    const name = list[idx]?.name || "";
-    if (!confirm(`Xoá "${name}" khỏi danh sách?`)) return;
-    list.splice(idx, 1);
-    slSave(list);
+    const all = slLoadAll();
+    const item = all[idx];
+    if (!item) return;
+    const label = item.isPreset ? `preset "${item.name}"` : `"${item.name}"`;
+    if (!confirm(`Xoá ${label} khỏi danh sách?\n${item.isPreset ? '(Có thể khôi phục bằng nút "Khôi phục preset" bên dưới)' : ''}`)) return;
+    if (item.isPreset) {
+      const bl = loadPresetBlacklist();
+      bl.add(item.presetId);
+      savePresetBlacklist(bl);
+    } else {
+      // Tìm trong local theo name+url (do thứ tự đã bị sort)
+      const local = slLoad();
+      const li = local.findIndex(l => l.name === item.name && l.url === item.url);
+      if (li >= 0) { local.splice(li, 1); slSave(local); }
+    }
     slRender();
-    document.getElementById("slStatus").textContent = `✅ Đã xoá "${name}".`;
+    document.getElementById("slStatus").textContent = `✅ Đã xoá ${label}.`;
+  }
+
+  function slRestorePresets() {
+    const bl = loadPresetBlacklist();
+    if (!bl.size) {
+      document.getElementById("slStatus").textContent = "Không có preset nào bị xoá.";
+      return;
+    }
+    if (!confirm(`Khôi phục ${bl.size} preset đã xoá?`)) return;
+    bl.clear();
+    savePresetBlacklist(bl);
+    slRender();
+    document.getElementById("slStatus").textContent = "✅ Đã khôi phục preset đã xoá.";
   }
 
   /* Picker state */
@@ -915,10 +1105,14 @@ const App = (() => {
   let pickerActiveTab = 0;
 
   async function slOpen(idx) {
-    const list = slLoad();
+    const list = slLoadAll();
     const item = list[idx];
     if (!item) return;
-    document.getElementById("slStatus").textContent = "Dang tai " + item.name + "...";
+    if (!item.url) {
+      document.getElementById("slStatus").textContent = "⚠️ Sheet này chưa có URL.";
+      return;
+    }
+    document.getElementById("slStatus").textContent = "Đang tải " + item.name + "...";
 
     const _csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
     if (!_csvUrl) { document.getElementById("slStatus").textContent = "Link khong hop le."; return; }
@@ -968,14 +1162,20 @@ const App = (() => {
     const tabBar = document.getElementById("pickerTabBar");
     tabBar.innerHTML = pickerTables.map((t, i) => {
       const isActive = i === pickerActiveTab;
-      const nameHtml = t.name.replace(/\n/g, "<br>");
+      // escape HTML rồi convert \n → <br> để render đúng text nhiều dòng từ hàng 1 sheet
+      const safe = String(t.name)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
       return '<button onclick="App.pickerSwitchTab(' + i + ')" style="' +
-        'padding:10px 16px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;' +
-        'line-height:1.45;text-align:left;white-space:normal;max-width:220px;min-width:120px;' +
+        'padding:12px 18px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;' +
+        'line-height:1.5;text-align:left;white-space:normal;word-break:break-word;' +
+        'max-width:420px;min-width:220px;flex:0 1 auto;' +
         (isActive
           ? 'background:var(--blue);color:white;box-shadow:0 2px 8px rgba(23,92,211,.25);'
           : 'background:#eef2f7;color:#344054;') +
-        '">' + nameHtml + '<br><span style="font-weight:400;font-size:11px;opacity:.8;">' + t.items.length + ' gói</span></button>';
+        '">' + safe + '<br><span style="font-weight:400;font-size:11px;opacity:.8;">' + t.items.length + ' gói</span></button>';
     }).join("");
   }
 
@@ -1068,7 +1268,15 @@ const App = (() => {
   async function slImport(idx)  { await slOpen(idx); }
   async function slPreview(idx) { await slOpen(idx); }
 
+  // Render ngay với local sheets, rồi async fetch preset từ sheets.json và re-render.
   slRender();
+  loadSheetPresets().then(presets => {
+    presetSheets = presets;
+    if (presets.length) {
+      slRender();
+      document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
+    }
+  });
 
   /* ===== GOOGLE SHEET IMPORT ===== */
 
@@ -1184,10 +1392,9 @@ const App = (() => {
 
   // Returns [{name, lines}] — mỗi sub-table là 1 bộ bảng giá riêng
   function gsParseTables(csvText, startRow, endRow) {
-    const rawLines = csvText.split(/\r?\n/);
+    const allRows = gsParseCsv(csvText);
     const s = Math.max(1, parseInt(startRow) || 1);
-    const e = endRow ? Math.min(rawLines.length, parseInt(endRow)) : rawLines.length;
-    const allRows = rawLines.map(l => gsParseCsvRow(l));
+    const e = endRow ? Math.min(allRows.length, parseInt(endRow)) : allRows.length;
     // Detect sub-tables dùng toàn bộ rows (kể cả hàng 1) để lấy tên
     // Nhưng data chỉ lấy từ s trở đi
     const subTables = gsDetectSubTables(allRows);
@@ -1234,24 +1441,37 @@ const App = (() => {
     return gsParseTables(csvText, startRow, endRow).flatMap(t => t.lines);
   }
 
-  function gsParseCsvRow(row) {
-    const cells = [];
+  // CSV parser robust: xử lý đúng newline (\n) bên trong quoted field.
+  // Đây là yêu cầu để hàng 1 (tên bộ bảng giá) có thể chứa text nhiều dòng (6-7 dòng).
+  function gsParseCsv(csvText) {
+    const rows = [];
+    let row = [];
     let cur = "";
     let inQ = false;
-    for (let i = 0; i < row.length; i++) {
-      const ch = row[i];
+    const text = String(csvText || "");
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
       if (inQ) {
-        if (ch === '"' && row[i + 1] === '"') { cur += '"'; i++; }
-        else if (ch === '"') inQ = false;
-        else cur += ch;
+        if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') { inQ = false; }
+        else { cur += ch; }
       } else {
-        if (ch === '"') inQ = true;
-        else if (ch === ',') { cells.push(cur); cur = ""; }
-        else cur += ch;
+        if (ch === '"') { inQ = true; }
+        else if (ch === ',') { row.push(cur); cur = ""; }
+        else if (ch === '\r') { /* skip, sẽ kết thúc row ở \n kế tiếp */ }
+        else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ""; }
+        else { cur += ch; }
       }
     }
-    cells.push(cur);
-    return cells;
+    // Flush row cuối
+    if (cur.length || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+
+  // Giữ lại để tương thích nếu nơi khác còn dùng (parse 1 row đơn lẻ)
+  function gsParseCsvRow(row) {
+    const parsed = gsParseCsv(row);
+    return parsed[0] || [];
   }
 
   const GS_PROXY = "https://script.google.com/macros/s/AKfycbxWDH8yZrFEk5w9XH1mOwR2JqdAIAixLmBPnhLyhA3n___dLiGqRajfV75NLKIQX7Rp1A/exec";
@@ -1400,6 +1620,7 @@ const App = (() => {
     slDelete,
     slImport,
     slPreview,
+    slRestorePresets,
     pickerFilter,
     pickerSelectAll,
     pickerDeselectAll,

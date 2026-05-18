@@ -1,0 +1,18 @@
+[
+  { "id": "esim-nghe-goi",          "name": "ESIM NGHE GỌI TOÀN THẾ GIỚI",                                      "url": "" },
+  { "id": "bang-gia-vn",            "name": "BẢNG GIÁ VN",                                                       "url": "" },
+  { "id": "uc-newzealand",          "name": "BẢNG GIÁ ÚC NEWZEALAND 🇦🇺🇳🇿",                                       "url": "" },
+  { "id": "trung-quoc",             "name": "BẢNG GIÁ TRUNG QUỐC 🇨🇳",                                            "url": "" },
+  { "id": "tho-nhi-ky",             "name": "BẢNG GIÁ THỔ NHĨ KỲ 🇹🇷",                                            "url": "" },
+  { "id": "the-gioi-khac",          "name": "BẢNG GIÁ THẾ GIỚI KHÁC",                                            "url": "" },
+  { "id": "thai-lan",               "name": "BẢNG GIÁ THÁI LAN 🇹🇭",                                              "url": "" },
+  { "id": "sri-lanka",              "name": "BẢNG GIÁ SRI LANKA 🇱🇰",                                             "url": "" },
+  { "id": "sg-id-th",               "name": "BẢNG GIÁ SINGAPORE 🇸🇬, INDONESIA 🇮🇩, THAILAND 🇹🇭",                    "url": "" },
+  { "id": "sg-my",                  "name": "BẢNG GIÁ SINGAPORE 🇸🇬, MALAYSIA 🇲🇾",                                "url": "" },
+  { "id": "dna-5-nuoc",             "name": "BẢNG GIÁ SINGAPORE 🇸🇬, MALAYSIA 🇲🇾, INDONESIA 🇮🇩, THAILAND 🇹🇭 (5 NƯỚC ĐNA)", "url": "" },
+  { "id": "saudi-arabia",           "name": "BẢNG GIÁ SAUDI ARABIA Ả rập xê út 🇸🇦",                              "url": "" },
+  { "id": "saipan-guam",            "name": "BẢNG GIÁ SAIPAN VÀ GUAM 🇲🇵🇬🇺",                                      "url": "" },
+  { "id": "philippines",            "name": "BẢNG GIÁ PHILIPPINES 🇵🇭",                                           "url": "" },
+  { "id": "oman",                   "name": "BẢNG GIÁ OMAN 🇴🇲",                                                  "url": "" },
+  { "id": "nhat-ban",               "name": "BẢNG GIÁ NHẬT BẢN 🇯🇵",                                              "url": "" }
+]
