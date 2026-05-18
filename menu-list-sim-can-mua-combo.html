@@ -196,23 +196,32 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
       <div id="sheetListWrap" style="display:grid;gap:8px;margin-bottom:12px;"></div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-        <div style="flex:1;min-width:140px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px;align-items:end;flex-wrap:wrap;">
+        <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tên nước / nhãn</div>
-          <input id="slName" type="text" placeholder="VD: Trung Quốc, Thái Lan..."
+          <input id="slName" type="text" placeholder="VD: Trung Quốc..."
             style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
         </div>
-        <div style="flex:2;min-width:200px;">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet</div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet (publish CSV)</div>
           <input id="slUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."
             style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
         </div>
-        <div style="min-width:60px;">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">GID (tab)</div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">GID</div>
           <input id="slGid" type="text" placeholder="0"
-            style="width:70px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+            style="width:72px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
         </div>
-        <button class="blue" onclick="App.slAdd()" style="margin-top:0;white-space:nowrap;">➕ Thêm</button>
+      </div>
+      <div style="margin-top:8px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
+          Tên từng bộ bảng giá <span style="font-weight:400;">(ngăn cách bằng <code style="background:#eef2f7;padding:1px 4px;border-radius:3px;">|</code> theo thứ tự từ trái sang phải — để trống nếu chỉ có 1 bộ)</span>
+        </div>
+        <input id="slTabNames" type="text" placeholder="VD: China Mobile | China Unicom | APAC Multi-region"
+          style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+      </div>
+      <div style="margin-top:8px;">
+        <button class="blue" onclick="App.slAdd()" style="margin:0;white-space:nowrap;">➕ Thêm vào danh sách</button>
       </div>
       <div id="slStatus" class="status" style="font-size:13px;"></div>
     </div>
@@ -275,6 +284,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
+    <div id="pickerTabBar" style="padding:12px 18px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;"></div>
     <div class="picker-body">
       <table class="picker-table">
         <thead>
@@ -872,16 +882,18 @@ const App = (() => {
     const name = document.getElementById("slName").value.trim();
     const url  = document.getElementById("slUrl").value.trim();
     const gid  = document.getElementById("slGid").value.trim() || "0";
-    if (!name) { document.getElementById("slStatus").textContent = "⚠️ Cần nhập tên nước."; return; }
-    if (!url)  { document.getElementById("slStatus").textContent = "⚠️ Cần nhập link sheet."; return; }
+    const tabNames = document.getElementById("slTabNames").value.trim();
+    if (!name) { document.getElementById("slStatus").textContent = "Can nhap ten nuoc."; return; }
+    if (!url)  { document.getElementById("slStatus").textContent = "Can nhap link sheet."; return; }
     const list = slLoad();
-    list.push({ name, url, gid });
+    list.push({ name, url, gid, tabNames });
     slSave(list);
     slRender();
     document.getElementById("slName").value = "";
     document.getElementById("slUrl").value = "";
     document.getElementById("slGid").value = "";
-    document.getElementById("slStatus").textContent = `✅ Đã thêm "${name}".`;
+    document.getElementById("slTabNames").value = "";
+    document.getElementById("slStatus").textContent = "Da them \"" + name + "\"";
   }
 
   function slDelete(idx) {
@@ -899,63 +911,105 @@ const App = (() => {
   let pickerChecked = new Set();
   let pickerSearchKw = "";
 
+  let pickerTables = []; // [{name, items}]
+  let pickerActiveTab = 0;
+
   async function slOpen(idx) {
     const list = slLoad();
     const item = list[idx];
     if (!item) return;
     document.getElementById("slStatus").textContent = "Dang tai " + item.name + "...";
-    // Set values directly for gsGetLines
-    const _gsUrlEl = document.getElementById("gsUrl");
-    const _gsGidEl = document.getElementById("gsGid");
-    const _gsStartEl = document.getElementById("gsStartRow");
-    const _gsEndEl = document.getElementById("gsEndRow");
-    if (_gsUrlEl) _gsUrlEl.value = item.url;
-    if (_gsGidEl) _gsGidEl.value = item.gid || "0";
-    if (_gsStartEl) _gsStartEl.value = "1";
-    if (_gsEndEl) _gsEndEl.value = "";
-    // If elements don't exist (manual import section removed), fetch directly
+
     const _csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
-    const lines = await (async () => {
-      if (!_csvUrl) { return null; }
-      try {
-        const csvText = await gsFetch(_csvUrl);
-        if (!csvText) return null;
-        return gsCsvToLines(csvText, "1", "");
-      } catch(e) {
-        document.getElementById("slStatus").textContent = "Loi: " + e.message;
-        return null;
-      }
-    })();
-    if (!lines) { document.getElementById("slStatus").textContent = "Khong tai duoc. Kiem tra link/Apps Script."; return; }
-    const { good } = ComboLogic.buildCartFromText(lines.join("\n"));
-    if (!good.length) { document.getElementById("slStatus").textContent = "Tai duoc nhung khong parse duoc goi nao."; return; }
-    pickerItems = good.map(g => ({ line: g.line, qty: g.qty, parsed: parseLineForDisplay(g.line) }));
+    if (!_csvUrl) { document.getElementById("slStatus").textContent = "Link khong hop le."; return; }
+    let csvText;
+    try {
+      csvText = await gsFetch(_csvUrl);
+    } catch(e) {
+      document.getElementById("slStatus").textContent = "Loi: " + e.message;
+      return;
+    }
+
+    // Bắt đầu từ hàng 2 (hàng 1 là header dù bao nhiêu dòng merged)
+    const tables = gsParseTables(csvText, "2", "");
+    if (!tables.length) { document.getElementById("slStatus").textContent = "Khong parse duoc goi nao."; return; }
+
+    // Apply custom tab names if provided
+    const customNames = (item.tabNames || "").split("|").map(s => s.trim()).filter(Boolean);
+    if (customNames.length) {
+      tables.forEach((t, i) => { if (customNames[i]) t.name = customNames[i]; });
+    }
+
+    // Build pickerTables: mỗi bộ là 1 tab
+    pickerTables = tables.map(t => {
+      const { good } = ComboLogic.buildCartFromText(t.lines.join("\n"));
+      return {
+        name: t.name,
+        items: good.map(g => ({ line: g.line, qty: g.qty, parsed: parseLineForDisplay(g.line) }))
+      };
+    }).filter(t => t.items.length > 0);
+
+    if (!pickerTables.length) { document.getElementById("slStatus").textContent = "Khong co goi nao parse duoc."; return; }
+
     pickerChecked = new Set();
     pickerSearchKw = "";
+    pickerActiveTab = 0;
     document.getElementById("pickerSearch").value = "";
-    document.getElementById("pickerTitle").textContent = "Chon goi - " + item.name + " (" + pickerItems.length + " goi)";
-    document.getElementById("slStatus").textContent = "Da tai " + pickerItems.length + " goi tu [" + item.name + "]. Tick chon roi bam Them vao gio.";
+    const totalGoi = pickerTables.reduce((s, t) => s + t.items.length, 0);
+    document.getElementById("pickerTitle").textContent = item.name + " — " + pickerTables.length + " bo, " + totalGoi + " goi";
+    document.getElementById("slStatus").textContent = "Da tai " + pickerTables.length + " bo bang gia, " + totalGoi + " goi. Chon roi bam Them vao gio.";
+
+    pickerRenderTabs();
     pickerRender();
     document.getElementById("pickerOverlay").classList.add("open");
   }
+
+  function pickerRenderTabs() {
+    const tabBar = document.getElementById("pickerTabBar");
+    tabBar.innerHTML = pickerTables.map((t, i) => {
+      const isActive = i === pickerActiveTab;
+      const nameHtml = t.name.replace(/\n/g, "<br>");
+      return '<button onclick="App.pickerSwitchTab(' + i + ')" style="' +
+        'padding:10px 16px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;' +
+        'line-height:1.45;text-align:left;white-space:normal;max-width:220px;min-width:120px;' +
+        (isActive
+          ? 'background:var(--blue);color:white;box-shadow:0 2px 8px rgba(23,92,211,.25);'
+          : 'background:#eef2f7;color:#344054;') +
+        '">' + nameHtml + '<br><span style="font-weight:400;font-size:11px;opacity:.8;">' + t.items.length + ' gói</span></button>';
+    }).join("");
+  }
+
+  function pickerSwitchTab(i) {
+    pickerActiveTab = i;
+    pickerSearchKw = "";
+    document.getElementById("pickerSearch").value = "";
+    pickerRenderTabs();
+    pickerRender();
+  }
+
 
   function pickerRender() {
     const tbody = document.getElementById("pickerTbody");
     const kw = pickerSearchKw.toLowerCase();
     tbody.innerHTML = "";
+    const tbl = pickerTables[pickerActiveTab];
+    if (!tbl) return;
+    const items = tbl.items;
     let shown = 0;
-    pickerItems.forEach((item, idx) => {
+    items.forEach((item, idx) => {
       const p = item.parsed;
       const text = (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase();
       if (kw && !text.includes(kw)) return;
       shown++;
-      const checked = pickerChecked.has(idx);
+      // Use composite key: tab_idx
+      const key = pickerActiveTab + "_" + idx;
+      const checked = pickerChecked.has(key);
       const tr = document.createElement("tr");
       if (checked) tr.classList.add("selected");
-      tr.onclick = (e) => { if (e.target.type !== "checkbox") pickerToggle(idx, tr); };
+      tr.onclick = (e) => { if (e.target.type !== "checkbox") pickerToggle(key, tr); };
       const tdCb = document.createElement("td"); tdCb.className = "col-cb";
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked;
-      cb.onchange = () => pickerToggle(idx, tr);
+      cb.onchange = () => pickerToggle(key, tr);
       tdCb.appendChild(cb); tr.appendChild(tdCb);
       const tdNo = document.createElement("td"); tdNo.className = "col-no"; tdNo.textContent = idx + 2; tr.appendChild(tdNo);
       const tdName = document.createElement("td"); tdName.className = "col-name"; tdName.textContent = p.name || item.line; tr.appendChild(tdName);
@@ -968,11 +1022,12 @@ const App = (() => {
     document.getElementById("pickerSelCount").textContent = cnt ? ("Da chon " + cnt + " goi") : ("Chua chon (" + shown + " goi hien thi)");
   }
 
-  function pickerToggle(idx, tr) {
-    if (pickerChecked.has(idx)) { pickerChecked.delete(idx); tr.classList.remove("selected"); }
-    else { pickerChecked.add(idx); tr.classList.add("selected"); }
+
+  function pickerToggle(key, tr) {
+    if (pickerChecked.has(key)) { pickerChecked.delete(key); tr.classList.remove("selected"); }
+    else { pickerChecked.add(key); tr.classList.add("selected"); }
     const cb = tr.querySelector("input[type=checkbox]");
-    if (cb) cb.checked = pickerChecked.has(idx);
+    if (cb) cb.checked = pickerChecked.has(key);
     document.getElementById("pickerSelCount").textContent = pickerChecked.size ? ("Da chon " + pickerChecked.size + " goi") : "Chua chon goi nao";
   }
 
@@ -983,9 +1038,12 @@ const App = (() => {
 
   function pickerSelectAll() {
     const kw = pickerSearchKw.toLowerCase();
-    pickerItems.forEach((item, idx) => {
+    const tbl = pickerTables[pickerActiveTab];
+    if (!tbl) return;
+    tbl.items.forEach((item, idx) => {
       const p = item.parsed;
-      if (!kw || (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase().includes(kw)) pickerChecked.add(idx);
+      const key = pickerActiveTab + "_" + idx;
+      if (!kw || (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase().includes(kw)) pickerChecked.add(key);
     });
     pickerRender();
   }
@@ -995,7 +1053,13 @@ const App = (() => {
 
   function pickerConfirm() {
     if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
-    const selected = [...pickerChecked].sort((a,b)=>a-b).map(idx => ({ line: pickerItems[idx].line, qty: pickerItems[idx].qty || 1 }));
+    const selected = [];
+    pickerChecked.forEach(key => {
+      const [tabIdx, itemIdx] = key.split("_").map(Number);
+      const tbl = pickerTables[tabIdx];
+      if (tbl && tbl.items[itemIdx]) selected.push({ line: tbl.items[itemIdx].line, qty: tbl.items[itemIdx].qty || 1 });
+    });
+    selected.sort((a, b) => a.line.localeCompare(b.line));
     const added = addItems(selected);
     document.getElementById("slStatus").textContent = "Da them " + added + " goi vao gio!";
     pickerClose();
@@ -1074,21 +1138,19 @@ const App = (() => {
     if (!allRows.length) return [];
     const maxCols = Math.max(...allRows.map(r => r.length));
 
-    // Đếm số lần mỗi cột chứa giá k
     const priceCols = [];
     for (let c = 0; c < maxCols; c++) {
       const count = allRows.filter(r => gsIsPrice((r[c] || ""))).length;
       if (count > 2) priceCols.push(c);
     }
 
-    if (!priceCols.length) return [{ startCol: 0, endCol: maxCols - 1, priceCol: -1 }];
+    if (!priceCols.length) return [{ startCol: 0, endCol: maxCols - 1, priceCol: -1, name: "Bảng giá" }];
 
     const tables = [];
     for (const pc of priceCols) {
       const already = tables.find(t => pc >= t.startCol && pc <= t.endCol);
       if (already) continue;
 
-      // Tìm startCol: đi ngược từ priceCol, dừng khi gặp cột trống hoặc price col khác
       let start = pc;
       for (let c = pc - 1; c >= 0; c--) {
         const hasContent = allRows.some(r => (r[c] || "").trim());
@@ -1097,70 +1159,79 @@ const App = (() => {
         start = c;
       }
 
-      // Tìm endCol: lấy thêm tối đa 1 cột sau giá (cột lưu ý)
       let end = pc;
       for (let c = pc + 1; c < Math.min(maxCols, pc + 3); c++) {
         const hasContent = allRows.some(r => (r[c] || "").trim());
         if (!hasContent) break;
-        if (priceCols.includes(c)) break; // bảng khác bắt đầu
+        if (priceCols.includes(c)) break;
         end = c;
-        break; // chỉ lấy 1 cột note
+        break;
       }
 
-      tables.push({ startCol: start, endCol: end, priceCol: pc });
+      // Lấy tên bộ từ hàng 1 (index 0), cột đầu tiên của bộ (startCol)
+      // Giữ nguyên toàn bộ nội dung kể cả xuống dòng
+      let name = "Bo " + (tables.length + 1);
+      const headerCell = (allRows[0] && allRows[0][start]) ? String(allRows[0][start]) : "";
+      if (headerCell.trim()) {
+        name = headerCell.trim();
+      }
+
+      tables.push({ startCol: start, endCol: end, priceCol: pc, name });
     }
 
     return tables;
   }
 
-  function gsCsvToLines(csvText, startRow, endRow) {
-    const result = [];
+  // Returns [{name, lines}] — mỗi sub-table là 1 bộ bảng giá riêng
+  function gsParseTables(csvText, startRow, endRow) {
     const rawLines = csvText.split(/\r?\n/);
     const s = Math.max(1, parseInt(startRow) || 1);
     const e = endRow ? Math.min(rawLines.length, parseInt(endRow)) : rawLines.length;
-
-    // Parse tất cả rows thành mảng cells
     const allRows = rawLines.map(l => gsParseCsvRow(l));
+    // Detect sub-tables dùng toàn bộ rows (kể cả hàng 1) để lấy tên
+    // Nhưng data chỉ lấy từ s trở đi
+    const subTables = gsDetectSubTables(allRows);
 
-    // Detect sub-tables từ phạm vi cần import
-    const subTables = gsDetectSubTables(allRows.slice(s - 1, e));
-
-    for (const tbl of subTables) {
+    const result = subTables.map(tbl => {
+      const lines = [];
       for (let i = s - 1; i < e && i < allRows.length; i++) {
         const row = allRows[i];
         const cells = [];
         for (let c = tbl.startCol; c <= tbl.endCol && c < row.length; c++) {
           cells.push((row[c] || "").trim());
         }
-
-        // Bỏ dòng không có giá k (header, tiêu đề, trống)
         if (!gsIsDataRow(cells)) continue;
-
         const priceIdx = tbl.priceCol - tbl.startCol;
         const beforePrice = cells.slice(0, priceIdx).filter(c => c);
         const price = cells[priceIdx] || "";
         const noteCell = cells[priceIdx + 1];
         const note = noteCell && !gsIsPrice(noteCell) ? noteCell : "";
-
         if (!price || !beforePrice.length) continue;
-
         const parts = [...beforePrice, price];
         if (note) parts.push(note);
-        result.push(parts.join("\t"));
+        lines.push(parts.join("\t"));
       }
-    }
+      return { name: tbl.name, lines };
+    }).filter(t => t.lines.length > 0);
 
-    // Fallback nếu không detect được sub-table
+    // Fallback: 1 bộ duy nhất
     if (!result.length) {
+      const lines = [];
       for (let i = s - 1; i < e && i < allRows.length; i++) {
         const cells = allRows[i];
         if (!gsIsDataRow(cells)) continue;
         const joined = cells.map(c => (c || "").trim()).filter(Boolean).join("\t");
-        if (joined) result.push(joined);
+        if (joined) lines.push(joined);
       }
+      if (lines.length) result.push({ name: "Bảng giá", lines });
     }
 
     return result;
+  }
+
+  // Backwards compat: flat list
+  function gsCsvToLines(csvText, startRow, endRow) {
+    return gsParseTables(csvText, startRow, endRow).flatMap(t => t.lines);
   }
 
   function gsParseCsvRow(row) {
@@ -1334,6 +1405,7 @@ const App = (() => {
     pickerDeselectAll,
     pickerClose,
     pickerConfirm,
+    pickerSwitchTab,
   };
 })();
 </script>
