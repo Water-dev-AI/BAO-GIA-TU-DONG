@@ -692,10 +692,10 @@ const App = (() => {
   function gsBuildCsvUrl(rawUrl, gid) {
     const resolvedGid = (gid && String(gid).trim()) ? String(gid).trim() : "0";
 
-    // Đã là CSV trực tiếp
+    // Đã là CSV
     if (rawUrl.includes("output=csv")) return rawUrl;
 
-    // Link pubhtml của published sheet: /spreadsheets/d/e/PUBID/pubhtml
+    // Link pubhtml published: /spreadsheets/d/e/PUBID/pubhtml
     const pubMatch = rawUrl.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9_-]+)\//);
     if (pubMatch) {
       return `https://docs.google.com/spreadsheets/d/e/${pubMatch[1]}/pub?output=csv&gid=${resolvedGid}`;
@@ -707,10 +707,18 @@ const App = (() => {
       return `${base}?output=csv&gid=${resolvedGid}`;
     }
 
-    // Link edit thường
+    // Link share thường (/edit, /view, hoặc chỉ có ID) → dùng /export
     const m = rawUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-    if (!m) return null;
-    return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${resolvedGid}`;
+    if (m) {
+      return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${resolvedGid}`;
+    }
+
+    // Chỉ có spreadsheet ID thuần
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(rawUrl.trim())) {
+      return `https://docs.google.com/spreadsheets/d/${rawUrl.trim()}/export?format=csv&gid=${resolvedGid}`;
+    }
+
+    return null;
   }
 
   function gsBuildJsonUrl(rawUrl) {
@@ -875,7 +883,6 @@ const App = (() => {
       return !t.startsWith("<!") && !t.startsWith("<html") && !t.startsWith("<HTML");
     }
 
-    console.log("proxy url:", proxyUrl(url));
     const attempts = [
       () => fetch(proxyUrl(url), { redirect: "follow" }),
       () => fetch(url, { redirect: "follow" }),
