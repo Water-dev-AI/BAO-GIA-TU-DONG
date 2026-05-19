@@ -2234,33 +2234,102 @@ const App = (() => {
     ctx.beginPath();
     ctx.moveTo(padding, y); ctx.lineTo(W - padding, y);
     ctx.stroke();
-    y += 18;
+    y += 28;
 
-    // === Bill text === (font to + rõ)
+    // === Bill text === (font sans-serif đẹp, căn cột thủ công bằng tab stops)
     ctx.fillStyle = "#1f2937";
     ctx.textAlign = "left";
-    const fontBody = "22px 'Cascadia Mono', 'Consolas', 'Courier New', monospace";
-    const fontBodyBold = "bold 22px 'Cascadia Mono', 'Consolas', 'Courier New', monospace";
-    const fontSans = "bold 22px Arial, 'Segoe UI', sans-serif";
-    const fontTotalPay = "bold 26px Arial, 'Segoe UI', sans-serif";
+    ctx.textBaseline = "top";
+    const fontBody = "20px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+    const fontBodyBold = "bold 20px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+    const fontHeader = "bold 22px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+    const fontTotalPay = "bold 26px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+
+    // Vẽ dòng có tab: phân cột bằng pixel position
+    // Layout 4 cột cho package line: [Tên gói | Loại | Ngày | Giá]
+    // Cột giá căn phải để các số thẳng cột.
+    const innerW = W - padding * 2;
+    const colTypeX  = padding + innerW * 0.58;  // cột Loại bắt đầu ở ~58%
+    const colDaysX  = padding + innerW * 0.74;  // Ngày ở ~74%
+    const colPriceR = padding + innerW;          // Giá: căn phải về biên
+
+    function drawTabbedLine(line, font, color) {
+      const cells = line.split("\t");
+      ctx.font = font;
+      ctx.fillStyle = color;
+      if (cells.length === 1) {
+        ctx.fillText(line, padding, y);
+        return;
+      }
+      // Có tab → render theo cột
+      const name = cells[0] || "";
+      const type = cells[1] || "";
+      const days = cells[2] || "";
+      const price = cells[3] || "";
+      // extra (note inline...) thì gắn sau giá, render thường
+      const extra = cells.slice(4).join(" ");
+
+      // Truncate tên nếu quá dài (không cho đè cột Loại)
+      let drawName = name;
+      const maxNameW = colTypeX - padding - 12;
+      if (ctx.measureText(drawName).width > maxNameW) {
+        while (drawName.length > 3 && ctx.measureText(drawName + "…").width > maxNameW) {
+          drawName = drawName.slice(0, -1);
+        }
+        drawName += "…";
+      }
+      ctx.textAlign = "left";
+      ctx.fillText(drawName, padding, y);
+      ctx.fillText(type, colTypeX, y);
+      ctx.fillText(days, colDaysX, y);
+      // Giá: căn phải
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#059669";
+      ctx.fillText(price, colPriceR, y);
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      if (extra) {
+        // Hiếm khi có; in nhỏ phía dưới
+        const prevFont = ctx.font;
+        ctx.font = "14px 'Segoe UI', Arial, sans-serif";
+        ctx.fillStyle = "#64748b";
+        ctx.fillText(extra, padding, y + 22);
+        ctx.font = prevFont;
+        ctx.fillStyle = color;
+      }
+    }
 
     billLines.forEach(line => {
       if (line.startsWith("SHOP GỬI")) {
-        ctx.font = fontSans;
+        ctx.font = fontHeader;
         ctx.fillStyle = "#1f2937";
+        ctx.textAlign = "left";
         ctx.fillText(line, padding, y);
       } else if (line.startsWith("Tổng thanh toán:")) {
         ctx.font = fontTotalPay;
         ctx.fillStyle = "#059669";
+        ctx.textAlign = "left";
         ctx.fillText(line, padding, y);
       } else if (line.startsWith("Còn:") || line.startsWith("Tổng:") || line.startsWith("Trên ")) {
-        ctx.font = fontBodyBold;
-        ctx.fillStyle = "#1f2937";
-        ctx.fillText(line, padding, y);
+        ctx.textAlign = "left";
+        drawTabbedLine(line, fontBodyBold, "#1f2937");
+      } else if (line.startsWith("---")) {
+        // Đường kẻ phân cách: vẽ line mảnh thay vì chuỗi gạch
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, y + lineH/2);
+        ctx.lineTo(W - padding, y + lineH/2);
+        ctx.stroke();
+      } else if (line.startsWith("   ↳")) {
+        // Note sản phẩm: italic nhỏ
+        ctx.font = "italic 16px 'Segoe UI', Arial, sans-serif";
+        ctx.fillStyle = "#0ea5e9";
+        ctx.textAlign = "left";
+        ctx.fillText(line.replace(/^\s+/, "  ⓘ "), padding, y);
       } else {
-        ctx.font = fontBody;
-        ctx.fillStyle = "#1f2937";
-        ctx.fillText(line, padding, y);
+        ctx.textAlign = "left";
+        drawTabbedLine(line, fontBody, "#1f2937");
       }
       y += lineH;
     });
