@@ -257,7 +257,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <h2>3) Chốt combo</h2>
       <button class="green" onclick="App.calcAndCopyFull()">✅ Chốt Combo + Copy Full</button>
-      <button class="blue" onclick="App.calcAndCopyBill()">Copy Bill khách</button>
+      <button class="blue" onclick="App.calcAndCopyBill()">📋 Copy Bill khách</button>
+      <button class="blue" onclick="App.calcAndCopyBillShort()" style="background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
       <button class="amber" onclick="App.calcAndCopyNotes()">Copy Notes giảm giá</button>
       <button class="light" onclick="App.calcOnly()">Chỉ tính / không copy</button>
     </div>
@@ -411,7 +412,9 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 /* COMBO_LOGIC_START */
 const ComboLogic = (() => {
   // Qty syntax sau dấu *: số thường (2), hoặc N3 (nạp), hoặc kết hợp 2+N3 / N2+3
-  const priceRe = /(\d[\d.,]*\s*k)(?:\s*\*\s*((?:N?\d+)(?:\+N?\d+)*))?\s*$/i;
+  // priceRe: match giá nằm cuối line HOẶC ngay trước tab+note.
+  // Group 1 = giá ("299k"), group 2 = qty optional ("2", "N3", "2+N3"...)
+  const priceRe = /(\d[\d.,]*\s*k)(?:\s*\*\s*((?:N?\d+)(?:\+N?\d+)*))?(?=\s*(?:\t|$))/i;
   const discounts = [
     [4000, 200, "Trên 4tr"],
     [3000, 150, "Trên 3tr"],
@@ -653,8 +656,30 @@ const ComboLogic = (() => {
     return newLine;
   }
 
+  // Tách 1 cart line thành (lineCore = phần đến giá) + (productNote = note sau giá).
+  // Dùng để: (1) build dòng bill chính không kèm note, (2) in note xuống dòng riêng.
+  function splitLineAndProductNote(line) {
+    const cells = String(line).split("\t");
+    const inlineRe = /^(\d[\d.,]*\s*k)(?:\s*\*\s*(?:N?\d+)(?:\+N?\d+)*)?\s*$/i;
+    for (let i = 0; i < cells.length; i++) {
+      if (inlineRe.test(cells[i].trim())) {
+        return {
+          lineCore: cells.slice(0, i + 1).join("\t"),
+          productNote: cells.slice(i + 1).join(" ").trim()
+        };
+      }
+    }
+    return { lineCore: String(line), productNote: "" };
+  }
+
+  // Format note 1 dòng (note gốc có thể chứa \n từ Google Sheet cell merge)
+  function formatProductNoteSingleLine(note) {
+    return String(note || "").replace(/\s*\n+\s*/g, " · ").trim();
+  }
+
   function calc(cart) {
     const outLines = [];
+    const outLinesShort = []; // bill không kèm product note
     const parsedItems = [];
     const errors = [];
     let totalK = 0;
@@ -711,12 +736,16 @@ const ComboLogic = (() => {
       if (isPhysical) regularPhysicalQty += regular;
 
       const parts = splitPackageParts(line);
+      const { lineCore, productNote } = splitLineAndProductNote(line);
+      const productNoteFlat = formatProductNoteSingleLine(productNote);
 
       // Dòng SIM thường
       if (regular > 0) {
-        let regularLine = replaceFinalPrice(line, unitK, regular);
+        let regularLine = replaceFinalPrice(lineCore, unitK, regular);
         if (rowNote) regularLine += "  [" + rowNote + "]";
         outLines.push(regularLine);
+        outLinesShort.push(regularLine);
+        if (productNoteFlat) outLines.push("   ↳ " + productNoteFlat);
         parsedItems.push({
           packageName: parts.packageName,
           productType: parts.productType,
@@ -729,9 +758,11 @@ const ComboLogic = (() => {
 
       // Dòng NẠP GÓI
       if (recharge > 0) {
-        let rechargeLine = buildRechargeLine(line, unitK, recharge);
+        let rechargeLine = buildRechargeLine(lineCore, unitK, recharge);
         if (rowNote) rechargeLine += "  [" + rowNote + "]";
         outLines.push(rechargeLine);
+        outLinesShort.push(rechargeLine);
+        if (productNoteFlat) outLines.push("   ↳ " + productNoteFlat);
         parsedItems.push({
           packageName: parts.packageName,
           productType: parts.productType,
@@ -747,6 +778,7 @@ const ComboLogic = (() => {
       return {
         ok: false,
         bill: "❌ Chưa có dòng nào để tính.",
+        billShort: "❌ Chưa có dòng nào để tính.",
         notes: "Chưa có notes.",
         full: "❌ Chưa có dòng nào để tính.",
         summary: { totalK: 0, discountK: 0, remainK: 0, totalQty: 0, totalQtyForShip, regularPhysicalQty, rechargeQty },
@@ -774,15 +806,21 @@ const ComboLogic = (() => {
     const sepLen = Math.max(6, ...summaryLines.map(x => x.length));
     outLines.push("-".repeat(sepLen));
     outLines.push(...summaryLines);
+    outLinesShort.push("-".repeat(sepLen));
+    outLinesShort.push(...summaryLines);
 
     if (errors.length) {
       outLines.push("");
       outLines.push("⚠️ Dòng chưa tính được:");
       errors.slice(0, 10).forEach(e => outLines.push("- " + e));
+      outLinesShort.push("");
+      outLinesShort.push("⚠️ Dòng chưa tính được:");
+      errors.slice(0, 10).forEach(e => outLinesShort.push("- " + e));
     }
 
     const BILL_HEADER = "SHOP GỬI BÁO GIÁ Ạ:";
     const bill = BILL_HEADER + "\n\n" + outLines.join("\n");
+    const billShort = BILL_HEADER + "\n\n" + outLinesShort.join("\n");
     const notes = buildDiscountNotes(parsedItems, discount.amount);
     const full = notes && !notes.startsWith("Không có")
       ? bill + "\n\nNotes phân bố giảm giá:\n" + notes
@@ -791,6 +829,7 @@ const ComboLogic = (() => {
     return {
       ok: true,
       bill,
+      billShort,
       notes,
       full,
       summary: { totalK, discountK: discount.amount, discountLabel: discount.label, remainK, totalQty: totalQtyForShip + rechargeQty, totalQtyForShip, regularPhysicalQty, rechargeQty },
@@ -892,26 +931,33 @@ const App = (() => {
 
   // Parse line thành các phần để hiển thị thẳng cột
   function parseLineForDisplay(line) {
-    const priceRe = ComboLogic.priceRe;
-    const priceMatch = line.match(priceRe);
-    const price = priceMatch ? priceMatch[1].replace(/\s+/g,'') : "";
-    const beforePrice = line.replace(priceRe, "").trim();
-    const parts = beforePrice.split("\t").map(s => s.trim()).filter(Boolean);
+    // Format chuẩn: tên\tloại\tngày\tgiá[\tnote]
+    // Robust: tìm cell match giá, suy ra các cột khác từ vị trí giá.
+    const cells = String(line || "").split("\t").map(s => s.trim());
+    const priceCellRe = /^(\d[\d.,]*\s*k)(?:\s*\*\s*(?:N?\d+)(?:\+N?\d+)*)?\s*$/i;
+    let priceIdx = -1;
+    for (let i = 0; i < cells.length; i++) {
+      if (priceCellRe.test(cells[i])) { priceIdx = i; break; }
+    }
 
-    let name = "", type = "", days = "";
-    if (parts.length >= 3) {
-      name = parts[0]; type = parts[1]; days = parts[2];
-    } else if (parts.length === 2) {
-      name = parts[0]; type = parts[1]; days = "";
-    } else {
-      name = parts[0] || beforePrice; type = ""; days = "";
+    if (priceIdx === -1) {
+      // Fallback: dùng priceRe cũ tìm giá ở cuối line
+      const priceMatch = String(line).match(ComboLogic.priceRe);
+      const price = priceMatch ? priceMatch[1].replace(/\s+/g,'') : "";
+      return { name: String(line), type: "", days: "", price, note: "" };
     }
-    // Nếu type trông như ngày (chứa "ngày" hoặc số ngày) → swap
-    const normType = (type||"").toLowerCase();
-    if (!days && (normType.includes("ngày") || /^\d+\s*(ngay|days?)$/i.test(normType))) {
-      days = type; type = "";
-    }
-    return { name, type, days, price };
+
+    const priceCell = cells[priceIdx];
+    // Tách giá thuần (bỏ *qty) để display
+    const priceOnly = priceCell.replace(/\s*\*\s*(?:N?\d+)(?:\+N?\d+)*\s*$/i, "").replace(/\s+/g, "");
+
+    const type  = priceIdx - 2 >= 0 ? cells[priceIdx - 2] : "";
+    const days  = priceIdx - 1 >= 0 ? cells[priceIdx - 1] : "";
+    const nameParts = priceIdx >= 3 ? cells.slice(0, priceIdx - 2).filter(Boolean) : [];
+    const name = nameParts.join(" ").trim() || cells[0] || "";
+    const note = priceIdx + 1 < cells.length ? cells.slice(priceIdx + 1).join(" ").trim() : "";
+
+    return { name, type, days, price: priceOnly, note };
   }
 
   function render() {
@@ -932,6 +978,12 @@ const App = (() => {
       nameDiv.className = "pkg-text";
       nameDiv.textContent = p.name || item.line;
       tdName.appendChild(nameDiv);
+      if (p.note) {
+        const noteDiv = document.createElement("div");
+        noteDiv.textContent = "ⓘ " + p.note;
+        noteDiv.style.cssText = "font-size:11px;color:#0ea5e9;font-style:italic;margin-top:3px;line-height:1.4;white-space:pre-wrap;word-break:break-word;";
+        tdName.appendChild(noteDiv);
+      }
 
       const tdType = document.createElement("td");
       tdType.style.cssText = "text-align:center;font-size:12px;color:#444;";
@@ -1036,6 +1088,12 @@ const App = (() => {
     const result = calcOnly();
     await copyText(result.bill);
     showStatus("✅ Đã copy Bill khách.");
+  }
+
+  async function calcAndCopyBillShort() {
+    const result = calcOnly();
+    await copyText(result.billShort || result.bill);
+    showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
   }
 
   async function calcAndCopyNotes() {
@@ -1383,7 +1441,7 @@ const App = (() => {
   // Helper: kiểm tra 1 item có pass filter hiện tại không
   function pickerItemMatches(item, kw) {
     const p = item.parsed;
-    const text = (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase();
+    const text = (p.name + " " + p.type + " " + p.days + " " + p.price + " " + (p.note || "")).toLowerCase();
     if (kw && !text.includes(kw)) return false;
     if (pickerTypeFilter !== "ALL") {
       const typeNorm = ComboLogic.norm(p.type || "");
@@ -1432,7 +1490,20 @@ const App = (() => {
       cb.onchange = () => pickerToggle(key, tr);
       tdCb.appendChild(cb); tr.appendChild(tdCb);
       const tdNo = document.createElement("td"); tdNo.className = "col-no"; tdNo.textContent = idx + 2; tr.appendChild(tdNo);
-      const tdName = document.createElement("td"); tdName.className = "col-name"; tdName.textContent = p.name || item.line; tr.appendChild(tdName);
+
+      const tdName = document.createElement("td"); tdName.className = "col-name";
+      const nameDiv = document.createElement("div");
+      nameDiv.textContent = p.name || item.line;
+      nameDiv.style.fontWeight = "500";
+      tdName.appendChild(nameDiv);
+      if (p.note) {
+        const noteDiv = document.createElement("div");
+        noteDiv.textContent = "ⓘ " + p.note;
+        noteDiv.style.cssText = "font-size:11px;color:#0ea5e9;font-style:italic;margin-top:3px;line-height:1.4;white-space:pre-wrap;word-break:break-word;";
+        tdName.appendChild(noteDiv);
+      }
+      tr.appendChild(tdName);
+
       const tdType = document.createElement("td"); tdType.className = "col-type"; tdType.textContent = p.type; tr.appendChild(tdType);
       const tdDays = document.createElement("td"); tdDays.className = "col-days"; tdDays.textContent = p.days; tr.appendChild(tdDays);
       const tdPrice = document.createElement("td"); tdPrice.className = "col-price"; tdPrice.textContent = p.price; tr.appendChild(tdPrice);
@@ -1932,96 +2003,118 @@ const App = (() => {
   // Tìm các "bảng con" nằm ngang trong sheet.
   // Sheet có 3 bảng cạnh nhau, mỗi bảng: [TÊN GÓI | LOẠI SIM | SỐ NGÀY | GIÁ | LƯU Ý?]
   // Strategy: tìm các cột thường xuyên chứa giá k → đó là "price columns" của mỗi bảng
+  // === ANCHOR-BY-PRICE detection ===
+  // Mỗi bộ giá có layout cố định 5 cột:
+  //   [Tên gói] [Loại SIM] [Ngày] [GIÁ] [Note]
+  // Phát hiện bằng cách:
+  //   1. Tìm cột chứa giá dạng "xxxk" (anchor)
+  //   2. Verify cột P-2 chứa "ESIM" hoặc "SIM VẬT LÝ"
+  //   3. Suy ra các cột khác từ vị trí anchor
+  const ESIM_PHYSICAL_RE = /^\s*(?:esim|sim\s*v[ậa]t\s*l[ýy]|sim)\s*$/i;
+  const PRICE_RE_STRICT = /^\d[\d.,]*\s*k\s*$/i;
+
   function gsDetectSubTables(allRows) {
     if (!allRows.length) return [];
     const maxCols = Math.max(...allRows.map(r => r.length));
 
+    // Bước 1: tìm tất cả cột chứa giá k (anchor)
     const priceCols = [];
     for (let c = 0; c < maxCols; c++) {
-      const count = allRows.filter(r => gsIsPrice((r[c] || ""))).length;
-      if (count > 2) priceCols.push(c);
+      let priceCount = 0;
+      for (let r = 0; r < allRows.length; r++) {
+        const cell = (allRows[r][c] || "").trim();
+        if (PRICE_RE_STRICT.test(cell)) priceCount++;
+      }
+      if (priceCount >= 3) priceCols.push({ col: c, count: priceCount });
     }
 
-    if (!priceCols.length) return [{ startCol: 0, endCol: maxCols - 1, priceCol: -1, name: "Bảng giá" }];
+    if (!priceCols.length) return [];
 
-    const tables = [];
+    // Bước 2: với mỗi anchor giá, verify cột P-2 = ESIM/SIM VẬT LÝ
+    const subTables = [];
+    let prevBoundary = 0;
+
     for (const pc of priceCols) {
-      const already = tables.find(t => pc >= t.startCol && pc <= t.endCol);
-      if (already) continue;
+      const P = pc.col;
+      if (P < 2) continue; // không đủ cột bên trái
 
-      let start = pc;
-      for (let c = pc - 1; c >= 0; c--) {
-        const hasContent = allRows.some(r => (r[c] || "").trim());
-        if (!hasContent) break;
-        if (priceCols.includes(c)) break;
-        start = c;
+      const typeCol = P - 2;
+      let typeMatchCount = 0;
+      for (let r = 0; r < allRows.length; r++) {
+        const cell = (allRows[r][typeCol] || "").trim();
+        if (ESIM_PHYSICAL_RE.test(cell)) typeMatchCount++;
       }
+      // Cần ít nhất 3 dòng có Loại đúng để tin là cột Loại thật
+      if (typeMatchCount < 3) continue;
 
-      let end = pc;
-      for (let c = pc + 1; c < Math.min(maxCols, pc + 3); c++) {
-        const hasContent = allRows.some(r => (r[c] || "").trim());
-        if (!hasContent) break;
-        if (priceCols.includes(c)) break;
-        end = c;
-        break;
+      const dateCol = P - 1;            // có thể trống — không bắt buộc
+      const nameCol = P - 3;            // cột tên chính, ngay trước Loại
+      const noteCol = P + 1 < maxCols ? P + 1 : -1;
+
+      // Tên bộ: lấy cell DÀI NHẤT ở row 0 trong dải [prevBoundary, P-3]
+      // Robust với layout có cell tên bị tách (vd: "THÁI" + "THÁI LAN ROAMING")
+      let subTableName = "";
+      let maxLen = 0;
+      const nameStart = Math.max(prevBoundary, 0);
+      const nameEnd = Math.max(P - 3, nameStart);
+      for (let c = nameStart; c <= nameEnd; c++) {
+        const cell = ((allRows[0] || [])[c] || "").trim();
+        if (cell.length > maxLen) {
+          subTableName = cell;
+          maxLen = cell.length;
+        }
       }
+      if (!subTableName) subTableName = "Bộ " + (subTables.length + 1);
 
-      // Lấy tên bộ từ hàng 1 (index 0), cột đầu tiên của bộ (startCol)
-      // Giữ nguyên toàn bộ nội dung kể cả xuống dòng
-      let name = "Bo " + (tables.length + 1);
-      const headerCell = (allRows[0] && allRows[0][start]) ? String(allRows[0][start]) : "";
-      if (headerCell.trim()) {
-        name = headerCell.trim();
-      }
+      subTables.push({
+        name: subTableName,
+        nameCol: nameCol >= 0 ? nameCol : 0,
+        typeCol,
+        dateCol,
+        priceCol: P,
+        noteCol,
+      });
 
-      tables.push({ startCol: start, endCol: end, priceCol: pc, name });
+      // Ranh giới: bộ tiếp theo bắt đầu sau noteCol
+      prevBoundary = (noteCol >= 0 ? noteCol : P) + 1;
     }
 
-    return tables;
+    return subTables;
   }
 
   // Returns [{name, lines}] — mỗi sub-table là 1 bộ bảng giá riêng
+  // Line format: "Tên\tLoại\tNgày\tGiá\tNote" (cột note optional)
   function gsParseTables(csvText, startRow, endRow) {
     const allRows = gsParseCsv(csvText);
-    const s = Math.max(1, parseInt(startRow) || 1);
-    const e = endRow ? Math.min(allRows.length, parseInt(endRow)) : allRows.length;
-    // Detect sub-tables dùng toàn bộ rows (kể cả hàng 1) để lấy tên
-    // Nhưng data chỉ lấy từ s trở đi
     const subTables = gsDetectSubTables(allRows);
+
+    // startRow/endRow chỉ ảnh hưởng đến dải data, không ảnh hưởng detect (luôn dùng cả sheet).
+    // Hàng 0 là header (tên bộ + tên cột phụ), data bắt đầu từ hàng 1.
+    const dataStart = Math.max(1, parseInt(startRow) || 1);
+    const dataEnd = endRow ? Math.min(allRows.length, parseInt(endRow)) : allRows.length;
 
     const result = subTables.map(tbl => {
       const lines = [];
-      for (let i = s - 1; i < e && i < allRows.length; i++) {
+      for (let i = dataStart; i < dataEnd && i < allRows.length; i++) {
         const row = allRows[i];
-        const cells = [];
-        for (let c = tbl.startCol; c <= tbl.endCol && c < row.length; c++) {
-          cells.push((row[c] || "").trim());
-        }
-        if (!gsIsDataRow(cells)) continue;
-        const priceIdx = tbl.priceCol - tbl.startCol;
-        const beforePrice = cells.slice(0, priceIdx).filter(c => c);
-        const price = cells[priceIdx] || "";
-        const noteCell = cells[priceIdx + 1];
-        const note = noteCell && !gsIsPrice(noteCell) ? noteCell : "";
-        if (!price || !beforePrice.length) continue;
-        const parts = [...beforePrice, price];
+        const name  = (row[tbl.nameCol]  || "").trim();
+        const type  = (row[tbl.typeCol]  || "").trim();
+        const days  = tbl.dateCol >= 0 ? (row[tbl.dateCol] || "").trim() : "";
+        const price = (row[tbl.priceCol] || "").trim();
+        const note  = tbl.noteCol >= 0 ? (row[tbl.noteCol] || "").trim() : "";
+
+        // Verify dòng data hợp lệ
+        if (!PRICE_RE_STRICT.test(price)) continue;
+        if (!ESIM_PHYSICAL_RE.test(type)) continue;
+        if (!name) continue;
+
+        // Build line: name\ttype\tdays\tprice (+ \tnote nếu có)
+        const parts = [name, type, days, price];
         if (note) parts.push(note);
         lines.push(parts.join("\t"));
       }
       return { name: tbl.name, lines };
     }).filter(t => t.lines.length > 0);
-
-    // Fallback: 1 bộ duy nhất
-    if (!result.length) {
-      const lines = [];
-      for (let i = s - 1; i < e && i < allRows.length; i++) {
-        const cells = allRows[i];
-        if (!gsIsDataRow(cells)) continue;
-        const joined = cells.map(c => (c || "").trim()).filter(Boolean).join("\t");
-        if (joined) lines.push(joined);
-      }
-      if (lines.length) result.push({ name: "Bảng giá", lines });
-    }
 
     return result;
   }
@@ -2200,6 +2293,7 @@ const App = (() => {
     calcOnly,
     calcAndCopyFull,
     calcAndCopyBill,
+    calcAndCopyBillShort,
     calcAndCopyNotes,
     copyLinesOnly,
     clearCart,
