@@ -200,7 +200,9 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
       <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên..."
         oninput="App.slFilter()"
-        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
+        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:8px;" />
+
+      <div id="slFavorites" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;"></div>
 
       <div id="sheetListWrap" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding-right:4px;"></div>
 
@@ -300,6 +302,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
         <button class="green" onclick="App.qrGenerate()">🎨 Tạo QR thanh toán</button>
         <button class="blue" onclick="App.qrGenerateFull()">🖼️ Tạo Ảnh báo giá full</button>
+        <button class="amber" onclick="App.qrCustomOpen()" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" title="Copy thông tin chuyển khoản text">📋 Copy thông tin CK</button>
       </div>
 
@@ -462,6 +465,39 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="green" onclick="App.draftImportConfirm(true)">✅ Import + Lưu thành đơn nháp</button>
       <button class="blue" onclick="App.draftImportConfirm(false)">⬇️ Chỉ Import vào giỏ</button>
       <button class="light" onclick="App.draftImportClose()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal QR Custom -->
+<div class="picker-overlay" id="qrCustomOverlay" onclick="if(event.target===this)App.qrCustomClose()">
+  <div class="picker-modal" style="width:min(96vw, 560px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">⚡ QR thanh toán nhanh</h3>
+      <button onclick="App.qrCustomClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Số tiền (VND) *</div>
+        <input id="qrCustomAmount" type="number" min="0" placeholder="VD: 500000"
+          oninput="App.qrCustomRender()"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Nội dung CK *</div>
+        <input id="qrCustomNote" type="text" placeholder="VD: Coc don hang"
+          oninput="App.qrCustomRender()"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
+      </div>
+      <div id="qrCustomPreview" style="display:none;text-align:center;background:white;border:1px solid var(--line);border-radius:10px;padding:12px;">
+        <img id="qrCustomImg" alt="QR" style="max-width:280px;height:auto;" />
+        <div id="qrCustomInfo" style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6;"></div>
+      </div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.qrCustomDownload()">💾 Tải QR</button>
+      <button class="blue"  onclick="App.qrCustomCopy()">📋 Copy ảnh</button>
+      <button class="light" onclick="App.qrCustomClose()">Đóng</button>
     </div>
   </div>
 </div>
@@ -1275,12 +1311,53 @@ const App = (() => {
 
   let slSearchKw = "";
 
+  // Các nước yêu thích — keyword khớp với tên trong sheets.json (không dấu, không phân biệt hoa thường)
+  const FAVORITE_COUNTRIES = [
+    { label: "🇰🇷 Hàn",         kw: "han quoc" },
+    { label: "🇨🇳 TQ",          kw: "trung quoc" },
+    { label: "🇯🇵 Nhật",        kw: "nhat ban" },
+    { label: "🇺🇸 Mỹ",          kw: "my" },
+    { label: "🇪🇺 Châu Âu",     kw: "chau au" },
+    { label: "🇸🇬 SG-MY",       kw: "singapore, malaysia" },
+    { label: "🇻🇳 VN",          kw: "vn" },
+    { label: "🇹🇭 Thái",        kw: "thai lan" },
+    { label: "🇸🇬 Sing-Indo-Thai", kw: "singapre" },
+    { label: "🇰🇭 CPC",         kw: "campuchia" },
+    { label: "🌏 5 Nước ĐNA",    kw: "5 nuoc" },
+    { label: "🇭🇰 HK-Macao",     kw: "hong kong" },
+    { label: "🇹🇼 Đài",         kw: "dai loan" },
+    { label: "🇦🇺 Úc-NZ",       kw: "uc newzealand" },
+  ];
+
+  function slRenderFavorites() {
+    const wrap = document.getElementById("slFavorites");
+    if (!wrap) return;
+    wrap.innerHTML = FAVORITE_COUNTRIES.map(f => {
+      const active = slSearchKw.toLowerCase() === f.kw.toLowerCase();
+      const bg = active ? "background:var(--blue);color:white;" : "background:#eef2f7;color:#334155;";
+      return `<button onclick="App.slFavoriteSearch('${f.kw}')" style="${bg}margin:0;padding:5px 10px;border:0;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;">${f.label}</button>`;
+    }).join("");
+  }
+
+  function slFavoriteSearch(kw) {
+    // Toggle: nếu đang search chính keyword này → clear
+    if (slSearchKw.toLowerCase() === kw.toLowerCase()) {
+      slSearchKw = "";
+    } else {
+      slSearchKw = kw;
+    }
+    const inp = document.getElementById("slSearch");
+    if (inp) inp.value = slSearchKw;
+    slRender();
+  }
+
   function slFilter() {
     slSearchKw = (document.getElementById("slSearch").value || "").trim();
     slRender();
   }
 
   function slRender() {
+    slRenderFavorites();
     const list = slLoadAll();
     const wrap = document.getElementById("sheetListWrap");
 
@@ -1372,7 +1449,7 @@ const App = (() => {
     }
     // Lấy dòng đầu của tên (bỏ emoji/format dài) cho gọn — nhưng giữ full để rõ ràng
     const cleanName = String(item.name).replace(/\s+/g, " ").trim();
-    const shareText = cleanName + "\n" + item.url + "\n" + DISCOUNT_POLICY_TEXT;
+    const shareText = "Shop gửi bảng giá ạ.\n" + cleanName + "\n" + item.url + "\n" + DISCOUNT_POLICY_TEXT;
     const ok = await copyText(shareText);
     if (ok) {
       document.getElementById("slStatus").textContent = `✅ Đã copy link share "${cleanName}".`;
@@ -2458,6 +2535,69 @@ const App = (() => {
     qrShowStatus(ok ? "✅ Đã copy thông tin CK." : "❌ Lỗi copy.");
   }
 
+  /* ===== QR Custom (tạo nhanh theo số tiền + nội dung tuỳ chọn) ===== */
+  function qrCustomOpen() {
+    document.getElementById("qrCustomAmount").value = "";
+    document.getElementById("qrCustomNote").value = "";
+    document.getElementById("qrCustomPreview").style.display = "none";
+    document.getElementById("qrCustomOverlay").classList.add("open");
+    setTimeout(() => document.getElementById("qrCustomAmount").focus(), 50);
+  }
+
+  function qrCustomClose() {
+    document.getElementById("qrCustomOverlay").classList.remove("open");
+  }
+
+  function qrCustomRender() {
+    const amount = parseInt(document.getElementById("qrCustomAmount").value, 10);
+    const note = (document.getElementById("qrCustomNote").value || "").trim();
+    const preview = document.getElementById("qrCustomPreview");
+    if (!Number.isFinite(amount) || amount <= 0 || !note) {
+      preview.style.display = "none";
+      return;
+    }
+    const url = buildVietQRUrl(amount, note);
+    document.getElementById("qrCustomImg").src = url;
+    document.getElementById("qrCustomInfo").innerHTML =
+      `<b>${stkConfig.bankName} · ${stkConfig.accountNo}</b><br>` +
+      `${stkConfig.accountName}<br>` +
+      `Số tiền: <b>${amount.toLocaleString("vi-VN")} VND</b> · ND: <b style="color:#dc2626;">${note}</b>`;
+    preview.style.display = "block";
+  }
+
+  async function qrCustomDownload() {
+    const img = document.getElementById("qrCustomImg");
+    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
+    try {
+      const blob = await (await fetch(img.src)).blob();
+      const url = URL.createObjectURL(blob);
+      const note = (document.getElementById("qrCustomNote").value || "QR").trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+      const a = document.createElement("a");
+      a.href = url; a.download = "QR_" + note + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      qrShowStatus("✅ Đã tải QR.");
+    } catch(e) {
+      qrShowStatus("❌ Lỗi tải: " + e.message);
+    }
+  }
+
+  async function qrCustomCopy() {
+    const img = document.getElementById("qrCustomImg");
+    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
+    try {
+      const blob = await (await fetch(img.src)).blob();
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        qrShowStatus("⚠️ Trình duyệt không hỗ trợ copy ảnh. Dùng Tải về.");
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      qrShowStatus("✅ Đã copy ảnh QR.");
+    } catch(e) {
+      qrShowStatus("❌ Lỗi copy: " + e.message);
+    }
+  }
+
   // Init STK config + order code
   loadStkConfig();
   regenOrderCode();
@@ -2829,6 +2969,7 @@ const App = (() => {
     slShare,
     slOpenUrl,
     slFilter,
+    slFavoriteSearch,
     slRestorePresets,
     updateShipFee,
     regenOrderCode,
@@ -2837,6 +2978,11 @@ const App = (() => {
     qrDownload,
     qrCopyImage,
     qrCopySTK,
+    qrCustomOpen,
+    qrCustomClose,
+    qrCustomRender,
+    qrCustomDownload,
+    qrCustomCopy,
     pickerFilter,
     pickerSelectAll,
     pickerDeselectAll,
