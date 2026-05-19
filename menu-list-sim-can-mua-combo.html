@@ -887,7 +887,10 @@ const ComboLogic = (() => {
       errors.slice(0, 10).forEach(e => outLinesShort.push("- " + e));
     }
 
-    const BILL_HEADER = "SHOP GỬI BÁO GIÁ Ạ:";
+    const orderCode = String(opts.orderCode || "").trim();
+    const BILL_HEADER = orderCode
+      ? `SHOP GỬI BÁO GIÁ ĐƠN HÀNG: ${orderCode}`
+      : "SHOP GỬI BÁO GIÁ Ạ:";
     const bill = BILL_HEADER + "\n\n" + outLines.join("\n");
     const billShort = BILL_HEADER + "\n\n" + outLinesShort.join("\n");
     const notes = buildDiscountNotes(parsedItems, discount.amount);
@@ -1113,8 +1116,12 @@ const App = (() => {
     return Number.isFinite(v) && v >= 0 ? v : 0;
   }
 
+  function getCalcOpts() {
+    return { shipFeeK: getShipFeeK(), orderCode: currentOrderCode || "" };
+  }
+
   function updateQuickTotals() {
-    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    const result = ComboLogic.calc(cart, getCalcOpts());
     const s = result.summary;
     $("quickTotals").innerHTML = [
       `<span class="pill">Tạm tính: ${ComboLogic.fmtK(s.totalK)}</span>`,
@@ -1129,7 +1136,7 @@ const App = (() => {
 
   function updateShipFee() {
     updateQuickTotals();
-    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    const result = ComboLogic.calc(cart, getCalcOpts());
     $("billOutput").textContent = result.bill;
   }
 
@@ -1153,7 +1160,7 @@ const App = (() => {
   }
 
   function calcOnly() {
-    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    const result = ComboLogic.calc(cart, getCalcOpts());
     $("billOutput").textContent = result.bill;
     $("notesOutput").textContent = result.notes;
     showStatus("✅ Đã tính xong, chưa copy.");
@@ -2092,7 +2099,14 @@ const App = (() => {
 
   function regenOrderCode() {
     currentOrderCode = genOrderCode();
-    document.getElementById("orderCode").value = currentOrderCode;
+    const el = document.getElementById("orderCode");
+    if (el) el.value = currentOrderCode;
+    // Re-render bill nếu đã hiển thị (để mã đơn mới phản ánh vào header)
+    const billEl = document.getElementById("billOutput");
+    if (billEl && billEl.textContent && billEl.textContent !== "Chưa có kết quả.") {
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      billEl.textContent = r.bill;
+    }
   }
 
   function buildVietQRUrl(amountVnd, addInfo) {
@@ -2111,7 +2125,7 @@ const App = (() => {
   }
 
   function qrGetState() {
-    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    const result = ComboLogic.calc(cart, getCalcOpts());
     if (!result.ok) {
       qrShowStatus("⚠️ Giỏ rỗng, không tạo QR được.");
       return null;
@@ -2160,22 +2174,36 @@ const App = (() => {
   // Layout: Header logo + tên công ty | Bill text (multiline) | QR ở giữa | Footer info CK
   async function qrRenderFull(state) {
     const canvas = document.getElementById("qrFullCanvas");
-    const W = 800;
-    const padding = 32;
-    const bill = state.result.bill;
-    const billLines = bill.split("\n");
+    const DPR = 2; // render hi-DPI cho sắc nét
+    const W = 900;
+    const padding = 40;
+    const billLines = state.result.bill.split("\n");
 
-    // Đo trước chiều cao cần thiết
+    // Pre-load logo + QR để biết tỉ lệ
+    let logoImg = null, qrImg = null;
+    try { logoImg = await loadImage("./logo.png"); } catch(e) { /* fallback below */ }
+    try { qrImg = await loadImage(state.qrUrl); } catch(e) { /* fallback below */ }
+
+    // Layout sizing
+    const headerH = 130;
+    const lineH = 32;             // chiều cao mỗi dòng bill (font 22px)
+    const billH = billLines.length * lineH + 16;
+    const qrSize = 280;           // QR nhỏ gọn ở góc
+    const footerInfoH = 200;      // khu vực thông tin CK ở dưới (chiều cao tối thiểu)
+    const blockH = Math.max(qrSize, footerInfoH);
+    const H = padding + headerH + billH + 30 + blockH + padding;
+
+    // Hi-DPI: canvas thực = W*DPR, CSS = W
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
     const ctx = canvas.getContext("2d");
-    const lineH = 22;
-    const headerH = 110;
-    const billH = billLines.length * lineH + 20;
-    const qrSize = 320;
-    const footerH = 130;
-    const H = padding + headerH + billH + 20 + qrSize + 20 + footerH + padding;
-
-    canvas.width = W;
-    canvas.height = H;
+    ctx.scale(DPR, DPR);
+    ctx.textBaseline = "alphabetic";
+    // Bật bilinear cho ảnh
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     // Background
     ctx.fillStyle = "#ffffff";
@@ -2184,30 +2212,20 @@ const App = (() => {
     let y = padding;
 
     // === Header ===
-    try {
-      const logo = await loadImage("./logo.png");
-      const logoSize = 70;
-      ctx.drawImage(logo, padding, y, logoSize, logoSize);
-      ctx.fillStyle = "#1f2937";
-      ctx.font = "bold 20px Arial, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(stkConfig.companyName || "SIMGLOBE", padding + logoSize + 14, y + 28);
-      ctx.font = "13px Arial, sans-serif";
-      ctx.fillStyle = "#64748b";
-      ctx.fillText("Uy tín, chân chính, tận tâm", padding + logoSize + 14, y + 50);
-      const dateStr = new Date().toLocaleDateString("vi-VN");
-      ctx.fillText(`Ngày: ${dateStr} · Mã ĐH: ${currentOrderCode}`, padding + logoSize + 14, y + 70);
-    } catch(e) {
-      // Logo không load được — vẫn vẽ tên công ty
-      ctx.fillStyle = "#1f2937";
-      ctx.font = "bold 22px Arial, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(stkConfig.companyName || "SIMGLOBE", padding, y + 28);
-      ctx.font = "13px Arial, sans-serif";
-      ctx.fillStyle = "#64748b";
-      const dateStr = new Date().toLocaleDateString("vi-VN");
-      ctx.fillText(`Ngày: ${dateStr} · Mã ĐH: ${currentOrderCode}`, padding, y + 50);
+    const logoSize = 90;
+    if (logoImg) {
+      ctx.drawImage(logoImg, padding, y, logoSize, logoSize);
     }
+    const headerTextX = logoImg ? padding + logoSize + 18 : padding;
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "bold 26px Arial, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(stkConfig.companyName || "SIMGLOBE", headerTextX, y + 34);
+    ctx.font = "16px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Uy tín, chân chính, tận tâm", headerTextX, y + 62);
+    const dateStr = new Date().toLocaleDateString("vi-VN");
+    ctx.fillText(`Ngày: ${dateStr}  ·  Mã ĐH: ${currentOrderCode}`, headerTextX, y + 88);
     y += headerH;
 
     // Đường kẻ phân cách
@@ -2216,65 +2234,102 @@ const App = (() => {
     ctx.beginPath();
     ctx.moveTo(padding, y); ctx.lineTo(W - padding, y);
     ctx.stroke();
-    y += 10;
+    y += 18;
 
-    // === Bill text ===
+    // === Bill text === (font to + rõ)
     ctx.fillStyle = "#1f2937";
-    ctx.font = "14px 'Courier New', monospace";
     ctx.textAlign = "left";
+    const fontBody = "22px 'Cascadia Mono', 'Consolas', 'Courier New', monospace";
+    const fontBodyBold = "bold 22px 'Cascadia Mono', 'Consolas', 'Courier New', monospace";
+    const fontSans = "bold 22px Arial, 'Segoe UI', sans-serif";
+    const fontTotalPay = "bold 26px Arial, 'Segoe UI', sans-serif";
+
     billLines.forEach(line => {
-      // Format đặc biệt: header SHOP GỬI BÁO GIÁ Ạ in đậm
       if (line.startsWith("SHOP GỬI")) {
-        ctx.font = "bold 14px Arial, sans-serif";
+        ctx.font = fontSans;
+        ctx.fillStyle = "#1f2937";
         ctx.fillText(line, padding, y);
-        ctx.font = "14px 'Courier New', monospace";
       } else if (line.startsWith("Tổng thanh toán:")) {
-        ctx.font = "bold 15px Arial, sans-serif";
+        ctx.font = fontTotalPay;
         ctx.fillStyle = "#059669";
         ctx.fillText(line, padding, y);
-        ctx.font = "14px 'Courier New', monospace";
+      } else if (line.startsWith("Còn:") || line.startsWith("Tổng:") || line.startsWith("Trên ")) {
+        ctx.font = fontBodyBold;
         ctx.fillStyle = "#1f2937";
-      } else if (line.startsWith("Còn:") || line.startsWith("Tổng:")) {
-        ctx.font = "bold 14px 'Courier New', monospace";
         ctx.fillText(line, padding, y);
-        ctx.font = "14px 'Courier New', monospace";
       } else {
+        ctx.font = fontBody;
+        ctx.fillStyle = "#1f2937";
         ctx.fillText(line, padding, y);
       }
       y += lineH;
     });
-    y += 20;
+    y += 30;
 
-    // === QR code ===
-    try {
-      const qr = await loadImage(state.qrUrl);
-      const qx = (W - qrSize) / 2;
-      ctx.drawImage(qr, qx, y, qrSize, qrSize);
-      y += qrSize + 14;
-    } catch(e) {
-      ctx.fillStyle = "#dc2626";
-      ctx.font = "14px Arial";
+    // === Khối dưới: bên trái = info CK, bên phải = QR ===
+    const blockTop = y;
+    const qrX = W - padding - qrSize;
+    const qrY = blockTop;
+
+    // QR (góc dưới phải)
+    if (qrImg) {
+      // Khung nhẹ quanh QR cho dễ phân biệt
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.lineWidth = 1;
+      ctx.fillRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+      ctx.strokeRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+      // Nhãn "Quét QR thanh toán" dưới QR
+      ctx.fillStyle = "#64748b";
+      ctx.font = "14px Arial, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("[Không load được QR — kiểm tra mạng]", W/2, y + qrSize/2);
-      y += qrSize + 14;
+      ctx.fillText("Quét QR để thanh toán", qrX + qrSize / 2, qrY + qrSize + 24);
+    } else {
+      ctx.fillStyle = "#dc2626";
+      ctx.font = "16px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("[QR load fail]", qrX + qrSize / 2, qrY + qrSize / 2);
     }
 
-    // === Footer info CK ===
+    // Info CK bên trái (font to, rõ)
+    ctx.textAlign = "left";
+    let infoY = blockTop + 28;
     ctx.fillStyle = "#1f2937";
-    ctx.textAlign = "center";
-    ctx.font = "bold 14px Arial, sans-serif";
-    ctx.fillText(`${stkConfig.bankName || "BANK"} · STK: ${stkConfig.accountNo}`, W/2, y);
-    y += 22;
-    ctx.font = "13px Arial, sans-serif";
-    ctx.fillText(stkConfig.accountName, W/2, y);
-    y += 22;
+    ctx.font = "bold 22px Arial, 'Segoe UI', sans-serif";
+    ctx.fillText("THÔNG TIN CHUYỂN KHOẢN", padding, infoY);
+    infoY += 38;
+
+    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Ngân hàng:", padding, infoY);
+    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#1f2937";
+    ctx.fillText(stkConfig.bankName || "BANK", padding + 110, infoY);
+    infoY += 30;
+
+    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Số TK:", padding, infoY);
+    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#1f2937";
+    ctx.fillText(stkConfig.accountNo, padding + 110, infoY);
+    infoY += 30;
+
+    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Tên:", padding, infoY);
+    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#1f2937";
+    ctx.fillText(stkConfig.accountName, padding + 110, infoY);
+    infoY += 38;
+
+    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("Nội dung:", padding, infoY);
+    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
     ctx.fillStyle = "#dc2626";
-    ctx.font = "bold 14px Arial, sans-serif";
-    ctx.fillText(`Nội dung CK: ${currentOrderCode}`, W/2, y);
-    y += 22;
-    ctx.fillStyle = "#1f2937";
-    ctx.font = "bold 16px Arial, sans-serif";
-    ctx.fillText(`Số tiền: ${ComboLogic.fmtK(state.finalPayK)} (${state.amountVnd.toLocaleString("vi-VN")} VND)`, W/2, y);
+    ctx.fillText(currentOrderCode, padding + 110, infoY);
   }
 
   function qrCanvasOrImageToBlob(which) {
