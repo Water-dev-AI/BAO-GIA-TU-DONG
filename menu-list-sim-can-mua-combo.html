@@ -273,6 +273,63 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <pre id="notesOutput">Chưa có notes.</pre>
       </div>
     </div>
+
+    <div class="card">
+      <h2>4) QR thanh toán</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px;">
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Phí ship (k) — tuỳ chọn</div>
+          <input id="shipFeeK" type="number" min="0" value="0" placeholder="0"
+            oninput="App.updateShipFee()"
+            style="width:120px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Mã đơn hàng (auto)</div>
+          <div style="display:flex;gap:6px;">
+            <input id="orderCode" type="text" readonly
+              style="width:160px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:'Roboto Mono',monospace;background:#f9fafb;" />
+            <button class="light" onclick="App.regenOrderCode()" style="margin:0;padding:9px 12px;" title="Tạo mã mới">🔄</button>
+          </div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tổng thanh toán</div>
+          <div id="qrTotalDisplay" style="font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">0k</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <button class="green" onclick="App.qrGenerate()">🎨 Tạo QR thanh toán</button>
+        <button class="blue" onclick="App.qrGenerateFull()">🖼️ Tạo Ảnh báo giá full</button>
+        <button class="light" onclick="App.qrCopySTK()" title="Copy thông tin chuyển khoản text">📋 Copy thông tin CK</button>
+      </div>
+
+      <div id="qrResultWrap" style="display:none;">
+        <div class="cols" style="grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">QR thanh toán</div>
+            <div id="qrSimpleWrap" style="background:white;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
+              <img id="qrSimpleImg" alt="QR" style="max-width:100%;height:auto;" />
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              <button class="green" onclick="App.qrDownload('simple')" style="margin:0;">💾 Tải QR</button>
+              <button class="blue"  onclick="App.qrCopyImage('simple')" style="margin:0;">📋 Copy ảnh</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Ảnh báo giá full</div>
+            <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow-y:auto;">
+              <canvas id="qrFullCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              <button class="green" onclick="App.qrDownload('full')" style="margin:0;">💾 Tải ảnh</button>
+              <button class="blue"  onclick="App.qrCopyImage('full')" style="margin:0;">📋 Copy ảnh</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="qrStatus" class="status" style="font-size:13px;margin-top:8px;"></div>
+    </div>
   </div>
 </div>
 
@@ -678,7 +735,9 @@ const ComboLogic = (() => {
     return String(note || "").replace(/\s*\n+\s*/g, " · ").trim();
   }
 
-  function calc(cart) {
+  function calc(cart, opts) {
+    opts = opts || {};
+    const shipFeeK = Math.max(0, parseInt(opts.shipFeeK, 10) || 0);
     const outLines = [];
     const outLinesShort = []; // bill không kèm product note
     const parsedItems = [];
@@ -782,16 +841,21 @@ const ComboLogic = (() => {
         billShort: "❌ Chưa có dòng nào để tính.",
         notes: "Chưa có notes.",
         full: "❌ Chưa có dòng nào để tính.",
-        summary: { totalK: 0, discountK: 0, remainK: 0, totalQty: 0, totalQtyForShip, regularPhysicalQty, rechargeQty },
+        summary: { totalK: 0, discountK: 0, remainK: 0, shipFeeK: 0, finalPayK: 0, totalQty: 0, totalQtyForShip, regularPhysicalQty, rechargeQty },
         errors,
       };
     }
 
     const discount = discountFor(totalK);
     const remainK = totalK - discount.amount;
+    // Tổng thanh toán cuối cùng (có cộng phí ship nếu có)
+    const finalPayK = remainK + shipFeeK;
 
     let shipText = "";
-    if (regularPhysicalQty > 0) {
+    if (shipFeeK > 0) {
+      // Có nhập phí ship thủ công → in luôn "+ Xk (phí ship)"
+      shipText = " + " + fmtK(shipFeeK) + " (phí ship)";
+    } else if (regularPhysicalQty > 0) {
       shipText = totalQtyForShip >= 10 ? " - free ship" : " + phí ship";
     }
 
@@ -802,6 +866,10 @@ const ComboLogic = (() => {
       summaryLines.push("Còn: " + fmtK(remainK) + shipText);
     } else {
       summaryLines.push("Tổng: " + fmtK(totalK) + shipText);
+    }
+    // Khi có phí ship thủ công, thêm dòng "Tổng thanh toán" cuối
+    if (shipFeeK > 0) {
+      summaryLines.push("Tổng thanh toán: " + fmtK(finalPayK));
     }
 
     const sepLen = Math.max(6, ...summaryLines.map(x => x.length));
@@ -833,7 +901,7 @@ const ComboLogic = (() => {
       billShort,
       notes,
       full,
-      summary: { totalK, discountK: discount.amount, discountLabel: discount.label, remainK, totalQty: totalQtyForShip + rechargeQty, totalQtyForShip, regularPhysicalQty, rechargeQty },
+      summary: { totalK, discountK: discount.amount, discountLabel: discount.label, remainK, shipFeeK, finalPayK, totalQty: totalQtyForShip + rechargeQty, totalQtyForShip, regularPhysicalQty, rechargeQty },
       errors,
     };
   }
@@ -1040,8 +1108,13 @@ const App = (() => {
     updateQuickTotals();
   }
 
+  function getShipFeeK() {
+    const v = parseInt(document.getElementById("shipFeeK")?.value, 10);
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  }
+
   function updateQuickTotals() {
-    const result = ComboLogic.calc(cart);
+    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
     const s = result.summary;
     $("quickTotals").innerHTML = [
       `<span class="pill">Tạm tính: ${ComboLogic.fmtK(s.totalK)}</span>`,
@@ -1050,6 +1123,14 @@ const App = (() => {
       `<span class="pill">SIM cần giao: ${s.regularPhysicalQty || 0}</span>`,
       `<span class="pill">Tổng SL: ${s.totalQty || 0}</span>`,
     ].join(" ");
+    const totalEl = document.getElementById("qrTotalDisplay");
+    if (totalEl) totalEl.textContent = ComboLogic.fmtK(s.finalPayK || 0);
+  }
+
+  function updateShipFee() {
+    updateQuickTotals();
+    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    $("billOutput").textContent = result.bill;
   }
 
   async function copyText(text) {
@@ -1072,7 +1153,7 @@ const App = (() => {
   }
 
   function calcOnly() {
-    const result = ComboLogic.calc(cart);
+    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
     $("billOutput").textContent = result.bill;
     $("notesOutput").textContent = result.notes;
     showStatus("✅ Đã tính xong, chưa copy.");
@@ -1981,6 +2062,281 @@ const App = (() => {
   draftRender();
   draftCheckUrlHash();
 
+  /* ===== QR THANH TOÁN ===== */
+  let stkConfig = {
+    accountNo: "250891",
+    accountName: "NGUYEN PHAN HOAN",
+    acqId: 970432,
+    bankName: "VPBANK",
+    template: "compact2",
+    companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL"
+  };
+  let currentOrderCode = "";
+
+  async function loadStkConfig() {
+    try {
+      const res = await fetch("./STK.json", { cache: "no-cache" });
+      if (res.ok) {
+        const data = await res.json();
+        stkConfig = { ...stkConfig, ...data };
+      }
+    } catch(e) { console.warn("STK.json load fail:", e); }
+  }
+
+  function genOrderCode() {
+    // Timestamp-based 8 digits: lấy 8 số cuối của Date.now() + random suffix nếu cần
+    // Date.now() ~ 13 digits. Lấy 8 số cuối = đảm bảo unique trong cùng giây + biến thiên rộng.
+    const t = String(Date.now()).slice(-8);
+    return "DH" + t;
+  }
+
+  function regenOrderCode() {
+    currentOrderCode = genOrderCode();
+    document.getElementById("orderCode").value = currentOrderCode;
+  }
+
+  function buildVietQRUrl(amountVnd, addInfo) {
+    const c = stkConfig;
+    const params = new URLSearchParams({
+      amount: String(amountVnd),
+      addInfo: addInfo
+    });
+    if (c.accountName) params.set("accountName", c.accountName);
+    const tpl = c.template || "compact2";
+    return `https://img.vietqr.io/image/${c.acqId}-${c.accountNo}-${tpl}.png?${params.toString()}`;
+  }
+
+  function qrShowStatus(msg) {
+    document.getElementById("qrStatus").textContent = msg;
+  }
+
+  function qrGetState() {
+    const result = ComboLogic.calc(cart, { shipFeeK: getShipFeeK() });
+    if (!result.ok) {
+      qrShowStatus("⚠️ Giỏ rỗng, không tạo QR được.");
+      return null;
+    }
+    const finalPayK = result.summary.finalPayK || 0;
+    if (finalPayK <= 0) {
+      qrShowStatus("⚠️ Tổng thanh toán = 0.");
+      return null;
+    }
+    if (!currentOrderCode) regenOrderCode();
+    const amountVnd = finalPayK * 1000;
+    const qrUrl = buildVietQRUrl(amountVnd, currentOrderCode);
+    return { result, finalPayK, amountVnd, qrUrl };
+  }
+
+  async function qrGenerate() {
+    const s = qrGetState();
+    if (!s) return;
+    document.getElementById("qrResultWrap").style.display = "block";
+    document.getElementById("qrSimpleImg").src = s.qrUrl;
+    // Cũng render full luôn để 2 cột sync
+    await qrRenderFull(s);
+    qrShowStatus(`✅ QR ${ComboLogic.fmtK(s.finalPayK)} — Mã ĐH: ${currentOrderCode}`);
+  }
+
+  async function qrGenerateFull() {
+    const s = qrGetState();
+    if (!s) return;
+    document.getElementById("qrResultWrap").style.display = "block";
+    document.getElementById("qrSimpleImg").src = s.qrUrl;
+    await qrRenderFull(s);
+    qrShowStatus(`✅ Đã tạo ảnh báo giá full.`);
+  }
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = (e) => reject(new Error("Load image fail: " + url));
+      img.src = url;
+    });
+  }
+
+  // Render ảnh báo giá full lên canvas (#qrFullCanvas)
+  // Layout: Header logo + tên công ty | Bill text (multiline) | QR ở giữa | Footer info CK
+  async function qrRenderFull(state) {
+    const canvas = document.getElementById("qrFullCanvas");
+    const W = 800;
+    const padding = 32;
+    const bill = state.result.bill;
+    const billLines = bill.split("\n");
+
+    // Đo trước chiều cao cần thiết
+    const ctx = canvas.getContext("2d");
+    const lineH = 22;
+    const headerH = 110;
+    const billH = billLines.length * lineH + 20;
+    const qrSize = 320;
+    const footerH = 130;
+    const H = padding + headerH + billH + 20 + qrSize + 20 + footerH + padding;
+
+    canvas.width = W;
+    canvas.height = H;
+
+    // Background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+
+    let y = padding;
+
+    // === Header ===
+    try {
+      const logo = await loadImage("./logo.png");
+      const logoSize = 70;
+      ctx.drawImage(logo, padding, y, logoSize, logoSize);
+      ctx.fillStyle = "#1f2937";
+      ctx.font = "bold 20px Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(stkConfig.companyName || "SIMGLOBE", padding + logoSize + 14, y + 28);
+      ctx.font = "13px Arial, sans-serif";
+      ctx.fillStyle = "#64748b";
+      ctx.fillText("Uy tín, chân chính, tận tâm", padding + logoSize + 14, y + 50);
+      const dateStr = new Date().toLocaleDateString("vi-VN");
+      ctx.fillText(`Ngày: ${dateStr} · Mã ĐH: ${currentOrderCode}`, padding + logoSize + 14, y + 70);
+    } catch(e) {
+      // Logo không load được — vẫn vẽ tên công ty
+      ctx.fillStyle = "#1f2937";
+      ctx.font = "bold 22px Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(stkConfig.companyName || "SIMGLOBE", padding, y + 28);
+      ctx.font = "13px Arial, sans-serif";
+      ctx.fillStyle = "#64748b";
+      const dateStr = new Date().toLocaleDateString("vi-VN");
+      ctx.fillText(`Ngày: ${dateStr} · Mã ĐH: ${currentOrderCode}`, padding, y + 50);
+    }
+    y += headerH;
+
+    // Đường kẻ phân cách
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, y); ctx.lineTo(W - padding, y);
+    ctx.stroke();
+    y += 10;
+
+    // === Bill text ===
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "14px 'Courier New', monospace";
+    ctx.textAlign = "left";
+    billLines.forEach(line => {
+      // Format đặc biệt: header SHOP GỬI BÁO GIÁ Ạ in đậm
+      if (line.startsWith("SHOP GỬI")) {
+        ctx.font = "bold 14px Arial, sans-serif";
+        ctx.fillText(line, padding, y);
+        ctx.font = "14px 'Courier New', monospace";
+      } else if (line.startsWith("Tổng thanh toán:")) {
+        ctx.font = "bold 15px Arial, sans-serif";
+        ctx.fillStyle = "#059669";
+        ctx.fillText(line, padding, y);
+        ctx.font = "14px 'Courier New', monospace";
+        ctx.fillStyle = "#1f2937";
+      } else if (line.startsWith("Còn:") || line.startsWith("Tổng:")) {
+        ctx.font = "bold 14px 'Courier New', monospace";
+        ctx.fillText(line, padding, y);
+        ctx.font = "14px 'Courier New', monospace";
+      } else {
+        ctx.fillText(line, padding, y);
+      }
+      y += lineH;
+    });
+    y += 20;
+
+    // === QR code ===
+    try {
+      const qr = await loadImage(state.qrUrl);
+      const qx = (W - qrSize) / 2;
+      ctx.drawImage(qr, qx, y, qrSize, qrSize);
+      y += qrSize + 14;
+    } catch(e) {
+      ctx.fillStyle = "#dc2626";
+      ctx.font = "14px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("[Không load được QR — kiểm tra mạng]", W/2, y + qrSize/2);
+      y += qrSize + 14;
+    }
+
+    // === Footer info CK ===
+    ctx.fillStyle = "#1f2937";
+    ctx.textAlign = "center";
+    ctx.font = "bold 14px Arial, sans-serif";
+    ctx.fillText(`${stkConfig.bankName || "BANK"} · STK: ${stkConfig.accountNo}`, W/2, y);
+    y += 22;
+    ctx.font = "13px Arial, sans-serif";
+    ctx.fillText(stkConfig.accountName, W/2, y);
+    y += 22;
+    ctx.fillStyle = "#dc2626";
+    ctx.font = "bold 14px Arial, sans-serif";
+    ctx.fillText(`Nội dung CK: ${currentOrderCode}`, W/2, y);
+    y += 22;
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "bold 16px Arial, sans-serif";
+    ctx.fillText(`Số tiền: ${ComboLogic.fmtK(state.finalPayK)} (${state.amountVnd.toLocaleString("vi-VN")} VND)`, W/2, y);
+  }
+
+  function qrCanvasOrImageToBlob(which) {
+    return new Promise((resolve, reject) => {
+      if (which === "full") {
+        const canvas = document.getElementById("qrFullCanvas");
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error("toBlob fail")), "image/png");
+      } else {
+        // Simple QR — fetch lại URL và blob hoá (vì <img> direct không lấy blob được dễ)
+        const img = document.getElementById("qrSimpleImg");
+        if (!img.src) { reject(new Error("No QR")); return; }
+        fetch(img.src).then(r => r.blob()).then(resolve).catch(reject);
+      }
+    });
+  }
+
+  async function qrDownload(which) {
+    try {
+      const blob = await qrCanvasOrImageToBlob(which);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (which === "full" ? "BaoGia_" : "QR_") + currentOrderCode + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      qrShowStatus("✅ Đã tải ảnh.");
+    } catch(e) {
+      qrShowStatus("❌ Lỗi tải: " + e.message);
+    }
+  }
+
+  async function qrCopyImage(which) {
+    try {
+      const blob = await qrCanvasOrImageToBlob(which);
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        qrShowStatus("⚠️ Trình duyệt không hỗ trợ copy ảnh. Hãy bấm Tải về.");
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      qrShowStatus("✅ Đã copy ảnh vào clipboard.");
+    } catch(e) {
+      qrShowStatus("❌ Lỗi copy: " + e.message);
+    }
+  }
+
+  async function qrCopySTK() {
+    const s = qrGetState();
+    if (!s) return;
+    const text = [
+      `${stkConfig.bankName} - ${stkConfig.accountNo}`,
+      stkConfig.accountName,
+      `Số tiền: ${ComboLogic.fmtK(s.finalPayK)} (${s.amountVnd.toLocaleString("vi-VN")} VND)`,
+      `Nội dung CK: ${currentOrderCode}`
+    ].join("\n");
+    const ok = await copyText(text);
+    qrShowStatus(ok ? "✅ Đã copy thông tin CK." : "❌ Lỗi copy.");
+  }
+
+  // Init STK config + order code
+  loadStkConfig();
+  regenOrderCode();
+
   // Render ngay với local sheets, rồi async fetch preset từ sheets.json và re-render.
   slRender();
   loadSheetPresets().then(presets => {
@@ -2360,6 +2716,13 @@ const App = (() => {
     slOpenUrl,
     slFilter,
     slRestorePresets,
+    updateShipFee,
+    regenOrderCode,
+    qrGenerate,
+    qrGenerateFull,
+    qrDownload,
+    qrCopyImage,
+    qrCopySTK,
     pickerFilter,
     pickerSelectAll,
     pickerDeselectAll,
