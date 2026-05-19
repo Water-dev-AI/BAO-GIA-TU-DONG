@@ -194,30 +194,23 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
     <div class="card">
       <h2>📋 Danh sách bảng giá</h2>
-      <div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;">
-        Bấm <b>Import</b> để mở picker chọn gói. Tên từng bộ giá trong sheet được auto-detect từ hàng 1.
-        <br>📌 = Preset từ <code style="background:#eef2f7;padding:1px 4px;border-radius:3px;">sheets.json</code> (mặc định khi load).
+      <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
+        Bấm <b>Import</b> để mở picker chọn gói. Tên từng bộ giá được auto-detect từ hàng 1 sheet.
       </div>
 
-      <div id="sheetListWrap" style="display:grid;gap:8px;margin-bottom:12px;"></div>
+      <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên..."
+        oninput="App.slFilter()"
+        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
 
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;align-items:end;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tên nước / nhãn</div>
-          <input id="slName" type="text" placeholder="VD: Trung Quốc..."
-            style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
-        </div>
-        <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Link Google Sheet (đã publish web CSV)</div>
-          <input id="slUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/..."
-            style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
-        </div>
+      <div id="sheetListWrap" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding-right:4px;"></div>
+
+      <div id="slRestoreWrap" style="margin-top:10px;display:none;">
+        <button class="light" onclick="App.slRestorePresets()" style="margin:0;font-size:12px;padding:7px 12px;">
+          ↺ Khôi phục <span id="slRestoreCount">0</span> preset đã xoá
+        </button>
       </div>
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="blue" onclick="App.slAdd()" style="margin:0;white-space:nowrap;">➕ Thêm vào danh sách</button>
-        <button class="light" onclick="App.slRestorePresets()" style="margin:0;white-space:nowrap;">↺ Khôi phục preset đã xoá</button>
-      </div>
-      <div id="slStatus" class="status" style="font-size:13px;"></div>
+
+      <div id="slStatus" class="status" style="font-size:13px;margin-top:8px;"></div>
     </div>
 
     <div class="card">
@@ -243,6 +236,22 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         </table>
       </div>
       <div class="totals" id="quickTotals"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;">💾 Lưu giỏ hiện tại</button>
+        </div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
+        Đơn nháp lưu cục bộ trên máy này, tự xoá sau 7 ngày. Bấm <b>Share</b> để tạo link gửi cho người khác mở/sửa.
+      </div>
+      <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách..."
+        oninput="App.draftFilter()"
+        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
+      <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
     </div>
 
     <div class="card">
@@ -276,9 +285,17 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         oninput="App.pickerFilter()" />
       <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
       <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
+      <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div id="pickerTabBar" style="padding:12px 18px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:flex-start;max-height:280px;overflow-y:auto;"></div>
+    <div id="pickerTabBar" style="padding:14px 18px;display:flex;flex-wrap:wrap;gap:10px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;"></div>
+    <div id="pickerFilterBar" style="padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#fafbfc;flex-shrink:0;font-size:13px;">
+      <span style="color:var(--muted);font-weight:600;">Loại:</span>
+      <button id="fltAll"      class="light" onclick="App.pickerSetTypeFilter('ALL')"     style="margin:0;padding:6px 14px;font-size:12px;">Cả 2</button>
+      <button id="fltEsim"     class="light" onclick="App.pickerSetTypeFilter('ESIM')"    style="margin:0;padding:6px 14px;font-size:12px;">ESIM</button>
+      <button id="fltPhysical" class="light" onclick="App.pickerSetTypeFilter('PHYSICAL')" style="margin:0;padding:6px 14px;font-size:12px;">SIM VẬT LÝ</button>
+      <span id="pickerFilterStats" style="color:var(--muted);font-size:12px;margin-left:auto;"></span>
+    </div>
     <div class="picker-body">
       <table class="picker-table">
         <thead>
@@ -298,6 +315,94 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div class="picker-sel-count" id="pickerSelCount">Chưa chọn gói nào</div>
       <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
       <button class="light" onclick="App.pickerClose()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay khi tải Google Sheet -->
+<div class="picker-overlay" id="slLoadingOverlay">
+  <div style="background:white;border-radius:14px;padding:28px 36px;display:flex;flex-direction:column;align-items:center;gap:16px;min-width:300px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.25);">
+    <div style="width:48px;height:48px;border:4px solid #e5e7eb;border-top-color:var(--blue);border-radius:50%;animation:slSpin 0.8s linear infinite;"></div>
+    <div id="slLoadingText" style="font-size:14px;font-weight:600;color:#1f2937;text-align:center;">Đang tải...</div>
+    <div id="slLoadingSub" style="font-size:12px;color:var(--muted);text-align:center;line-height:1.5;"></div>
+  </div>
+</div>
+<style>
+@keyframes slSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+</style>
+
+<!-- Modal Lưu đơn nháp -->
+<div class="picker-overlay" id="draftSaveOverlay" onclick="if(event.target===this)App.draftSaveClose()">
+  <div class="picker-modal" style="width:min(96vw, 520px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;" id="draftSaveTitle">💾 Lưu đơn nháp</h3>
+      <button onclick="App.draftSaveClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên khách hàng *</div>
+        <input id="draftName" type="text" placeholder="VD: Anh Minh"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Tag</div>
+        <div id="draftTagOptions" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="draftCustomTagWrap" style="display:none;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tag tuỳ chỉnh</div>
+        <input id="draftCustomTag" type="text" placeholder="VD: Tiktok"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
+      </div>
+      <div id="draftSaveStatus" style="font-size:12px;color:var(--red);min-height:16px;"></div>
+    </div>
+    <div class="picker-footer">
+      <div style="flex:1;font-size:12px;color:var(--muted);" id="draftSaveSummary"></div>
+      <button class="green" onclick="App.draftSave()">💾 Lưu</button>
+      <button class="light" onclick="App.draftSaveClose()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Share link -->
+<div class="picker-overlay" id="draftShareOverlay" onclick="if(event.target===this)App.draftShareClose()">
+  <div class="picker-modal" style="width:min(96vw, 640px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">🔗 Link chia sẻ đơn nháp</h3>
+      <button onclick="App.draftShareClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:13px;color:var(--muted);line-height:1.55;">
+        Link này chứa toàn bộ giỏ + tên KH + tag. Người nhận mở link sẽ thấy popup hỏi import đơn nháp.
+        Link có thể dài; nếu cần ngắn hơn, paste vào <a href="https://tinyurl.com" target="_blank" style="color:var(--blue);">tinyurl.com</a> trước khi gửi.
+      </div>
+      <textarea id="draftShareLink" readonly style="width:100%;min-height:90px;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:12px;font-family:'Roboto Mono',monospace;resize:vertical;background:#f9fafb;"></textarea>
+      <div id="draftShareLen" style="font-size:11px;color:var(--muted);"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.draftShareCopy()">📋 Copy link</button>
+      <button class="blue" onclick="App.draftShareOpen()">↗ Mở thử</button>
+      <button class="light" onclick="App.draftShareClose()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirm import từ link -->
+<div class="picker-overlay" id="draftImportOverlay" onclick="if(event.target===this)App.draftImportClose()">
+  <div class="picker-modal" style="width:min(96vw, 520px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">📥 Import đơn nháp từ link</h3>
+      <button onclick="App.draftImportClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <div id="draftImportInfo" style="font-size:13px;line-height:1.6;"></div>
+      <div style="font-size:12px;color:var(--amber);background:#fffaeb;padding:10px 12px;border-radius:8px;border:1px solid #fde68a;">
+        ⚠️ Việc import sẽ thay thế toàn bộ giỏ hiện tại của bạn. Nếu muốn giữ giỏ hiện tại, hãy <b>Lưu đơn nháp</b> trước.
+      </div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.draftImportConfirm(true)">✅ Import + Lưu thành đơn nháp</button>
+      <button class="blue" onclick="App.draftImportConfirm(false)">⬇️ Chỉ Import vào giỏ</button>
+      <button class="light" onclick="App.draftImportClose()">Huỷ</button>
     </div>
   </div>
 </div>
@@ -644,7 +749,7 @@ const ComboLogic = (() => {
         bill: "❌ Chưa có dòng nào để tính.",
         notes: "Chưa có notes.",
         full: "❌ Chưa có dòng nào để tính.",
-        summary: { totalK: 0, discountK: 0, remainK: 0, totalQtyForShip, regularPhysicalQty, rechargeQty },
+        summary: { totalK: 0, discountK: 0, remainK: 0, totalQty: 0, totalQtyForShip, regularPhysicalQty, rechargeQty },
         errors,
       };
     }
@@ -676,7 +781,8 @@ const ComboLogic = (() => {
       errors.slice(0, 10).forEach(e => outLines.push("- " + e));
     }
 
-    const bill = outLines.join("\n");
+    const BILL_HEADER = "SHOP GỬI BÁO GIÁ Ạ:";
+    const bill = BILL_HEADER + "\n\n" + outLines.join("\n");
     const notes = buildDiscountNotes(parsedItems, discount.amount);
     const full = notes && !notes.startsWith("Không có")
       ? bill + "\n\nNotes phân bố giảm giá:\n" + notes
@@ -687,7 +793,7 @@ const ComboLogic = (() => {
       bill,
       notes,
       full,
-      summary: { totalK, discountK: discount.amount, discountLabel: discount.label, remainK, totalQtyForShip, regularPhysicalQty, rechargeQty },
+      summary: { totalK, discountK: discount.amount, discountLabel: discount.label, remainK, totalQty: totalQtyForShip + rechargeQty, totalQtyForShip, regularPhysicalQty, rechargeQty },
       errors,
     };
   }
@@ -888,7 +994,8 @@ const App = (() => {
       `<span class="pill">Tạm tính: ${ComboLogic.fmtK(s.totalK)}</span>`,
       `<span class="pill">Giảm: ${ComboLogic.fmtK(s.discountK || 0)}</span>`,
       `<span class="pill">Còn: ${ComboLogic.fmtK(s.remainK || 0)}</span>`,
-      `<span class="pill">Item ship: ${s.totalQtyForShip || 0}</span>`,
+      `<span class="pill">SIM cần giao: ${s.regularPhysicalQty || 0}</span>`,
+      `<span class="pill">Tổng SL: ${s.totalQty || 0}</span>`,
     ].join(" ");
   }
 
@@ -1019,48 +1126,67 @@ const App = (() => {
     return all;
   }
 
+  let slSearchKw = "";
+
+  function slFilter() {
+    slSearchKw = (document.getElementById("slSearch").value || "").trim();
+    slRender();
+  }
+
   function slRender() {
     const list = slLoadAll();
     const wrap = document.getElementById("sheetListWrap");
-    if (!list.length) {
-      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;">Chưa có sheet nào. Thêm bên dưới hoặc tạo file <code>sheets.json</code> cùng folder.</div>';
+
+    // Update restore button visibility
+    const bl = loadPresetBlacklist();
+    const restoreWrap = document.getElementById("slRestoreWrap");
+    if (restoreWrap) {
+      if (bl.size > 0) {
+        restoreWrap.style.display = "block";
+        document.getElementById("slRestoreCount").textContent = String(bl.size);
+      } else {
+        restoreWrap.style.display = "none";
+      }
+    }
+
+    // Filter by search keyword (no-diacritic, case-insensitive)
+    const kw = ComboLogic.norm(slSearchKw);
+    const filtered = kw ? list.filter(x => ComboLogic.norm(x.name).includes(kw)) : list;
+
+    if (!filtered.length) {
+      wrap.innerHTML = kw
+        ? `<div style="color:var(--muted);font-size:13px;padding:12px;">Không tìm thấy bảng giá nào khớp "${slSearchKw}".</div>`
+        : '<div style="color:var(--muted);font-size:13px;padding:12px;">Chưa có sheet nào. Thêm vào <code>sheets.json</code>.</div>';
       return;
     }
-    wrap.innerHTML = list.map((item, idx) => {
+
+    // Tìm idx thực sự trong slLoadAll() để slImport/slDelete dùng đúng
+    wrap.innerHTML = filtered.map(item => {
+      const realIdx = list.indexOf(item);
       const badge = item.isPreset
         ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;">📌 PRESET</span>'
         : '';
-      const urlDisplay = item.url
-        ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px;">${item.url}</div>`
-        : '<div style="font-size:11px;color:var(--red);font-style:italic;">⚠️ Chưa có URL — sửa <code>sheets.json</code> để bổ sung</div>';
       const importBtn = item.url
-        ? `<button class="green" style="margin:0;padding:8px 14px;" onclick="App.slImport(${idx})">⬇️ Import</button>`
+        ? `<button class="green" style="margin:0;padding:8px 14px;" onclick="App.slImport(${realIdx})">⬇️ Import</button>`
         : '<button class="light" style="margin:0;padding:8px 14px;opacity:.5;cursor:not-allowed;" disabled>⬇️ Import</button>';
+      const urlDisplay = item.url
+        ? ''
+        : '<div style="font-size:11px;color:var(--red);font-style:italic;">⚠️ Chưa có URL — sửa <code>sheets.json</code> để bổ sung</div>';
       return `
-        <div style="display:flex;align-items:center;gap:8px;background:${item.isPreset ? '#f0f7ff' : '#f9fafb'};border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:200px;">
-            <div style="font-weight:700;font-size:14px;">${item.name}${badge}</div>
+        <div style="display:flex;align-items:center;gap:8px;background:${item.isPreset ? '#f0f7ff' : '#f9fafb'};border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;flex-shrink:0;">
+          <div style="flex:1;min-width:160px;">
+            <div style="font-weight:700;font-size:14px;line-height:1.4;">${item.name}${badge}</div>
             ${urlDisplay}
           </div>
           ${importBtn}
-          <button class="red" style="margin:0;padding:8px 10px;" onclick="App.slDelete(${idx})" title="Xoá khỏi danh sách">✕</button>
+          <button class="red" style="margin:0;padding:8px 10px;" onclick="App.slDelete(${realIdx})" title="Xoá khỏi danh sách">✕</button>
         </div>
       `;
     }).join("");
   }
 
   function slAdd() {
-    const name = document.getElementById("slName").value.trim();
-    const url  = document.getElementById("slUrl").value.trim();
-    if (!name) { document.getElementById("slStatus").textContent = "⚠️ Cần nhập tên."; return; }
-    if (!url)  { document.getElementById("slStatus").textContent = "⚠️ Cần nhập link sheet."; return; }
-    const list = slLoad();
-    list.push({ name, url, gid: "0", tabNames: "" });
-    slSave(list);
-    slRender();
-    document.getElementById("slName").value = "";
-    document.getElementById("slUrl").value = "";
-    document.getElementById("slStatus").textContent = `✅ Đã thêm "${name}".`;
+    // Bỏ form thêm thủ công — giữ stub để không break code cũ
   }
 
   function slDelete(idx) {
@@ -1104,7 +1230,19 @@ const App = (() => {
   let pickerTables = []; // [{name, items}]
   let pickerActiveTab = 0;
 
-  async function slOpen(idx) {
+  // In-memory CSV cache: key=URL, value={csvText, fetchedAt}. Reset khi refresh trang.
+  const csvCache = new Map();
+
+  function slShowLoading(title, sub) {
+    document.getElementById("slLoadingText").textContent = title || "Đang tải...";
+    document.getElementById("slLoadingSub").textContent = sub || "";
+    document.getElementById("slLoadingOverlay").classList.add("open");
+  }
+  function slHideLoading() {
+    document.getElementById("slLoadingOverlay").classList.remove("open");
+  }
+
+  async function slOpen(idx, forceRefresh) {
     const list = slLoadAll();
     const item = list[idx];
     if (!item) return;
@@ -1112,29 +1250,46 @@ const App = (() => {
       document.getElementById("slStatus").textContent = "⚠️ Sheet này chưa có URL.";
       return;
     }
-    document.getElementById("slStatus").textContent = "Đang tải " + item.name + "...";
 
     const _csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
-    if (!_csvUrl) { document.getElementById("slStatus").textContent = "Link khong hop le."; return; }
+    if (!_csvUrl) { document.getElementById("slStatus").textContent = "Link không hợp lệ."; return; }
+
     let csvText;
-    try {
-      csvText = await gsFetch(_csvUrl);
-    } catch(e) {
-      document.getElementById("slStatus").textContent = "Loi: " + e.message;
+    const cached = csvCache.get(_csvUrl);
+    if (cached && !forceRefresh) {
+      // Cache hit → mở picker tức thì
+      csvText = cached.csvText;
+      document.getElementById("slStatus").textContent = "⚡ " + item.name + " (đã cache trong phiên)";
+    } else {
+      // Cache miss → fetch với loading overlay
+      slShowLoading("Đang tải " + item.name + "...", "Lần đầu trong phiên có thể mất 5-15 giây tuỳ tốc độ mạng.");
+      try {
+        csvText = await gsFetch(_csvUrl);
+        csvCache.set(_csvUrl, { csvText, fetchedAt: Date.now() });
+      } catch(e) {
+        slHideLoading();
+        document.getElementById("slStatus").textContent = "❌ Lỗi: " + e.message;
+        return;
+      }
+    }
+
+    // Parse + build picker tables
+    slShowLoading("Đang xử lý dữ liệu...", "");
+    // Yield 1 frame để loading text kịp update
+    await new Promise(r => setTimeout(r, 10));
+
+    const tables = gsParseTables(csvText, "2", "");
+    if (!tables.length) {
+      slHideLoading();
+      document.getElementById("slStatus").textContent = "❌ Không parse được gói nào.";
       return;
     }
 
-    // Bắt đầu từ hàng 2 (hàng 1 là header dù bao nhiêu dòng merged)
-    const tables = gsParseTables(csvText, "2", "");
-    if (!tables.length) { document.getElementById("slStatus").textContent = "Khong parse duoc goi nao."; return; }
-
-    // Apply custom tab names if provided
     const customNames = (item.tabNames || "").split("|").map(s => s.trim()).filter(Boolean);
     if (customNames.length) {
       tables.forEach((t, i) => { if (customNames[i]) t.name = customNames[i]; });
     }
 
-    // Build pickerTables: mỗi bộ là 1 tab
     pickerTables = tables.map(t => {
       const { good } = ComboLogic.buildCartFromText(t.lines.join("\n"));
       return {
@@ -1143,39 +1298,74 @@ const App = (() => {
       };
     }).filter(t => t.items.length > 0);
 
-    if (!pickerTables.length) { document.getElementById("slStatus").textContent = "Khong co goi nao parse duoc."; return; }
+    if (!pickerTables.length) {
+      slHideLoading();
+      document.getElementById("slStatus").textContent = "❌ Không có gói nào parse được.";
+      return;
+    }
+
+    // Lưu sheet hiện tại để dùng cho nút Refresh
+    currentPickerSheetIdx = idx;
 
     pickerChecked = new Set();
     pickerSearchKw = "";
     pickerActiveTab = 0;
+    pickerTypeFilter = "ALL";
     document.getElementById("pickerSearch").value = "";
     const totalGoi = pickerTables.reduce((s, t) => s + t.items.length, 0);
-    document.getElementById("pickerTitle").textContent = item.name + " — " + pickerTables.length + " bo, " + totalGoi + " goi";
-    document.getElementById("slStatus").textContent = "Da tai " + pickerTables.length + " bo bang gia, " + totalGoi + " goi. Chon roi bam Them vao gio.";
+    const cacheNote = cached && !forceRefresh ? " ⚡" : "";
+    document.getElementById("pickerTitle").textContent = item.name + " — " + pickerTables.length + " bộ, " + totalGoi + " gói" + cacheNote;
+    document.getElementById("slStatus").textContent = "✅ Đã tải " + pickerTables.length + " bộ, " + totalGoi + " gói.";
 
     pickerRenderTabs();
+    pickerRenderFilterButtons();
     pickerRender();
+    slHideLoading();
     document.getElementById("pickerOverlay").classList.add("open");
+  }
+
+  let currentPickerSheetIdx = -1;
+
+  async function pickerRefresh() {
+    if (currentPickerSheetIdx < 0) return;
+    document.getElementById("pickerOverlay").classList.remove("open");
+    // Xoá cache để fetch lại
+    const list = slLoadAll();
+    const item = list[currentPickerSheetIdx];
+    if (item) {
+      const _csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+      csvCache.delete(_csvUrl);
+    }
+    await slOpen(currentPickerSheetIdx, true);
   }
 
   function pickerRenderTabs() {
     const tabBar = document.getElementById("pickerTabBar");
+    // Nếu chỉ có 1 tab, ẩn tab bar để tiết kiệm chỗ
+    if (pickerTables.length <= 1) {
+      tabBar.style.display = "none";
+      return;
+    }
+    tabBar.style.display = "flex";
     tabBar.innerHTML = pickerTables.map((t, i) => {
       const isActive = i === pickerActiveTab;
-      // escape HTML rồi convert \n → <br> để render đúng text nhiều dòng từ hàng 1 sheet
       const safe = String(t.name)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/\n/g, "<br>");
-      return '<button onclick="App.pickerSwitchTab(' + i + ')" style="' +
-        'padding:12px 18px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;' +
-        'line-height:1.5;text-align:left;white-space:normal;word-break:break-word;' +
-        'max-width:420px;min-width:220px;flex:0 1 auto;' +
-        (isActive
-          ? 'background:var(--blue);color:white;box-shadow:0 2px 8px rgba(23,92,211,.25);'
-          : 'background:#eef2f7;color:#344054;') +
-        '">' + safe + '<br><span style="font-weight:400;font-size:11px;opacity:.8;">' + t.items.length + ' gói</span></button>';
+      const bg = isActive
+        ? 'background:var(--blue);color:white;box-shadow:0 2px 8px rgba(23,92,211,.25);'
+        : 'background:#eef2f7;color:#344054;';
+      return '<div role="button" tabindex="0" onclick="App.pickerSwitchTab(' + i + ')" style="' +
+        'box-sizing:border-box;padding:14px 18px;border:0;border-radius:10px;cursor:pointer;' +
+        'font-size:13px;font-weight:600;line-height:1.55;text-align:left;' +
+        'white-space:normal;word-break:break-word;overflow-wrap:anywhere;' +
+        'max-width:440px;min-width:240px;flex:0 1 auto;' +
+        'display:flex;flex-direction:column;justify-content:flex-start;gap:6px;' +
+        'font-family:inherit;overflow:visible;height:auto;min-height:0;' + bg +
+        '"><div style="display:block;">' + safe + '</div>' +
+        '<div style="font-weight:400;font-size:11px;opacity:.8;">' + t.items.length + ' gói</div></div>';
     }).join("");
   }
 
@@ -1188,6 +1378,38 @@ const App = (() => {
   }
 
 
+  let pickerTypeFilter = "ALL"; // 'ALL' | 'ESIM' | 'PHYSICAL'
+
+  // Helper: kiểm tra 1 item có pass filter hiện tại không
+  function pickerItemMatches(item, kw) {
+    const p = item.parsed;
+    const text = (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase();
+    if (kw && !text.includes(kw)) return false;
+    if (pickerTypeFilter !== "ALL") {
+      const typeNorm = ComboLogic.norm(p.type || "");
+      if (pickerTypeFilter === "ESIM" && !typeNorm.includes("esim")) return false;
+      if (pickerTypeFilter === "PHYSICAL" && !(typeNorm.includes("sim vat ly") || typeNorm === "sim")) return false;
+    }
+    return true;
+  }
+
+  function pickerRenderFilterButtons() {
+    const blue = 'background:var(--blue);color:white;';
+    const light = 'background:#eef2f7;color:#344054;';
+    const ids = { ALL: "fltAll", ESIM: "fltEsim", PHYSICAL: "fltPhysical" };
+    Object.entries(ids).forEach(([k, id]) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.setAttribute("style", "margin:0;padding:6px 14px;font-size:12px;font-weight:600;" + (pickerTypeFilter === k ? blue : light));
+    });
+  }
+
+  function pickerSetTypeFilter(t) {
+    pickerTypeFilter = t;
+    pickerRenderFilterButtons();
+    pickerRender();
+  }
+
   function pickerRender() {
     const tbody = document.getElementById("pickerTbody");
     const kw = pickerSearchKw.toLowerCase();
@@ -1197,11 +1419,9 @@ const App = (() => {
     const items = tbl.items;
     let shown = 0;
     items.forEach((item, idx) => {
-      const p = item.parsed;
-      const text = (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase();
-      if (kw && !text.includes(kw)) return;
+      if (!pickerItemMatches(item, kw)) return;
       shown++;
-      // Use composite key: tab_idx
+      const p = item.parsed;
       const key = pickerActiveTab + "_" + idx;
       const checked = pickerChecked.has(key);
       const tr = document.createElement("tr");
@@ -1218,8 +1438,26 @@ const App = (() => {
       const tdPrice = document.createElement("td"); tdPrice.className = "col-price"; tdPrice.textContent = p.price; tr.appendChild(tdPrice);
       tbody.appendChild(tr);
     });
+
+    // Update stats
+    const statsEl = document.getElementById("pickerFilterStats");
+    if (statsEl) {
+      const total = items.length;
+      if (shown < total) {
+        statsEl.textContent = `Hiện ${shown}/${total} gói`;
+        statsEl.style.color = "var(--blue)";
+        statsEl.style.fontWeight = "600";
+      } else {
+        statsEl.textContent = `${total} gói`;
+        statsEl.style.color = "var(--muted)";
+        statsEl.style.fontWeight = "400";
+      }
+    }
+
     const cnt = pickerChecked.size;
-    document.getElementById("pickerSelCount").textContent = cnt ? ("Da chon " + cnt + " goi") : ("Chua chon (" + shown + " goi hien thi)");
+    document.getElementById("pickerSelCount").textContent = cnt
+      ? ("Đã chọn " + cnt + " gói")
+      : ("Chưa chọn (" + shown + " gói hiển thị)");
   }
 
 
@@ -1228,7 +1466,9 @@ const App = (() => {
     else { pickerChecked.add(key); tr.classList.add("selected"); }
     const cb = tr.querySelector("input[type=checkbox]");
     if (cb) cb.checked = pickerChecked.has(key);
-    document.getElementById("pickerSelCount").textContent = pickerChecked.size ? ("Da chon " + pickerChecked.size + " goi") : "Chua chon goi nao";
+    document.getElementById("pickerSelCount").textContent = pickerChecked.size
+      ? ("Đã chọn " + pickerChecked.size + " gói")
+      : "Chưa chọn gói nào";
   }
 
   function pickerFilter() {
@@ -1240,10 +1480,11 @@ const App = (() => {
     const kw = pickerSearchKw.toLowerCase();
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) return;
+    // Chỉ chọn những item match filter hiện tại (search + type)
     tbl.items.forEach((item, idx) => {
-      const p = item.parsed;
-      const key = pickerActiveTab + "_" + idx;
-      if (!kw || (p.name + " " + p.type + " " + p.days + " " + p.price).toLowerCase().includes(kw)) pickerChecked.add(key);
+      if (pickerItemMatches(item, kw)) {
+        pickerChecked.add(pickerActiveTab + "_" + idx);
+      }
     });
     pickerRender();
   }
@@ -1267,6 +1508,355 @@ const App = (() => {
 
   async function slImport(idx)  { await slOpen(idx); }
   async function slPreview(idx) { await slOpen(idx); }
+
+  /* ===== DRAFTS (đơn nháp) ===== */
+  const DRAFT_KEY = "combo_bill_drafts_v1";
+  const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+
+  // Tag config: ZALO mặc định, ZALO OA, FB, KHÁC (custom text)
+  const DRAFT_TAGS = [
+    { id: "ZALO",    label: "ZALO",     color: "#0068ff", bg: "#e0efff" },
+    { id: "ZALO_OA", label: "ZALO OA",  color: "#ff6900", bg: "#fff1e6" },
+    { id: "FB",      label: "FB",       color: "#1877F2", bg: "#e7f0fd" },
+    { id: "KHAC",    label: "KHÁC",     color: "#6b7280", bg: "#f3f4f6" },
+  ];
+
+  let draftSearchKw = "";
+  let draftEditingId = null; // nếu đang edit 1 draft, lưu id để overwrite khi Lưu
+  let draftSelectedTag = "ZALO";
+  let pendingImportPayload = null; // payload từ URL hash chờ confirm
+
+  function draftsLoad() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "[]"); } catch { return []; }
+  }
+  function draftsSave(list) { localStorage.setItem(DRAFT_KEY, JSON.stringify(list)); }
+
+  // Auto-cleanup drafts > 7 ngày, trả về list đã clean.
+  function draftsCleanup() {
+    const now = Date.now();
+    const list = draftsLoad();
+    const fresh = list.filter(d => (now - (d.createdAt || 0)) < DRAFT_TTL_MS);
+    if (fresh.length !== list.length) draftsSave(fresh);
+    return fresh;
+  }
+
+  function draftGenId() {
+    return "d_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function draftFormatTime(ts) {
+    if (!ts) return "";
+    const now = Date.now();
+    const diff = now - ts;
+    const minute = 60_000, hour = 3_600_000, day = 86_400_000;
+    if (diff < minute) return "vừa xong";
+    if (diff < hour) return Math.floor(diff / minute) + " phút trước";
+    if (diff < day) return Math.floor(diff / hour) + " giờ trước";
+    const d = Math.floor(diff / day);
+    return d + " ngày trước";
+  }
+
+  function draftTagBadge(tag, customTag) {
+    const cfg = DRAFT_TAGS.find(t => t.id === tag) || DRAFT_TAGS[3];
+    const label = tag === "KHAC" && customTag ? customTag : cfg.label;
+    return `<span style="background:${cfg.bg};color:${cfg.color};padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.3px;white-space:nowrap;">${escapeHtml(label)}</span>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function draftFilter() {
+    draftSearchKw = (document.getElementById("draftSearch").value || "").trim();
+    draftRender();
+  }
+
+  function draftRender() {
+    const list = draftsCleanup();
+    const wrap = document.getElementById("draftListWrap");
+    document.getElementById("draftCount").textContent = list.length + " đơn";
+
+    const kw = ComboLogic.norm(draftSearchKw);
+    const filtered = kw ? list.filter(d => {
+      const hay = ComboLogic.norm(d.name + " " + (d.customTag || ""));
+      return hay.includes(kw);
+    }) : list;
+
+    if (!filtered.length) {
+      wrap.innerHTML = kw
+        ? `<div style="color:var(--muted);font-size:13px;padding:10px;">Không tìm thấy đơn khớp "${escapeHtml(draftSearchKw)}".</div>`
+        : '<div style="color:var(--muted);font-size:13px;padding:10px;">Chưa có đơn nháp nào. Bấm "💾 Lưu giỏ hiện tại" để tạo.</div>';
+      return;
+    }
+
+    // Sort mới nhất lên trên
+    filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    wrap.innerHTML = filtered.map(d => {
+      const itemCount = (d.cart || []).length;
+      return `
+        <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              ${draftTagBadge(d.tag, d.customTag)}
+              <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);">${itemCount} dòng · ${draftFormatTime(d.createdAt)}</div>
+          </div>
+          <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
+          <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}')">🔗 Share</button>
+          <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}')" title="Xoá đơn">✕</button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // --- Modal Lưu đơn ---
+  function draftRenderTagOptions() {
+    const wrap = document.getElementById("draftTagOptions");
+    wrap.innerHTML = DRAFT_TAGS.map(t => {
+      const active = t.id === draftSelectedTag;
+      const border = active ? `2px solid ${t.color}` : `2px solid transparent`;
+      return `<button onclick="App.draftSelectTag('${t.id}')" style="
+        margin:0;padding:7px 14px;background:${t.bg};color:${t.color};
+        border:${border};border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;
+        font-family:inherit;letter-spacing:.3px;
+      ">${t.label}</button>`;
+    }).join("");
+    document.getElementById("draftCustomTagWrap").style.display =
+      draftSelectedTag === "KHAC" ? "block" : "none";
+  }
+
+  function draftSelectTag(id) {
+    draftSelectedTag = id;
+    draftRenderTagOptions();
+  }
+
+  function draftSaveOpen(prefillName, prefillTag, prefillCustom) {
+    if (!cart.length && !prefillName) {
+      showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
+      return;
+    }
+    draftSelectedTag = prefillTag || "ZALO";
+    document.getElementById("draftName").value = prefillName || "";
+    document.getElementById("draftCustomTag").value = prefillCustom || "";
+    document.getElementById("draftSaveStatus").textContent = "";
+    document.getElementById("draftSaveTitle").textContent = draftEditingId
+      ? "✏️ Cập nhật đơn nháp"
+      : "💾 Lưu đơn nháp";
+    const summary = `${cart.length} dòng trong giỏ`;
+    document.getElementById("draftSaveSummary").textContent = summary;
+    draftRenderTagOptions();
+    document.getElementById("draftSaveOverlay").classList.add("open");
+    setTimeout(() => document.getElementById("draftName").focus(), 50);
+  }
+
+  function draftSaveClose() {
+    document.getElementById("draftSaveOverlay").classList.remove("open");
+    draftEditingId = null;
+  }
+
+  function draftSave() {
+    const name = document.getElementById("draftName").value.trim();
+    if (!name) {
+      document.getElementById("draftSaveStatus").textContent = "⚠️ Cần nhập tên khách hàng.";
+      return;
+    }
+    const customTag = draftSelectedTag === "KHAC"
+      ? document.getElementById("draftCustomTag").value.trim()
+      : "";
+    if (draftSelectedTag === "KHAC" && !customTag) {
+      document.getElementById("draftSaveStatus").textContent = "⚠️ Tag KHÁC cần nhập text tuỳ chỉnh.";
+      return;
+    }
+
+    const list = draftsCleanup();
+    const now = Date.now();
+    if (draftEditingId) {
+      const idx = list.findIndex(d => d.id === draftEditingId);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), updatedAt: now };
+      } else {
+        // fallback: tạo mới nếu không tìm thấy
+        list.unshift({ id: draftGenId(), name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), createdAt: now, updatedAt: now });
+      }
+    } else {
+      list.unshift({ id: draftGenId(), name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), createdAt: now, updatedAt: now });
+    }
+    draftsSave(list);
+    draftSaveClose();
+    draftRender();
+    showStatus(`✅ Đã lưu đơn nháp "${name}".`);
+  }
+
+  // --- Actions trên đơn nháp ---
+  function draftImport(id) {
+    const list = draftsCleanup();
+    const d = list.find(x => x.id === id);
+    if (!d) return;
+    if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng đơn nháp "${d.name}"?`)) return;
+    cart = JSON.parse(JSON.stringify(d.cart || []));
+    saveCart();
+    render();
+    draftEditingId = id;
+    showStatus(`✅ Đã import đơn "${d.name}". Mọi thay đổi có thể lưu lại bằng "💾 Lưu giỏ hiện tại".`);
+  }
+
+  function draftDelete(id) {
+    const list = draftsCleanup();
+    const d = list.find(x => x.id === id);
+    if (!d) return;
+    if (!confirm(`Xoá đơn nháp "${d.name}"?`)) return;
+    const next = list.filter(x => x.id !== id);
+    draftsSave(next);
+    if (draftEditingId === id) draftEditingId = null;
+    draftRender();
+    showStatus(`✅ Đã xoá đơn "${d.name}".`);
+  }
+
+  // --- Share link (encode draft vào URL hash) ---
+  // Dùng URL-safe base64 + JSON minimal. Modern app static, không backend.
+  function urlSafeEncode(str) {
+    return btoa(unescape(encodeURIComponent(str)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function urlSafeDecode(str) {
+    str = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    return decodeURIComponent(escape(atob(str)));
+  }
+
+  function buildShareLink(name, tag, customTag, cartData) {
+    const payload = {
+      v: 1,
+      n: name,
+      t: tag,
+      c: (cartData || []).map(it => {
+        const o = { l: it.line, q: it.qty };
+        if (it.note) o.nt = it.note;
+        return o;
+      })
+    };
+    if (tag === "KHAC" && customTag) payload.ct = customTag;
+    const json = JSON.stringify(payload);
+    const encoded = urlSafeEncode(json);
+    const base = location.origin + location.pathname + location.search;
+    return base + "#d=" + encoded;
+  }
+
+  function parseSharePayload(hash) {
+    if (!hash) return null;
+    const m = hash.match(/[#&]d=([^&]+)/);
+    if (!m) return null;
+    try {
+      const json = urlSafeDecode(m[1]);
+      const data = JSON.parse(json);
+      return {
+        name: String(data.n || ""),
+        tag: String(data.t || "ZALO"),
+        customTag: String(data.ct || ""),
+        cart: (data.c || []).map(x => ({
+          line: String(x.l || ""),
+          qty: x.q == null ? "1" : String(x.q),
+          note: String(x.nt || "")
+        }))
+      };
+    } catch (e) {
+      console.warn("parseSharePayload failed:", e);
+      return null;
+    }
+  }
+
+  let lastShareLink = "";
+
+  function draftShare(id) {
+    const list = draftsCleanup();
+    const d = list.find(x => x.id === id);
+    if (!d) return;
+    lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart);
+    const ta = document.getElementById("draftShareLink");
+    ta.value = lastShareLink;
+    document.getElementById("draftShareLen").textContent =
+      `Độ dài link: ${lastShareLink.length} ký tự` +
+      (lastShareLink.length > 2000 ? " (hơi dài — cân nhắc rút gọn qua tinyurl.com)" : "");
+    document.getElementById("draftShareOverlay").classList.add("open");
+    setTimeout(() => { ta.focus(); ta.select(); }, 50);
+  }
+
+  function draftShareClose() {
+    document.getElementById("draftShareOverlay").classList.remove("open");
+  }
+
+  async function draftShareCopy() {
+    if (!lastShareLink) return;
+    const ok = await copyText(lastShareLink);
+    if (ok) showStatus("✅ Đã copy link share.");
+    draftShareClose();
+  }
+
+  function draftShareOpen() {
+    if (!lastShareLink) return;
+    window.open(lastShareLink, "_blank");
+  }
+
+  // --- Import từ URL hash khi load app ---
+  function draftCheckUrlHash() {
+    const payload = parseSharePayload(location.hash);
+    if (!payload) return;
+    pendingImportPayload = payload;
+    const tagLabel = payload.tag === "KHAC" && payload.customTag
+      ? payload.customTag
+      : (DRAFT_TAGS.find(t => t.id === payload.tag)?.label || payload.tag);
+    document.getElementById("draftImportInfo").innerHTML = `
+      <div style="margin-bottom:8px;">Bạn nhận được 1 đơn nháp chia sẻ:</div>
+      <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          ${draftTagBadge(payload.tag, payload.customTag)}
+          <b>${escapeHtml(payload.name || "(không có tên)")}</b>
+        </div>
+        <div style="font-size:12px;color:var(--muted);">${payload.cart.length} dòng</div>
+      </div>
+    `;
+    document.getElementById("draftImportOverlay").classList.add("open");
+    // Xoá hash khỏi URL để refresh không hiện lại popup
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+
+  function draftImportClose() {
+    document.getElementById("draftImportOverlay").classList.remove("open");
+    pendingImportPayload = null;
+  }
+
+  function draftImportConfirm(saveAsDraft) {
+    if (!pendingImportPayload) { draftImportClose(); return; }
+    const p = pendingImportPayload;
+    cart = p.cart;
+    saveCart();
+    render();
+    if (saveAsDraft && p.name) {
+      const list = draftsCleanup();
+      const now = Date.now();
+      list.unshift({
+        id: draftGenId(),
+        name: p.name,
+        tag: p.tag || "ZALO",
+        customTag: p.customTag || "",
+        cart: JSON.parse(JSON.stringify(p.cart)),
+        createdAt: now,
+        updatedAt: now
+      });
+      draftsSave(list);
+      draftRender();
+      showStatus(`✅ Đã import + lưu đơn nháp "${p.name}".`);
+    } else {
+      showStatus(`✅ Đã import đơn "${p.name || '(không tên)'}" vào giỏ.`);
+    }
+    draftImportClose();
+  }
+
+  // Init drafts
+  draftRender();
+  draftCheckUrlHash();
 
   // Render ngay với local sheets, rồi async fetch preset từ sheets.json và re-render.
   slRender();
@@ -1620,6 +2210,7 @@ const App = (() => {
     slDelete,
     slImport,
     slPreview,
+    slFilter,
     slRestorePresets,
     pickerFilter,
     pickerSelectAll,
@@ -1627,6 +2218,21 @@ const App = (() => {
     pickerClose,
     pickerConfirm,
     pickerSwitchTab,
+    pickerRefresh,
+    pickerSetTypeFilter,
+    draftSaveOpen,
+    draftSaveClose,
+    draftSave,
+    draftSelectTag,
+    draftFilter,
+    draftImport,
+    draftDelete,
+    draftShare,
+    draftShareClose,
+    draftShareCopy,
+    draftShareOpen,
+    draftImportClose,
+    draftImportConfirm,
   };
 })();
 </script>
