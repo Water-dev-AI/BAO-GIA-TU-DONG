@@ -519,7 +519,8 @@ const ComboLogic = (() => {
   const RECHARGE_DISCOUNT_K = 20; // nạp gói SIM VẬT LÝ: giá -20k/SIM
 
   function stripAccents(s) {
-    return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d").replace(/Đ/g, "D");
   }
 
   function norm(s) {
@@ -1312,47 +1313,54 @@ const App = (() => {
   let slSearchKw = "";
 
   // Các nước yêu thích — keyword khớp với tên trong sheets.json (không dấu, không phân biệt hoa thường)
+  // Mỗi favorite có thể dùng `id` (match presetId chính xác) hoặc `kw` (search text trong tên)
   const FAVORITE_COUNTRIES = [
-    { label: "🇰🇷 Hàn",         kw: "han quoc" },
-    { label: "🇨🇳 TQ",          kw: "trung quoc" },
-    { label: "🇯🇵 Nhật",        kw: "nhat ban" },
-    { label: "🇺🇸 Mỹ",          kw: "my" },
-    { label: "🇪🇺 Châu Âu",     kw: "chau au" },
-    { label: "🇸🇬 SG-MY",       kw: "singapore, malaysia" },
-    { label: "🇻🇳 VN",          kw: "vn" },
-    { label: "🇹🇭 Thái",        kw: "thai lan" },
-    { label: "🇸🇬 Sing-Indo-Thai", kw: "singapre" },
-    { label: "🇰🇭 CPC",         kw: "campuchia" },
-    { label: "🌏 5 Nước ĐNA",    kw: "5 nuoc" },
-    { label: "🇭🇰 HK-Macao",     kw: "hong kong" },
-    { label: "🇹🇼 Đài",         kw: "dai loan" },
-    { label: "🇦🇺 Úc-NZ",       kw: "uc newzealand" },
+    { label: "🇰🇷 Hàn",         id: "han-quoc" },
+    { label: "🇨🇳 TQ",          id: "trung-quoc" },
+    { label: "🇯🇵 Nhật",        id: "nhat-ban" },
+    { label: "🇺🇸 Mỹ",          id: "my" },
+    { label: "🇪🇺 Châu Âu",     id: "chau-au" },
+    { label: "🇸🇬 Sing-Mã",     id: "sg-my" },
+    { label: "🇻🇳 VN",          id: "vn" },
+    { label: "🇹🇭 Thái",        id: "thai-lan" },
+    { label: "🇸🇬 Sing-Indo-Thai", id: "singapre-id-th" },
+    { label: "🇰🇭 CPC",         id: "campuchia" },
+    { label: "🌏 5 Nước ĐNA",    id: "dna-5-nuoc" },
+    { label: "🇭🇰 HK-Macao",     id: "hong-kong-macao" },
+    { label: "🇹🇼 Đài",         id: "dai-loan" },
+    { label: "🇦🇺 Úc-NZ",       id: "uc-newzealand" },
   ];
+
+  let slFavoriteId = ""; // preset ID đang được chọn từ favorites
 
   function slRenderFavorites() {
     const wrap = document.getElementById("slFavorites");
     if (!wrap) return;
     wrap.innerHTML = FAVORITE_COUNTRIES.map(f => {
-      const active = slSearchKw.toLowerCase() === f.kw.toLowerCase();
+      const active = slFavoriteId === f.id;
       const bg = active ? "background:var(--blue);color:white;" : "background:#eef2f7;color:#334155;";
-      return `<button onclick="App.slFavoriteSearch('${f.kw}')" style="${bg}margin:0;padding:5px 10px;border:0;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;">${f.label}</button>`;
+      return `<button onclick="App.slFavoriteSearch('${f.id}')" style="${bg}margin:0;padding:5px 10px;border:0;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;">${f.label}</button>`;
     }).join("");
   }
 
-  function slFavoriteSearch(kw) {
-    // Toggle: nếu đang search chính keyword này → clear
-    if (slSearchKw.toLowerCase() === kw.toLowerCase()) {
-      slSearchKw = "";
+  function slFavoriteSearch(id) {
+    // Toggle: bấm lại pill đang active → bỏ chọn
+    if (slFavoriteId === id) {
+      slFavoriteId = "";
     } else {
-      slSearchKw = kw;
+      slFavoriteId = id;
+      // Clear search box khi dùng favorite (2 cơ chế độc lập)
+      slSearchKw = "";
+      const inp = document.getElementById("slSearch");
+      if (inp) inp.value = "";
     }
-    const inp = document.getElementById("slSearch");
-    if (inp) inp.value = slSearchKw;
     slRender();
   }
 
   function slFilter() {
     slSearchKw = (document.getElementById("slSearch").value || "").trim();
+    // User gõ search thủ công → bỏ favorite filter
+    if (slSearchKw) slFavoriteId = "";
     slRender();
   }
 
@@ -1373,14 +1381,20 @@ const App = (() => {
       }
     }
 
-    // Filter by search keyword (no-diacritic, case-insensitive)
-    const kw = ComboLogic.norm(slSearchKw);
-    const filtered = kw ? list.filter(x => ComboLogic.norm(x.name).includes(kw)) : list;
+    // Filter: ưu tiên favorite ID (chính xác), fallback sang search text
+    let filtered;
+    if (slFavoriteId) {
+      filtered = list.filter(x => x.presetId === slFavoriteId);
+    } else {
+      const kw = ComboLogic.norm(slSearchKw);
+      filtered = kw ? list.filter(x => ComboLogic.norm(x.name).includes(kw)) : list;
+    }
 
     if (!filtered.length) {
-      wrap.innerHTML = kw
-        ? `<div style="color:var(--muted);font-size:13px;padding:12px;">Không tìm thấy bảng giá nào khớp "${slSearchKw}".</div>`
-        : '<div style="color:var(--muted);font-size:13px;padding:12px;">Chưa có sheet nào. Thêm vào <code>sheets.json</code>.</div>';
+      const msg = slFavoriteId
+        ? `Preset "${slFavoriteId}" không có trong danh sách. Có thể đã bị xoá.`
+        : (slSearchKw ? `Không tìm thấy bảng giá nào khớp "${slSearchKw}".` : 'Chưa có sheet nào. Thêm vào <code>sheets.json</code>.');
+      wrap.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px;">${msg}</div>`;
       return;
     }
 
