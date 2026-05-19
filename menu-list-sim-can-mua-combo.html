@@ -2189,8 +2189,9 @@ const App = (() => {
     const lineH = 32;             // chiều cao mỗi dòng bill (font 22px)
     const billH = billLines.length * lineH + 16;
     const qrSize = 280;           // QR nhỏ gọn ở góc
+    const qrLabelH = 36;          // chiều cao chữ "Quét QR..." bên dưới QR
     const footerInfoH = 200;      // khu vực thông tin CK ở dưới (chiều cao tối thiểu)
-    const blockH = Math.max(qrSize, footerInfoH);
+    const blockH = Math.max(qrSize + qrLabelH, footerInfoH);
     const H = padding + headerH + billH + 30 + blockH + padding;
 
     // Hi-DPI: canvas thực = W*DPR, CSS = W
@@ -2583,19 +2584,9 @@ const App = (() => {
       const nameCol = P - 3;            // cột tên chính, ngay trước Loại
       const noteCol = P + 1 < maxCols ? P + 1 : -1;
 
-      // Tên bộ: lấy cell DÀI NHẤT ở row 0 trong dải [prevBoundary, P-3]
-      // Robust với layout có cell tên bị tách (vd: "THÁI" + "THÁI LAN ROAMING")
-      let subTableName = "";
-      let maxLen = 0;
-      const nameStart = Math.max(prevBoundary, 0);
-      const nameEnd = Math.max(P - 3, nameStart);
-      for (let c = nameStart; c <= nameEnd; c++) {
-        const cell = ((allRows[0] || [])[c] || "").trim();
-        if (cell.length > maxLen) {
-          subTableName = cell;
-          maxLen = cell.length;
-        }
-      }
+      // Tên bộ: cell ở row 0 của cột tên gói (nameCol = P - 3).
+      // Đây là pattern cố định: hàng 1 của cột tên gói chính là tên bộ giá.
+      let subTableName = ((allRows[0] || [])[nameCol] || "").trim();
       if (!subTableName) subTableName = "Bộ " + (subTables.length + 1);
 
       subTables.push({
@@ -2607,7 +2598,6 @@ const App = (() => {
         noteCol,
       });
 
-      // Ranh giới: bộ tiếp theo bắt đầu sau noteCol
       prevBoundary = (noteCol >= 0 ? noteCol : P) + 1;
     }
 
