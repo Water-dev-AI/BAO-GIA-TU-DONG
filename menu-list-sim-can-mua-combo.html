@@ -1909,11 +1909,11 @@ const App = (() => {
       const [tabIdx, itemIdx] = key.split("_").map(Number);
       const tbl = pickerTables[tabIdx];
       if (tbl && tbl.items[itemIdx]) {
-        const country = extractCountryFromTableName(tbl.name || "");
+        // Mapping NƯỚC chuyển sang Apps Script (suy từ tên gói qua tab MAPPING).
+        // App KHÔNG gắn country vào cart item nữa.
         selected.push({
           line: tbl.items[itemIdx].line,
           qty: tbl.items[itemIdx].qty || 1,
-          country: country || undefined,
         });
       }
     });
@@ -2850,11 +2850,20 @@ const App = (() => {
   const ESIM_PHYSICAL_RE = /^\s*(?:esim|sim\s*v[ậa]t\s*l[ýy]|sim)\s*$/i;
   const PRICE_RE_STRICT = /^\d[\d.,]*\s*k\s*$/i;
 
+  // Header row 0 thường chứa "GIÁ BÁN", "GIÁ (VND)", "GIÁ" → dấu hiệu mạnh nhận diện cột giá
+  // dù bộ giá đó hiện không có gói nào (vd công thức VLOOKUP lỗi #N/A trong sheet).
+  const HEADER_PRICE_RE = /^\s*gi[áa](?:\s*b[áa]n)?(?:\s*\(?\s*vnd\s*\)?)?\s*$/i;
+  // Header row 0 cho cột Loại: "LOẠI SIM" / "LOẠI" / "LOAI"
+  const HEADER_TYPE_RE = /^\s*lo[ạa]i(?:\s*sim)?\s*$/i;
+
   function gsDetectSubTables(allRows) {
     if (!allRows.length) return [];
     const maxCols = Math.max(...allRows.map(r => r.length));
 
-    // Bước 1: tìm tất cả cột chứa giá k (anchor)
+    // Bước 1: tìm tất cả cột là cột GIÁ (anchor)
+    // Match nếu THỎA 1 trong 2:
+    //   (a) Header row 0 (đầu mỗi dòng nếu cell multi-line) chứa pattern "GIÁ" / "GIÁ BÁN" / "GIÁ (VND)"
+    //   (b) Có ≥ 3 cell giá thực tế (XXXk) trong cột
     const priceCols = [];
     for (let c = 0; c < maxCols; c++) {
       let priceCount = 0;
@@ -2862,18 +2871,27 @@ const App = (() => {
         const cell = (allRows[r][c] || "").trim();
         if (PRICE_RE_STRICT.test(cell)) priceCount++;
       }
-      if (priceCount >= 3) priceCols.push({ col: c, count: priceCount });
+      // Check header row 0 — tách multi-line, check từng dòng
+      const headerCell = ((allRows[0] || [])[c] || "");
+      const headerLines = headerCell.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+      const headerMatchesPrice = headerLines.some(l => HEADER_PRICE_RE.test(l));
+
+      if (priceCount >= 3 || headerMatchesPrice) {
+        priceCols.push({ col: c, count: priceCount, fromHeader: headerMatchesPrice });
+      }
     }
 
     if (!priceCols.length) return [];
 
-    // Bước 2: với mỗi anchor giá, verify cột P-2 = ESIM/SIM VẬT LÝ
+    // Bước 2: với mỗi anchor giá, verify cột P-2 = cột Loại
+    // Match nếu THỎA 1 trong 2:
+    //   (a) Header row 0 cột P-2 chứa "LOẠI" / "LOẠI SIM"
+    //   (b) Có ≥ 1 cell ESIM/SIM VẬT LÝ trong cột (đã giảm ngưỡng từ 3 → 1 để cover bộ có ít gói)
     const subTables = [];
-    let prevBoundary = 0;
 
     for (const pc of priceCols) {
       const P = pc.col;
-      if (P < 2) continue; // không đủ cột bên trái
+      if (P < 2) continue;
 
       const typeCol = P - 2;
       let typeMatchCount = 0;
@@ -2881,15 +2899,17 @@ const App = (() => {
         const cell = (allRows[r][typeCol] || "").trim();
         if (ESIM_PHYSICAL_RE.test(cell)) typeMatchCount++;
       }
-      // Cần ít nhất 3 dòng có Loại đúng để tin là cột Loại thật
-      if (typeMatchCount < 3) continue;
+      const typeHeaderCell = ((allRows[0] || [])[typeCol] || "");
+      const typeHeaderLines = typeHeaderCell.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+      const typeHeaderOK = typeHeaderLines.some(l => HEADER_TYPE_RE.test(l));
 
-      const dateCol = P - 1;            // có thể trống — không bắt buộc
-      const nameCol = P - 3;            // cột tên chính, ngay trước Loại
+      // Cần header LOẠI khớp, hoặc ≥ 1 cell Loại thực (relax từ ≥ 3 → ≥ 1)
+      if (!typeHeaderOK && typeMatchCount < 1) continue;
+
+      const dateCol = P - 1;
+      const nameCol = P - 3;
       const noteCol = P + 1 < maxCols ? P + 1 : -1;
 
-      // Tên bộ: cell ở row 0 của cột tên gói (nameCol = P - 3).
-      // Đây là pattern cố định: hàng 1 của cột tên gói chính là tên bộ giá.
       let subTableName = ((allRows[0] || [])[nameCol] || "").trim();
       if (!subTableName) subTableName = "Bộ " + (subTables.length + 1);
 
@@ -2901,8 +2921,6 @@ const App = (() => {
         priceCol: P,
         noteCol,
       });
-
-      prevBoundary = (noteCol >= 0 ? noteCol : P) + 1;
     }
 
     return subTables;
@@ -2914,9 +2932,9 @@ const App = (() => {
     const allRows = gsParseCsv(csvText);
     const subTables = gsDetectSubTables(allRows);
 
-    // startRow/endRow chỉ ảnh hưởng đến dải data, không ảnh hưởng detect (luôn dùng cả sheet).
-    // Hàng 0 là header (tên bộ + tên cột phụ), data bắt đầu từ hàng 1.
-    const dataStart = Math.max(1, parseInt(startRow) || 1);
+    // startRow/endRow là 1-indexed như Google Sheet hiển thị (row 1 = header tên bộ,
+    // row 2 = gói đầu tiên). Convert sang JS index (0-indexed) bằng cách -1.
+    const dataStart = Math.max(1, (parseInt(startRow) || 2) - 1);
     const dataEnd = endRow ? Math.min(allRows.length, parseInt(endRow)) : allRows.length;
 
     const result = subTables.map(tbl => {
@@ -3231,7 +3249,6 @@ const App = (() => {
       orderCode: currentOrderCode,
       link: draftLink,
       items: items.map(it => ({
-        c: it.country || "",
         p: it.packageRaw,
         t: it.type,
         d: it.days,
@@ -3259,10 +3276,7 @@ const App = (() => {
 
     const totalK = items.reduce((s, it) => s + it.amountK, 0);
     const discK = items.reduce((s, it) => s + it.discountAllocK, 0);
-    const missingCountry = items.filter(it => !it.country).length;
-    let msg = `✅ ${items.length} gói | Tổng ${ComboLogic.fmtK(totalK)} | Giảm ${ComboLogic.fmtK(discK)} | Còn ${ComboLogic.fmtK(totalK - discK)}`;
-    if (missingCountry > 0) msg += ` | ⚠️ ${missingCountry} gói thiếu NƯỚC (Apps Script sẽ hỏi)`;
-    statusEl.textContent = msg;
+    statusEl.textContent = `✅ ${items.length} gói | Tổng ${ComboLogic.fmtK(totalK)} | Giảm ${ComboLogic.fmtK(discK)} | Còn ${ComboLogic.fmtK(totalK - discK)}`;
   }
 
   async function sheetPayloadCopy() {
