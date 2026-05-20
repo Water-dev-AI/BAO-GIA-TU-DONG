@@ -1077,17 +1077,33 @@ const App = (() => {
     return added;
   }
 
-  // Cleanup tên bảng giá → tên nước/khu vực thuần (bỏ prefix BẢNG GIÁ + emoji)
+  // Cleanup tên bảng giá → tên nước/khu vực thuần.
+  // Tên bộ giá Google Sheet thường là multi-line (5-7 dòng) với:
+  //   Dòng 1: "BẢNG GIÁ HÀN QUỐC" hoặc "GÓI THÁI LAN NỘI ĐỊA"
+  //   Dòng 2-N: NHÀ MẠNG, ghi chú, etc.
+  // → chỉ giữ dòng 1 và clean prefix/suffix/parens/emoji.
   function extractCountryFromTableName(tableName) {
     if (!tableName) return "";
-    let s = String(tableName);
-    // Bỏ prefix "BẢNG GIÁ" / "BANG GIA" / "BANG GIÁ" (no-diacritic)
-    s = s.replace(/^\s*(B[ẢA]NG\s+GI[ÁA])\s+/iu, "").replace(/^\s*BANG\s+GIA\s+/iu, "");
-    // Bỏ emoji + ký tự kỳ lạ (giữ chữ + dấu + số + dấu phẩy + dấu cách + - ( ) /)
+    // Lấy dòng đầu (split bởi \n, \r, hoặc bất kỳ whitespace newline)
+    let s = String(tableName).split(/[\r\n]+/)[0] || "";
+    // Bỏ emoji + ký tự cờ + ký tự kỳ lạ
     s = s.replace(/[\p{Extended_Pictographic}\u200d\uFE0F]/gu, "");
-    // Bỏ ký tự kiểu cờ regional indicator
     s = s.replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "");
-    return s.trim();
+    // Bỏ prefix "BẢNG GIÁ" / "BANG GIA" / "GÓI " / "GOI "
+    s = s.replace(/^\s*(B[ẢA]NG\s+GI[ÁA])\s+/iu, "")
+         .replace(/^\s*BANG\s+GIA\s+/iu, "")
+         .replace(/^\s*G[ÓO]I\s+/iu, "");
+    // Bỏ suffix "NỘI ĐỊA" / "NOI DIA"
+    s = s.replace(/\s+(N[ỘO]I\s+Đ[ỊI]A)\s*$/iu, "")
+         .replace(/\s+NOI\s+DIA\s*$/iu, "");
+    // Bỏ content trong dấu ngoặc tròn (vd "(5 NƯỚC ĐNA)" — vẫn giữ tên chính)
+    // Trừ khi parens là phần chính (vd "Châu Á (APAC A)" — sheet xuất hoá đơn cũng có dấu ngoặc)
+    // → strategy: chỉ bỏ parens nếu nội dung > 15 ký tự (mô tả dài) hoặc chứa từ khoá "Dùng được", "Nhà mạng"
+    s = s.replace(/\([^)]*(?:dùng được|nha mạng|nhà mạng|tiktok|chatgpt)[^)]*\)/giu, "");
+    s = s.replace(/\(([^)]{16,})\)/g, ""); // parens content dài >15 → bỏ
+    // Chuẩn hoá whitespace
+    s = s.replace(/\s{2,}/g, " ").trim();
+    return s;
   }
 
   function addFromText() {
