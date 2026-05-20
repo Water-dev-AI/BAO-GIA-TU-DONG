@@ -304,6 +304,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button class="blue" onclick="App.qrGenerateFull()">🖼️ Tạo Ảnh báo giá full</button>
         <button class="amber" onclick="App.qrCustomOpen()" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" title="Copy thông tin chuyển khoản text">📋 Copy thông tin CK</button>
+        <button style="background:#0e7c3a;color:white;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Payload Sheet</button>
       </div>
 
       <div id="qrResultWrap" style="display:none;">
@@ -498,6 +499,65 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="green" onclick="App.qrCustomDownload()">💾 Tải QR</button>
       <button class="blue"  onclick="App.qrCustomCopy()">📋 Copy ảnh</button>
       <button class="light" onclick="App.qrCustomClose()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Sheet Payload -->
+<div class="picker-overlay" id="sheetPayloadOverlay" onclick="if(event.target===this)App.sheetPayloadClose()">
+  <div class="picker-modal" style="width:min(96vw,720px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">📤 Tạo payload Google Sheet</h3>
+      <button onclick="App.sheetPayloadClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div class="picker-body" style="padding:18px;">
+      <div style="background:#fff8e1;border:1px solid #fbe7a3;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#7a5a00;line-height:1.55;margin-bottom:14px;">
+        💡 Payload chứa: mã đơn (DH...), link đơn nháp, danh sách gói + qty + giá + discount đã phân bổ + VAT info.
+        <br>Trong Google Sheet → chọn ô đầu tiên cột <b>MÃ ORDER ID</b> làm anchor → menu <b>⚙ Tools → 📥 Nhập đơn từ App</b> → paste payload.
+        <br>📌 Script fill: NƯỚC, LOẠI SIM, NGÀY, GÓI, SỐ LƯỢNG, ĐƠN GIÁ, GIẢM GIÁ, <b>MÃ ĐƠN HÀNG</b>, <b>LINK ĐƠN HÀNG</b>, MST/Tên CTY/Địa chỉ/Email (nếu CTY).
+        <br>📌 Bạn tự điền: <i>MÃ ORDER ID (anchor)</i>, NGÀY ORDER, NGÀY CUNG CẤP DV, "Đã xuất".
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">Tên đơn (gợi ý cho nhân viên)</div>
+        <input id="spOrderName" type="text" placeholder="VD: Chị Hằng FB / Anh Tuấn Zalo / ..."
+          oninput="App.sheetPayloadRegenerate()"
+          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;" />
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Tự điền từ tên đơn nháp đang load (nếu có). Sẽ ghi vào note của ô <b>MÃ ĐƠN HÀNG</b> trên sheet.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <button id="spTypeRetail" class="blue" onclick="App.sheetPayloadSetType('retail')" style="margin:0;">🛒 Đơn lẻ</button>
+        <button id="spTypeCompany" class="light" onclick="App.sheetPayloadSetType('company')" style="margin:0;">🏢 Đơn công ty (xuất VAT)</button>
+      </div>
+
+      <div id="spVatBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fafbfc;margin-bottom:14px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600;">Thông tin xuất VAT công ty:</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">MST</div>
+            <input id="spVatMst" type="text" placeholder="0123456789" oninput="App.sheetPayloadRegenerate()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Email nhận hoá đơn</div>
+            <input id="spVatEmail" type="text" placeholder="ketoan@cty.vn" oninput="App.sheetPayloadRegenerate()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+          <div style="grid-column:span 2;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Tên người mua / Tên CTY</div>
+            <input id="spVatName" type="text" placeholder="CÔNG TY ABC" oninput="App.sheetPayloadRegenerate()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+          <div style="grid-column:span 2;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Địa chỉ</div>
+            <input id="spVatAddr" type="text" placeholder="Số... đường... quận... TP..." oninput="App.sheetPayloadRegenerate()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">Payload (auto-generate):</div>
+      <textarea id="spPayloadText" readonly
+        style="width:100%;min-height:120px;font-family:'Roboto Mono',ui-monospace,monospace;font-size:11px;background:#f7f9fc;"></textarea>
+      <div id="spStatus" class="status" style="margin-top:6px;font-size:12.5px;"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.sheetPayloadCopy()">📋 Copy payload</button>
+      <button class="blue" onclick="App.sheetPayloadRegenerate()">🔄 Tạo lại</button>
+      <button class="light" onclick="App.sheetPayloadClose()">Đóng</button>
     </div>
   </div>
 </div>
@@ -970,6 +1030,7 @@ const ComboLogic = (() => {
     buildLinesOnly,
     calc,
     discountFor,
+    largestRemainderShares,
   };
 })();
 /* COMBO_LOGIC_END */
@@ -1000,14 +1061,31 @@ const App = (() => {
         const reg = (a.valid ? a.regular : 0) + (b.valid ? b.regular : 0);
         const rec = (a.valid ? a.recharge : 0) + (b.valid ? b.recharge : 0);
         found.qty = ComboLogic.qtyToString(reg, rec);
+        // Cập nhật country nếu lần này có mà found chưa có
+        if (item.country && !found.country) found.country = item.country;
       } else {
-        cart.push({ line: item.line, qty: item.qty || "1", note: "" });
+        const newItem = { line: item.line, qty: item.qty || "1", note: "" };
+        if (item.country) newItem.country = item.country;
+        cart.push(newItem);
       }
       added += 1;
     });
     saveCart();
     render();
     return added;
+  }
+
+  // Cleanup tên bảng giá → tên nước/khu vực thuần (bỏ prefix BẢNG GIÁ + emoji)
+  function extractCountryFromTableName(tableName) {
+    if (!tableName) return "";
+    let s = String(tableName);
+    // Bỏ prefix "BẢNG GIÁ" / "BANG GIA" / "BANG GIÁ" (no-diacritic)
+    s = s.replace(/^\s*(B[ẢA]NG\s+GI[ÁA])\s+/iu, "").replace(/^\s*BANG\s+GIA\s+/iu, "");
+    // Bỏ emoji + ký tự kỳ lạ (giữ chữ + dấu + số + dấu phẩy + dấu cách + - ( ) /)
+    s = s.replace(/[\p{Extended_Pictographic}\u200d\uFE0F]/gu, "");
+    // Bỏ ký tự kiểu cờ regional indicator
+    s = s.replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "");
+    return s.trim();
   }
 
   function addFromText() {
@@ -1800,7 +1878,14 @@ const App = (() => {
     pickerChecked.forEach(key => {
       const [tabIdx, itemIdx] = key.split("_").map(Number);
       const tbl = pickerTables[tabIdx];
-      if (tbl && tbl.items[itemIdx]) selected.push({ line: tbl.items[itemIdx].line, qty: tbl.items[itemIdx].qty || 1 });
+      if (tbl && tbl.items[itemIdx]) {
+        const country = extractCountryFromTableName(tbl.name || "");
+        selected.push({
+          line: tbl.items[itemIdx].line,
+          qty: tbl.items[itemIdx].qty || 1,
+          country: country || undefined,
+        });
+      }
     });
     selected.sort((a, b) => a.line.localeCompare(b.line));
     const added = addItems(selected);
@@ -2961,6 +3046,176 @@ const App = (() => {
     }
   }
 
+  /* ===== SHEET PAYLOAD (xuất sang Google Sheet hoá đơn) ===== */
+
+  let spType = "retail"; // 'retail' | 'company'
+
+  function sheetPayloadOpen() {
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không tạo payload được.");
+      return;
+    }
+    document.getElementById("sheetPayloadOverlay").classList.add("open");
+    spType = "retail";
+    document.getElementById("spVatBox").style.display = "none";
+    document.getElementById("spTypeRetail").className = "blue";
+    document.getElementById("spTypeCompany").className = "light";
+    // Pre-fill tên đơn từ draft đang load (nếu có)
+    const nameInput = document.getElementById("spOrderName");
+    if (nameInput && !nameInput.value && draftEditingId) {
+      const list = draftsCleanup();
+      const d = list.find(x => x.id === draftEditingId);
+      if (d && d.name) nameInput.value = d.name;
+    }
+    sheetPayloadRegenerate();
+  }
+
+  function sheetPayloadClose() {
+    document.getElementById("sheetPayloadOverlay").classList.remove("open");
+  }
+
+  function sheetPayloadSetType(t) {
+    spType = t;
+    const retail = document.getElementById("spTypeRetail");
+    const company = document.getElementById("spTypeCompany");
+    if (t === "company") {
+      retail.className = "light";
+      company.className = "blue";
+      document.getElementById("spVatBox").style.display = "";
+    } else {
+      retail.className = "blue";
+      company.className = "light";
+      document.getElementById("spVatBox").style.display = "none";
+    }
+    sheetPayloadRegenerate();
+  }
+
+  // Build payload items: parse từng cart line, gom thành item, phân bổ discount.
+  // Logic giống ComboLogic.calc() nhưng giữ lại từng item rời (không gộp thành bill).
+  function buildSheetPayloadItems() {
+    const items = [];
+    for (const cartItem of cart) {
+      const line = String(cartItem.line || "");
+      if (ComboLogic.shouldSkipLine(line)) continue;
+      const parts = parseLineForDisplay(line);
+      const qtyExpr = String(cartItem.qty || "1");
+      const { regular, recharge } = ComboLogic.parseQtyExpression(qtyExpr);
+      const unitK = ComboLogic.parseK(parts.price);
+      if (!unitK || unitK <= 0) continue;
+
+      const rowNote = String(cartItem.note || "").trim();
+      const productNote = (parts.note || "").trim();
+      const country = String(cartItem.country || "").trim();
+
+      if (regular > 0) {
+        items.push({
+          country,
+          packageRaw: parts.name, // = cột GÓI ở sheet
+          type: parts.type,
+          days: parts.days,
+          qty: regular,
+          isRecharge: false,
+          unitPriceK: unitK,
+          amountK: unitK * regular,
+          rowNote, productNote,
+        });
+      }
+      if (recharge > 0) {
+        const rechargeUnitK = unitK - 20; // nạp gói SIM vật lý giảm 20k/SIM
+        items.push({
+          country,
+          packageRaw: parts.name,
+          type: parts.type,
+          days: parts.days,
+          qty: recharge,
+          isRecharge: true,
+          unitPriceK: rechargeUnitK,
+          amountK: rechargeUnitK * recharge,
+          rowNote, productNote,
+        });
+      }
+    }
+
+    const totalK = items.reduce((s, it) => s + it.amountK, 0);
+    const discount = ComboLogic.discountFor(totalK);
+    const shares = ComboLogic.largestRemainderShares(items, discount.amount);
+    return items.map((it, idx) => ({ ...it, discountAllocK: shares[idx] || 0 }));
+  }
+
+  function sheetPayloadRegenerate() {
+    const ta = document.getElementById("spPayloadText");
+    if (!ta) return;
+    const items = buildSheetPayloadItems();
+    const statusEl = document.getElementById("spStatus");
+    if (!items.length) {
+      ta.value = "";
+      statusEl.textContent = "⚠️ Không có gói hợp lệ để tạo payload.";
+      return;
+    }
+
+    // Đảm bảo có order code (dùng chung với QR card)
+    if (!currentOrderCode) regenOrderCode();
+
+    const orderName = (document.getElementById("spOrderName").value || "").trim();
+    const draftLink = buildShareLink(orderName || "Đơn từ app", "KHAC", "SHEET", cart);
+
+    const payload = {
+      v: 1,
+      kind: "simglobe_sheet_v1",
+      name: orderName,
+      orderCode: currentOrderCode,
+      link: draftLink,
+      items: items.map(it => ({
+        c: it.country || "",
+        p: it.packageRaw,
+        t: it.type,
+        d: it.days,
+        q: it.qty,
+        u: it.unitPriceK,
+        g: it.discountAllocK,
+        r: it.isRecharge ? 1 : 0,
+        n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
+      })),
+    };
+    if (spType === "company") {
+      const vat = {
+        mst: document.getElementById("spVatMst").value.trim(),
+        name: document.getElementById("spVatName").value.trim(),
+        addr: document.getElementById("spVatAddr").value.trim(),
+        email: document.getElementById("spVatEmail").value.trim(),
+      };
+      if (vat.mst || vat.name) payload.vat = vat;
+    }
+
+    const json = JSON.stringify(payload);
+    const encoded = urlSafeEncode(json);
+    const out = "SIMGLOBE-SHEET:" + encoded;
+    ta.value = out;
+
+    const totalK = items.reduce((s, it) => s + it.amountK, 0);
+    const discK = items.reduce((s, it) => s + it.discountAllocK, 0);
+    const missingCountry = items.filter(it => !it.country).length;
+    let msg = `✅ ${items.length} gói | Tổng ${ComboLogic.fmtK(totalK)} | Giảm ${ComboLogic.fmtK(discK)} | Còn ${ComboLogic.fmtK(totalK - discK)}`;
+    if (missingCountry > 0) msg += ` | ⚠️ ${missingCountry} gói thiếu NƯỚC (Apps Script sẽ hỏi)`;
+    statusEl.textContent = msg;
+  }
+
+  async function sheetPayloadCopy() {
+    const ta = document.getElementById("spPayloadText");
+    if (!ta || !ta.value) {
+      showStatus("⚠️ Chưa có payload để copy.");
+      return;
+    }
+    const ok = await copyText(ta.value);
+    const statusEl = document.getElementById("spStatus");
+    if (ok) {
+      statusEl.textContent = "📋 Đã copy payload. Mở Google Sheet → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.";
+    } else {
+      ta.focus(); ta.select();
+      statusEl.textContent = "⚠️ Không tự copy được, đã chọn text — bấm Ctrl+C.";
+    }
+  }
+
   render();
 
   return {
@@ -3018,6 +3273,11 @@ const App = (() => {
     draftShareOpen,
     draftImportClose,
     draftImportConfirm,
+    sheetPayloadOpen,
+    sheetPayloadClose,
+    sheetPayloadSetType,
+    sheetPayloadRegenerate,
+    sheetPayloadCopy,
   };
 })();
 </script>
