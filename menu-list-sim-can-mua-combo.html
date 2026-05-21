@@ -577,10 +577,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
               style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
             <div id="vatDropdown_mst" class="vat-dropdown"></div>
           </div>
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Email nhận hoá đơn</div>
+          <div style="position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Email nhận hoá đơn</div>
             <input id="spVatEmail" type="text" placeholder="ketoan@cty.vn" autocomplete="off"
-              oninput="App.sheetPayloadRegenerate()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+              oninput="App.vatOnInput('email')" onfocus="App.vatOnInput('email')" onblur="App.vatCloseSoon()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
+            <div id="vatDropdown_email" class="vat-dropdown"></div>
+          </div>
           <div style="grid-column:span 2;position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Tên người mua / Tên CTY</div>
             <input id="spVatName" type="text" placeholder="CÔNG TY ABC" autocomplete="off"
               oninput="App.vatOnInput('name')" onfocus="App.vatOnInput('name')" onblur="App.vatCloseSoon()"
@@ -3677,7 +3679,8 @@ const App = (() => {
     const q = vatNoDiacritics(query).trim();
     if (!q) return vatList.slice(0, 8);
     return vatList.filter(v => {
-      if (field === "mst") return v.mst && v.mst.toLowerCase().includes(query.toLowerCase().trim());
+      if (field === "mst")   return v.mst   && v.mst.toLowerCase().includes(query.toLowerCase().trim());
+      if (field === "email") return v.email && v.email.toLowerCase().includes(query.toLowerCase().trim());
       return v.ten && vatNoDiacritics(v.ten).includes(q);
     }).slice(0, 10);
   }
@@ -3685,7 +3688,8 @@ const App = (() => {
   function vatRenderDropdown(field) {
     const dd = document.getElementById("vatDropdown_" + field);
     if (!dd) return;
-    const input = document.getElementById(field === "mst" ? "spVatMst" : "spVatName");
+    const inputId = field === "mst" ? "spVatMst" : field === "email" ? "spVatEmail" : "spVatName";
+    const input = document.getElementById(inputId);
     const q = input ? input.value : "";
     const matches = vatSearch(field, q);
     if (!matches.length) {
@@ -3749,7 +3753,7 @@ const App = (() => {
       if (!data.ok) throw new Error(data.error || "unknown");
       vatList = vatList.filter(v => !(v.mst === m.mst && v.ten === m.ten));
       vatCacheSave(vatList);
-      ["mst", "name"].forEach(f => {
+      ["mst", "name", "email"].forEach(f => {
         const dd = document.getElementById("vatDropdown_" + f);
         if (dd && dd.classList.contains("open")) vatRenderDropdown(f);
       });
