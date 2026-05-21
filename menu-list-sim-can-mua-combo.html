@@ -3533,8 +3533,12 @@ const App = (() => {
         csvUrl: String(data.csvUrl || "").trim(),
         webAppUrl: String(data.webAppUrl || "").trim(),
       };
+      console.log("[VAT] Config loaded:", {
+        csvUrl: vatRuntimeCfg.csvUrl ? "✓ " + vatRuntimeCfg.csvUrl.slice(0, 60) + "..." : "✗ EMPTY",
+        webAppUrl: vatRuntimeCfg.webAppUrl ? "✓ " + vatRuntimeCfg.webAppUrl.slice(0, 60) + "..." : "✗ EMPTY",
+      });
     } catch (e) {
-      console.warn("vat-config.json không load được:", e.message);
+      console.warn("[VAT] vat-config.json không load được:", e.message);
       vatRuntimeCfg = { csvUrl: "", webAppUrl: "" };
     }
   }
@@ -3728,9 +3732,16 @@ const App = (() => {
   }
 
   async function vatSaveToSheet(info) {
-    if (!info || (!info.mst && !info.name)) return;
+    if (!info || (!info.mst && !info.name)) {
+      console.log("[VAT] Bỏ qua save: thiếu MST và tên.");
+      return;
+    }
     const cfg = vatGetCfg();
-    if (!cfg.webAppUrl) return;
+    if (!cfg.webAppUrl) {
+      console.warn("[VAT] Không save được — webAppUrl rỗng. Check vat-config.json.");
+      return;
+    }
+    console.log("[VAT] Đang lưu lên sheet:", info);
     try {
       const res = await fetch(cfg.webAppUrl, {
         method: "POST",
@@ -3744,6 +3755,7 @@ const App = (() => {
         }),
       });
       const data = await res.json();
+      console.log("[VAT] Response:", data);
       if (data.ok) {
         const idx = vatList.findIndex(v =>
           (info.mst && v.mst === info.mst) || (!info.mst && v.ten === info.name)
@@ -3755,8 +3767,14 @@ const App = (() => {
         };
         if (idx >= 0) vatList[idx] = entry; else vatList.unshift(entry);
         vatCacheSave(vatList);
+        vatSetStatus(`✅ Đã lưu VAT lên sheet (${data.action || "ok"}).`);
+      } else {
+        vatSetStatus("❌ Lưu thất bại: " + (data.error || "unknown"));
       }
-    } catch (e) { console.warn("VAT save fail:", e); }
+    } catch (e) {
+      console.warn("[VAT] save fail:", e);
+      vatSetStatus("❌ Lưu thất bại: " + e.message);
+    }
   }
 
   async function vatInit() {

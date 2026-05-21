@@ -1,7 +1,4 @@
 {
-  "csvUrl": "",
-  "webAppUrl": "",
-  "_comment_csvUrl": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQLTnkZtbV7VLUI7NoGzxpOkWnOad0COKsPJQP2dYXVDgjzRfCI326yPzA79zsvJlJno97gaif1vdZ3/pub?output=csv",
-  "_comment_webAppUrl": "https://script.google.com/macros/s/AKfycbyVQHmbghYv9VB1tNI1air6ROrIpDyJdL4fQ29KRxO16MSBzv4Qqvd7w2teFpfttJTKmw/exec",
-  "_note": "Khi sang năm mới đổi sheet, chỉ cần edit 2 URL ở đây rồi git push. Tất cả nhân viên auto có URL mới sau khi reload tab."
+  "csvUrl": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQLTnkZtbV7VLUI7NoGzxpOkWnOad0COKsPJQP2dYXVDgjzRfCI326yPzA79zsvJlJno97gaif1vdZ3/pub?output=csv",
+  "webAppUrl": "https://script.google.com/macros/s/AKfycbyVQHmbghYv9VB1tNI1air6ROrIpDyJdL4fQ29KRxO16MSBzv4Qqvd7w2teFpfttJTKmw/exec"
 }
