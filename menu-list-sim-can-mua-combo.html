@@ -1243,10 +1243,12 @@ const App = (() => {
       const priceMatch = String(line).match(ComboLogic.priceRe);
       const price = priceMatch ? priceMatch[1].replace(/\s+/g,'') : "";
       // Detect type/days từ nội dung khi không có tab — fix bug import share link
+      // (dùng ComboLogic.norm vì isRechargeLine/isPhysicalLine/isEsimLine ở scope ComboLogic, không expose)
+      const n = ComboLogic.norm(line);
       let detectedType = "";
-      if (isRechargeLine(line)) detectedType = "NẠP GÓI";
-      else if (isPhysicalLine(line)) detectedType = "SIM VẬT LÝ";
-      else if (isEsimLine(line)) detectedType = "ESIM";
+      if (/(^|[\s\t\[\(])nap($|[\s\t\]\):_\-])/.test(n) || n.includes("nap sim") || n.includes("goi nap") || n.includes("nap goi")) detectedType = "NẠP GÓI";
+      else if (n.includes("sim vat ly")) detectedType = "SIM VẬT LÝ";
+      else if (n.includes("esim")) detectedType = "ESIM";
       const daysMatch = String(line).match(/(\d+)\s*(?:days?|ng[aà]y)/i);
       const detectedDays = daysMatch ? daysMatch[1] + " Days" : "";
       return { name: String(line), type: detectedType, days: detectedDays, price, note: "" };
