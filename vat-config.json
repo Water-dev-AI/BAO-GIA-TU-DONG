@@ -1,0 +1,7 @@
+{
+  "csvUrl": "",
+  "webAppUrl": "",
+  "_comment_csvUrl": "Lấy từ: Google Sheet VAT DB → File → Share → Publish to web → tab VAT, format CSV. Dạng: https://docs.google.com/spreadsheets/d/.../pub?gid=...&single=true&output=csv",
+  "_comment_webAppUrl": "Lấy từ: Google Sheet VAT DB → Extensions → Apps Script (đã paste vat-sheet.gs) → Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone). Dạng: https://script.google.com/macros/s/.../exec",
+  "_note": "Khi sang năm mới đổi sheet, chỉ cần edit 2 URL ở đây rồi git push. Tất cả nhân viên auto có URL mới sau khi reload tab."
+}
