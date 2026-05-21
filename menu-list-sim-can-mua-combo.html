@@ -1012,8 +1012,8 @@ const ComboLogic = (() => {
     if (!discountK || discountK <= 0) return "Không có giảm giá để phân bố.";
     const shares = largestRemainderShares(items, discountK);
     return items.map((item, idx) => {
-      let line = `${item.packageName} ${item.qty} ${item.productType} (-${fmtK(shares[idx])})`;
-      if (item.isRecharge) line += " [NẠP]";
+      const typeLabel = item.isRecharge ? "NẠP GÓI" : item.productType;
+      let line = `${item.packageName} ${item.qty} ${typeLabel} (-${fmtK(shares[idx])})`;
       if (item.note) line += " - " + item.note;
       return line;
     }).join("\n");
@@ -1431,6 +1431,7 @@ const App = (() => {
     { label: "🇸🇬 Sing-Mã",     id: "sg-my" },
     { label: "🇻🇳 VN",          id: "vn" },
     { label: "🇹🇭 Thái",        id: "thai-lan" },
+    { label: "🇵🇭 Phil",         id: "philippines" },
     { label: "🇸🇬 Sing-Indo-Thai", id: "singapre-id-th" },
     { label: "🇰🇭 CPC",         id: "campuchia" },
     { label: "🌏 5 Nước ĐNA",    id: "dna-5-nuoc" },
