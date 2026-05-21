@@ -1,8 +1,20 @@
-{
-  "accountNo": "0923282790",
-  "accountName": "NGUYEN PHAN HOAN",
-  "acqId": 970432,
-  "bankName": "VPBANK",
-  "template": "compact2",
-  "companyName": "CÔNG TY TNHH SIMGLOBE OFFICIAL"
-}
+[
+  {
+    "accountNo": "0923282790",
+    "accountName": "NGUYEN PHAN HOAN",
+    "acqId": 970432,
+    "bankName": "VPBANK",
+    "template": "compact2",
+    "companyName": "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+    "label": "STK1 · VPBANK"
+  },
+  {
+    "accountNo": "250891",
+    "accountName": "CT TNHH SIMGLOBE OFFICIAL",
+    "acqId": 970407,
+    "bankName": "TECHCOMBANK",
+    "template": "compact2",
+    "companyName": "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+    "label": "STK2 · TECHCOMBANK"
+  }
+]
