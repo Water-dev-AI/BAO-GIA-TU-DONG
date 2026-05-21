@@ -567,7 +567,6 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--muted);font-weight:600;flex:1;">Thông tin xuất VAT công ty:</span>
           <button onclick="App.vatRefreshHistory()" style="margin:0;padding:4px 9px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Refresh từ Google Sheet (cache 24h)">🔄 Refresh</button>
-          <button onclick="App.vatSettingsOpen()" style="margin:0;padding:4px 9px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Cấu hình link Google Sheet VAT">⚙ Cấu hình</button>
         </div>
         <div id="vatHistoryStatus" style="font-size:10.5px;color:var(--muted);margin-bottom:6px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -609,52 +608,6 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   </div>
 </div>
 
-<!-- Modal VAT Settings -->
-<div class="picker-overlay" id="vatSettingsOverlay" onclick="if(event.target===this)App.vatSettingsClose()">
-  <div class="picker-modal" style="width:min(96vw,640px);">
-    <div class="picker-header">
-      <h3 style="margin:0;flex:1;">⚙ Cấu hình Google Sheet lưu VAT</h3>
-      <button onclick="App.vatSettingsClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
-    </div>
-    <div class="picker-body" style="padding:18px;">
-      <div style="background:#fff8e1;border:1px solid #fbe7a3;border-radius:8px;padding:11px 13px;font-size:12px;color:#6a4a00;line-height:1.6;margin-bottom:14px;">
-        <b>Cách setup (làm 1 lần):</b>
-        <ol style="margin:6px 0 0 18px;padding:0;">
-          <li>Tạo Google Sheet mới tên <b>"SIMGLOBE VAT DB"</b>, rename tab đầu thành <b>VAT</b></li>
-          <li>Hàng 1 dán header: <code>MST | TEN | DIA_CHI | EMAIL | UPDATED_AT</code></li>
-          <li>Extensions → Apps Script → paste code <code>vat-sheet.gs</code> (tôi cung cấp) → Save</li>
-          <li>Deploy → New deployment → Web app → Execute as: <b>Me</b>, Who has access: <b>Anyone</b> → Deploy → copy Web App URL</li>
-          <li>File → Share → Publish to web → tab VAT, format CSV → copy CSV URL</li>
-          <li>Dán 2 URL vào ô bên dưới → Lưu</li>
-        </ol>
-      </div>
-
-      <div style="margin-bottom:12px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">📥 CSV URL (để đọc)</div>
-        <input id="vatCsvUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/.../pub?gid=...&output=csv"
-          style="width:100%;padding:8px 11px;border:1px solid #cfd5df;border-radius:7px;font-size:12px;font-family:'Roboto Mono',monospace;" />
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Lấy từ: File → Share → Publish to web → chọn tab VAT, định dạng CSV.</div>
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">📤 Web App URL (để ghi)</div>
-        <input id="vatWebAppUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec"
-          style="width:100%;padding:8px 11px;border:1px solid #cfd5df;border-radius:7px;font-size:12px;font-family:'Roboto Mono',monospace;" />
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Lấy từ: Apps Script → Deploy → New deployment → Web app.</div>
-      </div>
-
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-        <button class="blue" onclick="App.vatSettingsTest()" style="margin:0;">🔍 Test kết nối</button>
-        <button class="amber" onclick="App.vatGetScriptCode()" style="margin:0;">📋 Copy code .gs</button>
-      </div>
-      <div id="vatSettingsStatus" class="status" style="margin-top:6px;font-size:12px;"></div>
-    </div>
-    <div class="picker-footer">
-      <button class="green" onclick="App.vatSettingsSave()">💾 Lưu cấu hình</button>
-      <button class="light" onclick="App.vatSettingsClose()">Đóng</button>
-    </div>
-  </div>
-</div>
 
 <script>
 /* COMBO_LOGIC_START */
@@ -3563,16 +3516,27 @@ const App = (() => {
   }
 
   /* ===== VAT HISTORY (Google Sheet sync qua Apps Script Web App) ===== */
-  const VAT_CFG_KEY = "vat_cfg_v1";
+  // Config được load từ file `vat-config.json` đặt cạnh HTML (admin push qua GitHub khi đổi sheet)
   const VAT_CACHE_KEY = "vat_cache_v1";
   const VAT_CACHE_TTL_MS = 24 * 3600 * 1000; // 24h
   let vatList = []; // [{mst, ten, diaChi, email, updatedAt}]
+  let vatRuntimeCfg = { csvUrl: "", webAppUrl: "" }; // load từ vat-config.json lúc init
 
-  function vatGetCfg() {
-    try { return JSON.parse(localStorage.getItem(VAT_CFG_KEY) || "{}"); } catch { return {}; }
-  }
-  function vatSaveCfg(cfg) {
-    localStorage.setItem(VAT_CFG_KEY, JSON.stringify(cfg || {}));
+  function vatGetCfg() { return vatRuntimeCfg; }
+
+  async function vatLoadConfigFile() {
+    try {
+      const res = await fetch("./vat-config.json", { cache: "no-cache" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      vatRuntimeCfg = {
+        csvUrl: String(data.csvUrl || "").trim(),
+        webAppUrl: String(data.webAppUrl || "").trim(),
+      };
+    } catch (e) {
+      console.warn("vat-config.json không load được:", e.message);
+      vatRuntimeCfg = { csvUrl: "", webAppUrl: "" };
+    }
   }
   function vatCacheLoad() {
     try {
@@ -3795,163 +3759,18 @@ const App = (() => {
     } catch (e) { console.warn("VAT save fail:", e); }
   }
 
-  function vatSettingsOpen() {
-    const cfg = vatGetCfg();
-    document.getElementById("vatCsvUrl").value = cfg.csvUrl || "";
-    document.getElementById("vatWebAppUrl").value = cfg.webAppUrl || "";
-    document.getElementById("vatSettingsStatus").textContent = "";
-    document.getElementById("vatSettingsOverlay").classList.add("open");
-  }
-  function vatSettingsClose() {
-    document.getElementById("vatSettingsOverlay").classList.remove("open");
-  }
-  function vatSettingsSave() {
-    const csvUrl = document.getElementById("vatCsvUrl").value.trim();
-    const webAppUrl = document.getElementById("vatWebAppUrl").value.trim();
-    vatSaveCfg({ csvUrl, webAppUrl });
-    const stEl = document.getElementById("vatSettingsStatus");
-    stEl.textContent = "✅ Đã lưu. Load lại VAT…";
-    vatFetchFromSheet(true).then(() => {
-      stEl.textContent = "✅ Đã lưu và refresh xong.";
-    });
-  }
-  async function vatSettingsTest() {
-    const csvUrl = document.getElementById("vatCsvUrl").value.trim();
-    const webAppUrl = document.getElementById("vatWebAppUrl").value.trim();
-    const stEl = document.getElementById("vatSettingsStatus");
-    stEl.textContent = "⏳ Đang test…";
-    const out = [];
-    if (csvUrl) {
-      try {
-        const res = await fetch(csvUrl, { cache: "no-cache" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const text = await res.text();
-        const rows = vatParseCsv(text);
-        out.push(`✅ CSV OK — ${rows.length - 1} dòng dữ liệu.`);
-      } catch (e) { out.push("❌ CSV lỗi: " + e.message); }
-    } else out.push("⚠️ Chưa nhập CSV URL.");
-    if (webAppUrl) {
-      try {
-        const res = await fetch(webAppUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "ping" }),
-        });
-        const data = await res.json();
-        if (data.ok) out.push("✅ Web App OK — " + (data.message || "ping pass."));
-        else out.push("❌ Web App lỗi: " + (data.error || "unknown"));
-      } catch (e) { out.push("❌ Web App lỗi: " + e.message); }
-    } else out.push("⚠️ Chưa nhập Web App URL.");
-    stEl.innerHTML = out.join("<br>");
-  }
-  function vatGetScriptCode() {
-    const code = VAT_GS_CODE;
-    navigator.clipboard.writeText(code).then(() => {
-      document.getElementById("vatSettingsStatus").textContent = "📋 Đã copy code Apps Script. Vào Sheet → Extensions → Apps Script → xoá hết code mặc định → paste → Save → Deploy.";
-    }).catch(() => {
-      document.getElementById("vatSettingsStatus").textContent = "⚠️ Không tự copy. Mở DevTools Console gõ: copy(App.__vatCode())";
-    });
-  }
-  function __vatCode() { return VAT_GS_CODE; }
-
-  const VAT_GS_CODE = [
-    '/**',
-    ' * SIMGLOBE VAT DB — Apps Script Web App',
-    ' * Paste vào: Google Sheet "SIMGLOBE VAT DB" → Extensions → Apps Script',
-    ' * Deploy: New deployment → Web app → Execute as: Me, Who has access: Anyone',
-    ' *',
-    ' * Sheet phải có tab "VAT" với header hàng 1:',
-    ' *   MST | TEN | DIA_CHI | EMAIL | UPDATED_AT',
-    ' */',
-    '',
-    'const SHEET_NAME = "VAT";',
-    '',
-    'function doPost(e) {',
-    '  try {',
-    '    var body = JSON.parse(e.postData.contents || "{}");',
-    '    var action = body.action || "";',
-    '    if (action === "ping")   return _json({ ok: true, message: "VAT DB ready" });',
-    '    if (action === "upsert") return _json(upsertVat(body));',
-    '    if (action === "delete") return _json(deleteVat(body));',
-    '    return _json({ ok: false, error: "Unknown action: " + action });',
-    '  } catch (err) {',
-    '    return _json({ ok: false, error: String(err) });',
-    '  }',
-    '}',
-    '',
-    'function doGet(e) {',
-    '  return _json({ ok: true, message: "Use POST. Actions: ping, upsert, delete." });',
-    '}',
-    '',
-    'function _json(obj) {',
-    '  return ContentService.createTextOutput(JSON.stringify(obj))',
-    '    .setMimeType(ContentService.MimeType.JSON);',
-    '}',
-    '',
-    'function _getSheet() {',
-    '  var ss = SpreadsheetApp.getActiveSpreadsheet();',
-    '  var sh = ss.getSheetByName(SHEET_NAME);',
-    '  if (!sh) {',
-    '    sh = ss.insertSheet(SHEET_NAME);',
-    '    sh.getRange(1, 1, 1, 5).setValues([["MST", "TEN", "DIA_CHI", "EMAIL", "UPDATED_AT"]]);',
-    '    sh.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f0f4f8");',
-    '    sh.setFrozenRows(1);',
-    '  }',
-    '  return sh;',
-    '}',
-    '',
-    'function _findRow(sh, mst, ten) {',
-    '  var lastRow = sh.getLastRow();',
-    '  if (lastRow < 2) return -1;',
-    '  var data = sh.getRange(2, 1, lastRow - 1, 2).getValues();',
-    '  for (var i = 0; i < data.length; i++) {',
-    '    var rowMst = String(data[i][0] || "").trim();',
-    '    var rowTen = String(data[i][1] || "").trim();',
-    '    if (mst && rowMst && rowMst === String(mst).trim()) return i + 2;',
-    '    if (!mst && !rowMst && rowTen && rowTen === String(ten || "").trim()) return i + 2;',
-    '  }',
-    '  return -1;',
-    '}',
-    '',
-    'function upsertVat(body) {',
-    '  var sh = _getSheet();',
-    '  var mst = String(body.mst || "").trim();',
-    '  var ten = String(body.ten || "").trim();',
-    '  var diaChi = String(body.diaChi || "").trim();',
-    '  var email = String(body.email || "").trim();',
-    '  if (!mst && !ten) return { ok: false, error: "Cần ít nhất MST hoặc TEN" };',
-    '  var now = new Date().toISOString();',
-    '  var row = _findRow(sh, mst, ten);',
-    '  if (row > 0) {',
-    '    sh.getRange(row, 1, 1, 5).setValues([[mst, ten, diaChi, email, now]]);',
-    '    return { ok: true, action: "updated", row: row };',
-    '  } else {',
-    '    sh.appendRow([mst, ten, diaChi, email, now]);',
-    '    return { ok: true, action: "inserted", row: sh.getLastRow() };',
-    '  }',
-    '}',
-    '',
-    'function deleteVat(body) {',
-    '  var sh = _getSheet();',
-    '  var mst = String(body.mst || "").trim();',
-    '  var ten = String(body.ten || "").trim();',
-    '  var row = _findRow(sh, mst, ten);',
-    '  if (row > 0) {',
-    '    sh.deleteRow(row);',
-    '    return { ok: true, action: "deleted", row: row };',
-    '  }',
-    '  return { ok: false, error: "Not found" };',
-    '}',
-    ''
-  ].join("\n");
-
-  function vatInit() {
+  async function vatInit() {
+    // Load cache trước (hiện ngay nếu có) — không block
     const cached = vatCacheLoad();
     if (cached && Array.isArray(cached.list)) vatList = cached.list;
+    // Load config từ vat-config.json (deploy cùng HTML)
+    await vatLoadConfigFile();
     const cfg = vatGetCfg();
     if (cfg.csvUrl) {
       const stale = !cached || (Date.now() - cached.ts) > VAT_CACHE_TTL_MS;
       if (stale) vatFetchFromSheet(false);
+    } else {
+      vatSetStatus("⚠️ Chưa có vat-config.json (admin chưa setup). Liên hệ admin.");
     }
   }
   vatInit();
@@ -4028,12 +3847,6 @@ const App = (() => {
     vatCloseSoon,
     vatPickItem,
     vatDeleteItem,
-    vatSettingsOpen,
-    vatSettingsClose,
-    vatSettingsSave,
-    vatSettingsTest,
-    vatGetScriptCode,
-    __vatCode,
   };
 })();
 </script>
