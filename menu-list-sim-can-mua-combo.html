@@ -260,7 +260,30 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <h2>3) Chốt combo</h2>
       <button class="blue" onclick="App.calcAndCopyBill()">📋 Copy Bill khách</button>
       <button class="blue" onclick="App.calcAndCopyBillShort()" style="background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
-      <button class="light" onclick="App.calcOnly()">Chỉ tính / không copy</button>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">🚚 Phí ship (k)</div>
+          <input id="shipFeeK" type="number" min="0" value="0" placeholder="0"
+            oninput="App.updateShipFee()"
+            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">💸 Giảm thủ công (k)</div>
+          <input id="manualDiscK" type="number" min="0" value="" placeholder="—"
+            oninput="App.onManualDiscChange('k')"
+            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">💸 Giảm thủ công (% — tối đa 15)</div>
+          <input id="manualDiscPct" type="number" min="0" max="15" step="0.1" value="" placeholder="—"
+            oninput="App.onManualDiscChange('pct')"
+            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+        </div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.4;flex:1;min-width:160px;">
+          Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
+        </div>
+      </div>
     </div>
 
     <div class="cols">
@@ -276,13 +299,11 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
     <div class="card">
       <h2>4) QR thanh toán</h2>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f3f4f6;border-radius:8px;">
+        <span style="font-size:11px;color:var(--muted);font-weight:600;">Tài khoản nhận:</span>
+        <div id="stkToggleWrap" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px;">
-        <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Phí ship (k) — tuỳ chọn</div>
-          <input id="shipFeeK" type="number" min="0" value="0" placeholder="0"
-            oninput="App.updateShipFee()"
-            style="width:120px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
-        </div>
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Mã đơn hàng (auto)</div>
           <div style="display:flex;gap:6px;">
@@ -390,6 +411,18 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 <style>
 @keyframes slSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.vat-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #cfd5df; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:240px; overflow-y:auto; margin-top:2px; }
+.vat-dropdown.open { display:block; }
+.vat-dropdown-item { display:flex; align-items:flex-start; gap:6px; padding:7px 10px; border-bottom:1px solid #f0f2f5; cursor:pointer; font-size:12px; }
+.vat-dropdown-item:hover { background:#f3f4f6; }
+.vat-dropdown-item:last-child { border-bottom:none; }
+.vat-dropdown-item .vd-main { flex:1; line-height:1.4; min-width:0; }
+.vat-dropdown-item .vd-mst { font-family:'Roboto Mono',monospace; color:#0e7c3a; font-weight:600; font-size:11.5px; }
+.vat-dropdown-item .vd-name { font-weight:600; color:#1f2937; }
+.vat-dropdown-item .vd-sub { font-size:10.5px; color:#6b7280; }
+.vat-dropdown-item .vd-del { padding:2px 6px; background:#fee2e2; color:#dc2626; border:none; border-radius:4px; font-size:11px; cursor:pointer; flex-shrink:0; }
+.vat-dropdown-item .vd-del:hover { background:#fecaca; }
+.vat-dropdown-empty { padding:10px 12px; color:#9ca3af; font-size:11.5px; font-style:italic; text-align:center; }
 </style>
 
 <!-- Modal Lưu đơn nháp -->
@@ -531,19 +564,32 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       </div>
 
       <div id="spVatBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fafbfc;margin-bottom:14px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600;">Thông tin xuất VAT công ty:</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--muted);font-weight:600;flex:1;">Thông tin xuất VAT công ty:</span>
+          <button onclick="App.vatRefreshHistory()" style="margin:0;padding:4px 9px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Refresh từ Google Sheet (cache 24h)">🔄 Refresh</button>
+          <button onclick="App.vatSettingsOpen()" style="margin:0;padding:4px 9px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Cấu hình link Google Sheet VAT">⚙ Cấu hình</button>
+        </div>
+        <div id="vatHistoryStatus" style="font-size:10.5px;color:var(--muted);margin-bottom:6px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">MST</div>
-            <input id="spVatMst" type="text" placeholder="0123456789" oninput="App.sheetPayloadRegenerate()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+          <div style="position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">MST</div>
+            <input id="spVatMst" type="text" placeholder="0123456789" autocomplete="off"
+              oninput="App.vatOnInput('mst')" onfocus="App.vatOnInput('mst')" onblur="App.vatCloseSoon()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
+            <div id="vatDropdown_mst" class="vat-dropdown"></div>
+          </div>
           <div><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Email nhận hoá đơn</div>
-            <input id="spVatEmail" type="text" placeholder="ketoan@cty.vn" oninput="App.sheetPayloadRegenerate()"
+            <input id="spVatEmail" type="text" placeholder="ketoan@cty.vn" autocomplete="off"
+              oninput="App.sheetPayloadRegenerate()"
               style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
-          <div style="grid-column:span 2;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Tên người mua / Tên CTY</div>
-            <input id="spVatName" type="text" placeholder="CÔNG TY ABC" oninput="App.sheetPayloadRegenerate()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
+          <div style="grid-column:span 2;position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Tên người mua / Tên CTY</div>
+            <input id="spVatName" type="text" placeholder="CÔNG TY ABC" autocomplete="off"
+              oninput="App.vatOnInput('name')" onfocus="App.vatOnInput('name')" onblur="App.vatCloseSoon()"
+              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
+            <div id="vatDropdown_name" class="vat-dropdown"></div>
+          </div>
           <div style="grid-column:span 2;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Địa chỉ</div>
-            <input id="spVatAddr" type="text" placeholder="Số... đường... quận... TP..." oninput="App.sheetPayloadRegenerate()"
+            <input id="spVatAddr" type="text" placeholder="Số... đường... quận... TP..." autocomplete="off"
+              oninput="App.sheetPayloadRegenerate()"
               style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
         </div>
       </div>
@@ -557,6 +603,53 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="green" onclick="App.sheetPayloadCopy()">📋 Copy payload</button>
       <button class="blue" onclick="App.sheetPayloadRegenerate()">🔄 Tạo lại</button>
       <button class="light" onclick="App.sheetPayloadClose()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal VAT Settings -->
+<div class="picker-overlay" id="vatSettingsOverlay" onclick="if(event.target===this)App.vatSettingsClose()">
+  <div class="picker-modal" style="width:min(96vw,640px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">⚙ Cấu hình Google Sheet lưu VAT</h3>
+      <button onclick="App.vatSettingsClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div class="picker-body" style="padding:18px;">
+      <div style="background:#fff8e1;border:1px solid #fbe7a3;border-radius:8px;padding:11px 13px;font-size:12px;color:#6a4a00;line-height:1.6;margin-bottom:14px;">
+        <b>Cách setup (làm 1 lần):</b>
+        <ol style="margin:6px 0 0 18px;padding:0;">
+          <li>Tạo Google Sheet mới tên <b>"SIMGLOBE VAT DB"</b>, rename tab đầu thành <b>VAT</b></li>
+          <li>Hàng 1 dán header: <code>MST | TEN | DIA_CHI | EMAIL | UPDATED_AT</code></li>
+          <li>Extensions → Apps Script → paste code <code>vat-sheet.gs</code> (tôi cung cấp) → Save</li>
+          <li>Deploy → New deployment → Web app → Execute as: <b>Me</b>, Who has access: <b>Anyone</b> → Deploy → copy Web App URL</li>
+          <li>File → Share → Publish to web → tab VAT, format CSV → copy CSV URL</li>
+          <li>Dán 2 URL vào ô bên dưới → Lưu</li>
+        </ol>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">📥 CSV URL (để đọc)</div>
+        <input id="vatCsvUrl" type="text" placeholder="https://docs.google.com/spreadsheets/d/.../pub?gid=...&output=csv"
+          style="width:100%;padding:8px 11px;border:1px solid #cfd5df;border-radius:7px;font-size:12px;font-family:'Roboto Mono',monospace;" />
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Lấy từ: File → Share → Publish to web → chọn tab VAT, định dạng CSV.</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">📤 Web App URL (để ghi)</div>
+        <input id="vatWebAppUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec"
+          style="width:100%;padding:8px 11px;border:1px solid #cfd5df;border-radius:7px;font-size:12px;font-family:'Roboto Mono',monospace;" />
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Lấy từ: Apps Script → Deploy → New deployment → Web app.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <button class="blue" onclick="App.vatSettingsTest()" style="margin:0;">🔍 Test kết nối</button>
+        <button class="amber" onclick="App.vatGetScriptCode()" style="margin:0;">📋 Copy code .gs</button>
+      </div>
+      <div id="vatSettingsStatus" class="status" style="margin-top:6px;font-size:12px;"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.vatSettingsSave()">💾 Lưu cấu hình</button>
+      <button class="light" onclick="App.vatSettingsClose()">Đóng</button>
     </div>
   </div>
 </div>
@@ -945,7 +1038,14 @@ const ComboLogic = (() => {
       };
     }
 
-    const discount = discountFor(totalK);
+    const manualDiscK = Math.max(0, parseInt(opts.manualDiscountK, 10) || 0);
+    let discount;
+    if (manualDiscK > 0) {
+      // Manual đè bậc thang. Cap không vượt totalK.
+      discount = { amount: Math.min(manualDiscK, totalK), label: "Giảm giá thủ công" };
+    } else {
+      discount = discountFor(totalK);
+    }
     const remainK = totalK - discount.amount;
     // Tổng thanh toán cuối cùng (có cộng phí ship nếu có)
     const finalPayK = remainK + shipFeeK;
@@ -1050,7 +1150,30 @@ const App = (() => {
     catch { return []; }
   }
 
-  function saveCart() { localStorage.setItem(STORAGE_KEY, JSON.stringify(cart)); }
+  function saveCart() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+    liveRecalc();
+  }
+
+  let _liveRecalcTimer = null;
+  function liveRecalc() {
+    // Debounce nhẹ để gõ qty/note không lag
+    if (_liveRecalcTimer) clearTimeout(_liveRecalcTimer);
+    _liveRecalcTimer = setTimeout(() => {
+      _liveRecalcTimer = null;
+      const billEl = document.getElementById("billOutput");
+      const notesEl = document.getElementById("notesOutput");
+      if (!billEl || !notesEl) return;
+      if (!cart || !cart.length) {
+        billEl.textContent = "Chưa có kết quả.";
+        notesEl.textContent = "Chưa có kết quả.";
+        return;
+      }
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      billEl.textContent = r.bill;
+      notesEl.textContent = r.notes;
+    }, 80);
+  }
 
   function addItems(items) {
     let added = 0;
@@ -1261,8 +1384,67 @@ const App = (() => {
     return Number.isFinite(v) && v >= 0 ? v : 0;
   }
 
+  function getManualDiscountK() {
+    const el = document.getElementById("manualDiscK");
+    if (!el || el.value === "") return 0;
+    const v = parseInt(el.value, 10);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  }
+
+  function getManualDiscountPct() {
+    const el = document.getElementById("manualDiscPct");
+    if (!el || el.value === "") return 0;
+    let v = parseFloat(el.value);
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    if (v > 15) v = 15;
+    return v;
+  }
+
+  // Compute effective manual discount in k (priority: k input > pct input)
+  function computeManualDiscountK(totalK) {
+    const k = getManualDiscountK();
+    if (k > 0) return k;
+    const pct = getManualDiscountPct();
+    if (pct > 0 && totalK > 0) return Math.round(totalK * pct / 100);
+    return 0;
+  }
+
+  function onManualDiscChange(which) {
+    // Khi user gõ 1 ô, clear ô kia để tránh xung đột
+    if (which === "k") {
+      const v = document.getElementById("manualDiscK").value;
+      if (v !== "" && parseFloat(v) > 0) document.getElementById("manualDiscPct").value = "";
+    } else {
+      const v = document.getElementById("manualDiscPct").value;
+      if (v !== "" && parseFloat(v) > 0) {
+        document.getElementById("manualDiscK").value = "";
+        // Clamp 0..15
+        let n = parseFloat(v);
+        if (n > 15) document.getElementById("manualDiscPct").value = "15";
+      }
+    }
+    updateQuickTotals();
+    liveRecalc();
+  }
+
   function getCalcOpts() {
-    return { shipFeeK: getShipFeeK(), orderCode: currentOrderCode || "" };
+    // Compute totalK trước (raw, không discount) để chuyển % thành k chính xác
+    let rawTotalK = 0;
+    for (const it of (cart || [])) {
+      const line = String(it.line || "");
+      const m = line.match(/(\d[\d.,]*\s*k)(?:\s*\*\s*((?:N?\d+)(?:\+N?\d+)*))?(?=\s*(?:\t|$))/i);
+      if (!m) continue;
+      const unitK = ComboLogic.parseK(m[1]);
+      const qp = ComboLogic.parseQtyExpression(it.qty);
+      if (!qp.valid) continue;
+      const rechargeUnit = Math.max(unitK - 20, 0);
+      rawTotalK += qp.regular * unitK + qp.recharge * rechargeUnit;
+    }
+    return {
+      shipFeeK: getShipFeeK(),
+      orderCode: currentOrderCode || "",
+      manualDiscountK: computeManualDiscountK(rawTotalK),
+    };
   }
 
   function updateQuickTotals() {
@@ -1281,8 +1463,7 @@ const App = (() => {
 
   function updateShipFee() {
     updateQuickTotals();
-    const result = ComboLogic.calc(cart, getCalcOpts());
-    $("billOutput").textContent = result.bill;
+    liveRecalc();
   }
 
   async function copyText(text) {
@@ -1308,7 +1489,6 @@ const App = (() => {
     const result = ComboLogic.calc(cart, getCalcOpts());
     $("billOutput").textContent = result.bill;
     $("notesOutput").textContent = result.notes;
-    showStatus("✅ Đã tính xong, chưa copy.");
     return result;
   }
 
@@ -1348,7 +1528,6 @@ const App = (() => {
   }
 
   function clearCart() {
-    if (!confirm("Xoá toàn bộ giỏ hiện tại?")) return;
     cart = [];
     saveCart();
     render();
@@ -2018,6 +2197,7 @@ const App = (() => {
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
+              <button onclick="App.draftRename('${d.id}')" title="Đổi tên" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
             <div style="font-size:11px;color:var(--muted);">${itemCount} dòng · ${draftFormatTime(d.createdAt)}</div>
           </div>
@@ -2027,6 +2207,23 @@ const App = (() => {
         </div>
       `;
     }).join("");
+  }
+
+  function draftRename(id) {
+    const list = draftsCleanup();
+    const d = list.find(x => x.id === id);
+    if (!d) return;
+    const newName = prompt("Đổi tên đơn nháp:", d.name);
+    if (newName === null) return;
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      showStatus("⚠️ Tên không được để trống.");
+      return;
+    }
+    d.name = trimmed;
+    draftsSave(list);
+    draftRender();
+    showStatus(`✅ Đã đổi tên thành "${trimmed}".`);
   }
 
   // --- Modal Lưu đơn ---
@@ -2277,22 +2474,73 @@ const App = (() => {
   draftCheckUrlHash();
 
   /* ===== QR THANH TOÁN ===== */
-  let stkConfig = {
-    accountNo: "0923282790",
-    accountName: "NGUYEN PHAN HOAN",
-    acqId: 970432,
-    bankName: "VPBANK",
-    template: "compact2",
-    companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL"
-  };
+  // 2 STK: STK1 mặc định, có toggle sang STK2
+  const DEFAULT_STK_LIST = [
+    {
+      accountNo: "0923282790",
+      accountName: "NGUYEN PHAN HOAN",
+      acqId: 970432,
+      bankName: "VPBANK",
+      template: "compact2",
+      companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+      label: "STK1 · VPBANK",
+    },
+    {
+      accountNo: "250891",
+      accountName: "CT TNHH SIMGLOBE OFFICIAL",
+      acqId: 970405,
+      bankName: "TECHCOMBANK",
+      template: "compact2",
+      companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+      label: "STK2 · TECHCOMBANK",
+    },
+  ];
+  let stkList = JSON.parse(JSON.stringify(DEFAULT_STK_LIST));
+  let currentStkIdx = 0;
+  // Proxy giữ tương thích code cũ dùng `stkConfig.xxx`
+  let stkConfig = stkList[0];
   let currentOrderCode = "";
+
+  function setActiveStk(idx) {
+    if (idx < 0 || idx >= stkList.length) return;
+    currentStkIdx = idx;
+    stkConfig = stkList[idx];
+    renderStkToggle();
+    // Clear QR cũ vì account đã đổi
+    const qrImg = document.getElementById("qrImg");
+    if (qrImg) qrImg.removeAttribute("src");
+    const qrBox = document.getElementById("qrBox");
+    if (qrBox) qrBox.style.display = "none";
+    showStatus(`✅ Đã chọn ${stkConfig.label || stkConfig.bankName}.`);
+  }
+
+  function renderStkToggle() {
+    const wrap = document.getElementById("stkToggleWrap");
+    if (!wrap) return;
+    wrap.innerHTML = stkList.map((s, i) => {
+      const active = i === currentStkIdx;
+      return `<button onclick="App.setActiveStk(${i})" title="${escapeHtml(s.bankName)} · ${escapeHtml(s.accountNo)}"
+        style="margin:0;padding:5px 11px;font-size:11px;border-radius:6px;border:1px solid ${active ? "#16a34a" : "#cfd5df"};
+        background:${active ? "#16a34a" : "#fff"};color:${active ? "#fff" : "#374151"};font-weight:${active ? "700" : "500"};cursor:pointer;">
+        ${active ? "● " : ""}${escapeHtml(s.label || s.bankName)}
+      </button>`;
+    }).join("");
+  }
 
   async function loadStkConfig() {
     try {
       const res = await fetch("./STK.json", { cache: "no-cache" });
       if (res.ok) {
         const data = await res.json();
-        stkConfig = { ...stkConfig, ...data };
+        // Support cả format cũ (object đơn) và format mới (array)
+        if (Array.isArray(data)) {
+          stkList = data.map((d, i) => ({ ...DEFAULT_STK_LIST[i] || {}, ...d }));
+        } else {
+          // Format cũ: chỉ override STK1
+          stkList[0] = { ...stkList[0], ...data };
+        }
+        stkConfig = stkList[currentStkIdx];
+        renderStkToggle();
       }
     } catch(e) { console.warn("STK.json load fail:", e); }
   }
@@ -2765,6 +3013,7 @@ const App = (() => {
 
   // Init STK config + order code
   loadStkConfig();
+  renderStkToggle();
   regenOrderCode();
 
   // Render ngay với local sheets, rồi async fetch preset từ sheets.json và re-render.
@@ -3144,9 +3393,9 @@ const App = (() => {
     document.getElementById("spVatBox").style.display = "none";
     document.getElementById("spTypeRetail").className = "blue";
     document.getElementById("spTypeCompany").className = "light";
-    // Pre-fill tên đơn từ draft đang load (nếu có)
+    // Pre-fill tên đơn từ draft đang load (luôn refresh để khớp với rename mới nhất)
     const nameInput = document.getElementById("spOrderName");
-    if (nameInput && !nameInput.value && draftEditingId) {
+    if (nameInput && draftEditingId) {
       const list = draftsCleanup();
       const d = list.find(x => x.id === draftEditingId);
       if (d && d.name) nameInput.value = d.name;
@@ -3221,7 +3470,10 @@ const App = (() => {
     }
 
     const totalK = items.reduce((s, it) => s + it.amountK, 0);
-    const discount = ComboLogic.discountFor(totalK);
+    const manualK = computeManualDiscountK(totalK);
+    const discount = manualK > 0
+      ? { amount: Math.min(manualK, totalK), label: "Giảm giá thủ công" }
+      : ComboLogic.discountFor(totalK);
     const shares = ComboLogic.largestRemainderShares(items, discount.amount);
     return items.map((it, idx) => ({ ...it, discountAllocK: shares[idx] || 0 }));
   }
@@ -3290,13 +3542,418 @@ const App = (() => {
     const statusEl = document.getElementById("spStatus");
     if (ok) {
       statusEl.textContent = "📋 Đã copy payload. Mở Google Sheet → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.";
+      // Auto-save VAT info lên sheet (background, không block)
+      try {
+        if (spType === "company") {
+          const info = {
+            mst: document.getElementById("spVatMst")?.value.trim() || "",
+            name: document.getElementById("spVatName")?.value.trim() || "",
+            addr: document.getElementById("spVatAddr")?.value.trim() || "",
+            email: document.getElementById("spVatEmail")?.value.trim() || "",
+          };
+          if (info.mst || info.name) vatSaveToSheet(info);
+        }
+      } catch (e) { console.warn("VAT auto-save fail:", e); }
     } else {
       ta.focus(); ta.select();
       statusEl.textContent = "⚠️ Không tự copy được, đã chọn text — bấm Ctrl+C.";
     }
   }
 
+  /* ===== VAT HISTORY (Google Sheet sync qua Apps Script Web App) ===== */
+  const VAT_CFG_KEY = "vat_cfg_v1";
+  const VAT_CACHE_KEY = "vat_cache_v1";
+  const VAT_CACHE_TTL_MS = 24 * 3600 * 1000; // 24h
+  let vatList = []; // [{mst, ten, diaChi, email, updatedAt}]
+
+  function vatGetCfg() {
+    try { return JSON.parse(localStorage.getItem(VAT_CFG_KEY) || "{}"); } catch { return {}; }
+  }
+  function vatSaveCfg(cfg) {
+    localStorage.setItem(VAT_CFG_KEY, JSON.stringify(cfg || {}));
+  }
+  function vatCacheLoad() {
+    try {
+      const raw = localStorage.getItem(VAT_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !Array.isArray(obj.list)) return null;
+      return obj;
+    } catch { return null; }
+  }
+  function vatCacheSave(list) {
+    localStorage.setItem(VAT_CACHE_KEY, JSON.stringify({ list, ts: Date.now() }));
+  }
+
+  function vatParseCsv(text) {
+    const rows = [];
+    let cur = [], field = "", inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (text[i+1] === '"') { field += '"'; i++; }
+          else inQ = false;
+        } else field += ch;
+      } else {
+        if (ch === '"') inQ = true;
+        else if (ch === ',') { cur.push(field); field = ""; }
+        else if (ch === '\n') { cur.push(field); rows.push(cur); cur = []; field = ""; }
+        else if (ch === '\r') {}
+        else field += ch;
+      }
+    }
+    if (field !== "" || cur.length) { cur.push(field); rows.push(cur); }
+    return rows;
+  }
+
+  function vatRowsToList(rows) {
+    if (!rows || rows.length < 2) return [];
+    const header = rows[0].map(h => String(h || "").trim().toUpperCase());
+    let idx = {
+      mst: header.findIndex(h => h === "MST"),
+      ten: header.findIndex(h => h === "TEN" || h === "TÊN" || h === "TÊN CTY" || h === "TEN CTY"),
+      diaChi: header.findIndex(h => h === "DIA_CHI" || h === "DIA CHI" || h === "ĐỊA CHỈ" || h === "DIACHI"),
+      email: header.findIndex(h => h === "EMAIL"),
+      updatedAt: header.findIndex(h => h === "UPDATED_AT" || h === "UPDATED"),
+    };
+    if (idx.mst < 0 && idx.ten < 0) {
+      idx = { mst: 0, ten: 1, diaChi: 2, email: 3, updatedAt: 4 };
+    }
+    const out = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i]; if (!r) continue;
+      const mst = (idx.mst >= 0 ? r[idx.mst] : "") || "";
+      const ten = (idx.ten >= 0 ? r[idx.ten] : "") || "";
+      if (!mst && !ten) continue;
+      out.push({
+        mst: String(mst).trim(),
+        ten: String(ten).trim(),
+        diaChi: String((idx.diaChi >= 0 ? r[idx.diaChi] : "") || "").trim(),
+        email: String((idx.email >= 0 ? r[idx.email] : "") || "").trim(),
+        updatedAt: String((idx.updatedAt >= 0 ? r[idx.updatedAt] : "") || "").trim(),
+      });
+    }
+    return out;
+  }
+
+  async function vatFetchFromSheet(force) {
+    const cfg = vatGetCfg();
+    if (!cfg.csvUrl) {
+      vatSetStatus("⚠️ Chưa cấu hình CSV URL. Bấm ⚙ Cấu hình.");
+      return;
+    }
+    if (!force) {
+      const cached = vatCacheLoad();
+      if (cached && (Date.now() - cached.ts) < VAT_CACHE_TTL_MS) {
+        vatList = cached.list;
+        const ageMin = Math.round((Date.now() - cached.ts) / 60000);
+        vatSetStatus(`📂 ${vatList.length} dòng VAT (cache ${ageMin} phút trước).`);
+        return;
+      }
+    }
+    vatSetStatus("⏳ Đang tải VAT từ Google Sheet…");
+    try {
+      const res = await fetch(cfg.csvUrl, { cache: "no-cache" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      const rows = vatParseCsv(text);
+      vatList = vatRowsToList(rows);
+      vatCacheSave(vatList);
+      vatSetStatus(`✅ Đã tải ${vatList.length} dòng VAT.`);
+    } catch (e) {
+      vatSetStatus("❌ Lỗi tải VAT: " + e.message);
+    }
+  }
+  function vatRefreshHistory() { vatFetchFromSheet(true); }
+  function vatSetStatus(text) {
+    const el = document.getElementById("vatHistoryStatus");
+    if (el) el.textContent = text;
+  }
+  function vatNoDiacritics(s) {
+    return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+  function vatSearch(field, query) {
+    const q = vatNoDiacritics(query).trim();
+    if (!q) return vatList.slice(0, 8);
+    return vatList.filter(v => {
+      if (field === "mst") return v.mst && v.mst.toLowerCase().includes(query.toLowerCase().trim());
+      return v.ten && vatNoDiacritics(v.ten).includes(q);
+    }).slice(0, 10);
+  }
+
+  function vatRenderDropdown(field) {
+    const dd = document.getElementById("vatDropdown_" + field);
+    if (!dd) return;
+    const input = document.getElementById(field === "mst" ? "spVatMst" : "spVatName");
+    const q = input ? input.value : "";
+    const matches = vatSearch(field, q);
+    if (!matches.length) {
+      dd.innerHTML = `<div class="vat-dropdown-empty">${vatList.length ? "Không có gợi ý khớp" : "Chưa có lịch sử — cấu hình ⚙"}</div>`;
+    } else {
+      dd.innerHTML = matches.map(m => {
+        const sub = [m.email, m.diaChi].filter(Boolean).join(" · ");
+        const enc = btoa(unescape(encodeURIComponent(JSON.stringify(m))));
+        return `
+          <div class="vat-dropdown-item" onmousedown="event.preventDefault(); App.vatPickItem('${enc}')">
+            <div class="vd-main">
+              ${m.mst ? `<div class="vd-mst">${escapeHtml(m.mst)}</div>` : ""}
+              <div class="vd-name">${escapeHtml(m.ten || "(không tên)")}</div>
+              ${sub ? `<div class="vd-sub">${escapeHtml(sub)}</div>` : ""}
+            </div>
+            <button class="vd-del" title="Xoá khỏi sheet" onmousedown="event.preventDefault(); event.stopPropagation(); App.vatDeleteItem('${enc}')">✕</button>
+          </div>
+        `;
+      }).join("");
+    }
+    dd.classList.add("open");
+  }
+
+  function vatOnInput(field) {
+    vatRenderDropdown(field);
+    sheetPayloadRegenerate();
+  }
+  function vatCloseSoon() {
+    setTimeout(() => {
+      document.querySelectorAll(".vat-dropdown").forEach(d => d.classList.remove("open"));
+    }, 200);
+  }
+  function vatPickItem(enc) {
+    let m;
+    try { m = JSON.parse(decodeURIComponent(escape(atob(enc)))); } catch { return; }
+    document.getElementById("spVatMst").value = m.mst || "";
+    document.getElementById("spVatName").value = m.ten || "";
+    document.getElementById("spVatAddr").value = m.diaChi || "";
+    document.getElementById("spVatEmail").value = m.email || "";
+    document.querySelectorAll(".vat-dropdown").forEach(d => d.classList.remove("open"));
+    sheetPayloadRegenerate();
+    vatSetStatus(`✅ Đã chọn: ${m.ten || m.mst}`);
+  }
+  async function vatDeleteItem(enc) {
+    let m;
+    try { m = JSON.parse(decodeURIComponent(escape(atob(enc)))); } catch { return; }
+    if (!confirm(`Xoá khỏi sheet VAT?\n\n${m.ten || ""}\nMST: ${m.mst || "—"}`)) return;
+    const cfg = vatGetCfg();
+    if (!cfg.webAppUrl) {
+      vatSetStatus("⚠️ Chưa cấu hình Web App URL.");
+      return;
+    }
+    vatSetStatus("⏳ Đang xoá…");
+    try {
+      const res = await fetch(cfg.webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "delete", mst: m.mst, ten: m.ten }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "unknown");
+      vatList = vatList.filter(v => !(v.mst === m.mst && v.ten === m.ten));
+      vatCacheSave(vatList);
+      ["mst", "name"].forEach(f => {
+        const dd = document.getElementById("vatDropdown_" + f);
+        if (dd && dd.classList.contains("open")) vatRenderDropdown(f);
+      });
+      vatSetStatus(`✅ Đã xoá.`);
+    } catch (e) {
+      vatSetStatus("❌ Lỗi xoá: " + e.message);
+    }
+  }
+
+  async function vatSaveToSheet(info) {
+    if (!info || (!info.mst && !info.name)) return;
+    const cfg = vatGetCfg();
+    if (!cfg.webAppUrl) return;
+    try {
+      const res = await fetch(cfg.webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "upsert",
+          mst: info.mst || "",
+          ten: info.name || "",
+          diaChi: info.addr || "",
+          email: info.email || "",
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const idx = vatList.findIndex(v =>
+          (info.mst && v.mst === info.mst) || (!info.mst && v.ten === info.name)
+        );
+        const entry = {
+          mst: info.mst || "", ten: info.name || "",
+          diaChi: info.addr || "", email: info.email || "",
+          updatedAt: new Date().toISOString(),
+        };
+        if (idx >= 0) vatList[idx] = entry; else vatList.unshift(entry);
+        vatCacheSave(vatList);
+      }
+    } catch (e) { console.warn("VAT save fail:", e); }
+  }
+
+  function vatSettingsOpen() {
+    const cfg = vatGetCfg();
+    document.getElementById("vatCsvUrl").value = cfg.csvUrl || "";
+    document.getElementById("vatWebAppUrl").value = cfg.webAppUrl || "";
+    document.getElementById("vatSettingsStatus").textContent = "";
+    document.getElementById("vatSettingsOverlay").classList.add("open");
+  }
+  function vatSettingsClose() {
+    document.getElementById("vatSettingsOverlay").classList.remove("open");
+  }
+  function vatSettingsSave() {
+    const csvUrl = document.getElementById("vatCsvUrl").value.trim();
+    const webAppUrl = document.getElementById("vatWebAppUrl").value.trim();
+    vatSaveCfg({ csvUrl, webAppUrl });
+    const stEl = document.getElementById("vatSettingsStatus");
+    stEl.textContent = "✅ Đã lưu. Load lại VAT…";
+    vatFetchFromSheet(true).then(() => {
+      stEl.textContent = "✅ Đã lưu và refresh xong.";
+    });
+  }
+  async function vatSettingsTest() {
+    const csvUrl = document.getElementById("vatCsvUrl").value.trim();
+    const webAppUrl = document.getElementById("vatWebAppUrl").value.trim();
+    const stEl = document.getElementById("vatSettingsStatus");
+    stEl.textContent = "⏳ Đang test…";
+    const out = [];
+    if (csvUrl) {
+      try {
+        const res = await fetch(csvUrl, { cache: "no-cache" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        const rows = vatParseCsv(text);
+        out.push(`✅ CSV OK — ${rows.length - 1} dòng dữ liệu.`);
+      } catch (e) { out.push("❌ CSV lỗi: " + e.message); }
+    } else out.push("⚠️ Chưa nhập CSV URL.");
+    if (webAppUrl) {
+      try {
+        const res = await fetch(webAppUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "ping" }),
+        });
+        const data = await res.json();
+        if (data.ok) out.push("✅ Web App OK — " + (data.message || "ping pass."));
+        else out.push("❌ Web App lỗi: " + (data.error || "unknown"));
+      } catch (e) { out.push("❌ Web App lỗi: " + e.message); }
+    } else out.push("⚠️ Chưa nhập Web App URL.");
+    stEl.innerHTML = out.join("<br>");
+  }
+  function vatGetScriptCode() {
+    const code = VAT_GS_CODE;
+    navigator.clipboard.writeText(code).then(() => {
+      document.getElementById("vatSettingsStatus").textContent = "📋 Đã copy code Apps Script. Vào Sheet → Extensions → Apps Script → xoá hết code mặc định → paste → Save → Deploy.";
+    }).catch(() => {
+      document.getElementById("vatSettingsStatus").textContent = "⚠️ Không tự copy. Mở DevTools Console gõ: copy(App.__vatCode())";
+    });
+  }
+  function __vatCode() { return VAT_GS_CODE; }
+
+  const VAT_GS_CODE = [
+    '/**',
+    ' * SIMGLOBE VAT DB — Apps Script Web App',
+    ' * Paste vào: Google Sheet "SIMGLOBE VAT DB" → Extensions → Apps Script',
+    ' * Deploy: New deployment → Web app → Execute as: Me, Who has access: Anyone',
+    ' *',
+    ' * Sheet phải có tab "VAT" với header hàng 1:',
+    ' *   MST | TEN | DIA_CHI | EMAIL | UPDATED_AT',
+    ' */',
+    '',
+    'const SHEET_NAME = "VAT";',
+    '',
+    'function doPost(e) {',
+    '  try {',
+    '    var body = JSON.parse(e.postData.contents || "{}");',
+    '    var action = body.action || "";',
+    '    if (action === "ping")   return _json({ ok: true, message: "VAT DB ready" });',
+    '    if (action === "upsert") return _json(upsertVat(body));',
+    '    if (action === "delete") return _json(deleteVat(body));',
+    '    return _json({ ok: false, error: "Unknown action: " + action });',
+    '  } catch (err) {',
+    '    return _json({ ok: false, error: String(err) });',
+    '  }',
+    '}',
+    '',
+    'function doGet(e) {',
+    '  return _json({ ok: true, message: "Use POST. Actions: ping, upsert, delete." });',
+    '}',
+    '',
+    'function _json(obj) {',
+    '  return ContentService.createTextOutput(JSON.stringify(obj))',
+    '    .setMimeType(ContentService.MimeType.JSON);',
+    '}',
+    '',
+    'function _getSheet() {',
+    '  var ss = SpreadsheetApp.getActiveSpreadsheet();',
+    '  var sh = ss.getSheetByName(SHEET_NAME);',
+    '  if (!sh) {',
+    '    sh = ss.insertSheet(SHEET_NAME);',
+    '    sh.getRange(1, 1, 1, 5).setValues([["MST", "TEN", "DIA_CHI", "EMAIL", "UPDATED_AT"]]);',
+    '    sh.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f0f4f8");',
+    '    sh.setFrozenRows(1);',
+    '  }',
+    '  return sh;',
+    '}',
+    '',
+    'function _findRow(sh, mst, ten) {',
+    '  var lastRow = sh.getLastRow();',
+    '  if (lastRow < 2) return -1;',
+    '  var data = sh.getRange(2, 1, lastRow - 1, 2).getValues();',
+    '  for (var i = 0; i < data.length; i++) {',
+    '    var rowMst = String(data[i][0] || "").trim();',
+    '    var rowTen = String(data[i][1] || "").trim();',
+    '    if (mst && rowMst && rowMst === String(mst).trim()) return i + 2;',
+    '    if (!mst && !rowMst && rowTen && rowTen === String(ten || "").trim()) return i + 2;',
+    '  }',
+    '  return -1;',
+    '}',
+    '',
+    'function upsertVat(body) {',
+    '  var sh = _getSheet();',
+    '  var mst = String(body.mst || "").trim();',
+    '  var ten = String(body.ten || "").trim();',
+    '  var diaChi = String(body.diaChi || "").trim();',
+    '  var email = String(body.email || "").trim();',
+    '  if (!mst && !ten) return { ok: false, error: "Cần ít nhất MST hoặc TEN" };',
+    '  var now = new Date().toISOString();',
+    '  var row = _findRow(sh, mst, ten);',
+    '  if (row > 0) {',
+    '    sh.getRange(row, 1, 1, 5).setValues([[mst, ten, diaChi, email, now]]);',
+    '    return { ok: true, action: "updated", row: row };',
+    '  } else {',
+    '    sh.appendRow([mst, ten, diaChi, email, now]);',
+    '    return { ok: true, action: "inserted", row: sh.getLastRow() };',
+    '  }',
+    '}',
+    '',
+    'function deleteVat(body) {',
+    '  var sh = _getSheet();',
+    '  var mst = String(body.mst || "").trim();',
+    '  var ten = String(body.ten || "").trim();',
+    '  var row = _findRow(sh, mst, ten);',
+    '  if (row > 0) {',
+    '    sh.deleteRow(row);',
+    '    return { ok: true, action: "deleted", row: row };',
+    '  }',
+    '  return { ok: false, error: "Not found" };',
+    '}',
+    ''
+  ].join("\n");
+
+  function vatInit() {
+    const cached = vatCacheLoad();
+    if (cached && Array.isArray(cached.list)) vatList = cached.list;
+    const cfg = vatGetCfg();
+    if (cfg.csvUrl) {
+      const stale = !cached || (Date.now() - cached.ts) > VAT_CACHE_TTL_MS;
+      if (stale) vatFetchFromSheet(false);
+    }
+  }
+  vatInit();
+
   render();
+  liveRecalc();
 
   return {
     addFromText,
@@ -3321,6 +3978,8 @@ const App = (() => {
     slFavoriteSearch,
     slRestorePresets,
     updateShipFee,
+    onManualDiscChange,
+    setActiveStk,
     regenOrderCode,
     qrGenerate,
     qrGenerateFull,
@@ -3347,6 +4006,7 @@ const App = (() => {
     draftSelectTag,
     draftFilter,
     draftImport,
+    draftRename,
     draftDelete,
     draftShare,
     draftShareClose,
@@ -3359,6 +4019,17 @@ const App = (() => {
     sheetPayloadSetType,
     sheetPayloadRegenerate,
     sheetPayloadCopy,
+    vatRefreshHistory,
+    vatOnInput,
+    vatCloseSoon,
+    vatPickItem,
+    vatDeleteItem,
+    vatSettingsOpen,
+    vatSettingsClose,
+    vatSettingsSave,
+    vatSettingsTest,
+    vatGetScriptCode,
+    __vatCode,
   };
 })();
 </script>
