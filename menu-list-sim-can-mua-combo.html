@@ -2489,7 +2489,8 @@ const App = (() => {
     return decodeURIComponent(escape(atob(str)));
   }
 
-  function buildShareLink(name, tag, customTag, cartData) {
+  function buildShareLink(name, tag, customTag, cartData, opts) {
+    opts = opts || {};
     const payload = {
       v: 1,
       n: name,
@@ -2501,6 +2502,15 @@ const App = (() => {
       })
     };
     if (tag === "KHAC" && customTag) payload.ct = customTag;
+    if (opts.orderCode) payload.oc = opts.orderCode;
+    if (opts.vat && (opts.vat.mst || opts.vat.name)) {
+      payload.vat = {
+        mst: opts.vat.mst || "",
+        name: opts.vat.name || "",
+        addr: opts.vat.addr || "",
+        email: opts.vat.email || "",
+      };
+    }
     const json = JSON.stringify(payload);
     const encoded = urlSafeEncode(json);
     const base = location.origin + location.pathname + location.search;
@@ -2518,6 +2528,13 @@ const App = (() => {
         name: String(data.n || ""),
         tag: String(data.t || "ZALO"),
         customTag: String(data.ct || ""),
+        orderCode: String(data.oc || ""),
+        vat: data.vat ? {
+          mst: String(data.vat.mst || ""),
+          name: String(data.vat.name || ""),
+          addr: String(data.vat.addr || ""),
+          email: String(data.vat.email || ""),
+        } : null,
         cart: (data.c || []).map(x => ({
           line: String(x.l || ""),
           qty: x.q == null ? "1" : String(x.q),
@@ -2535,7 +2552,10 @@ const App = (() => {
   function draftShare(id) {
     const d = DraftStore.getById(id);
     if (!d) return;
-    lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart);
+    lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart, {
+      orderCode: d.orderCode || "",
+      vat: d.vat || null,
+    });
     const ta = document.getElementById("draftShareLink");
     ta.value = lastShareLink;
     document.getElementById("draftShareLen").textContent =
@@ -2569,14 +2589,22 @@ const App = (() => {
     const tagLabel = payload.tag === "KHAC" && payload.customTag
       ? payload.customTag
       : (DRAFT_TAGS.find(t => t.id === payload.tag)?.label || payload.tag);
+    const vatBadge = payload.vat && (payload.vat.mst || payload.vat.name)
+      ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;margin-left:4px;" title="Đơn có VAT">VAT</span>`
+      : "";
+    const extraInfo = [
+      payload.orderCode ? `Mã đơn: <code style="font-family:monospace;background:#fff;padding:1px 4px;border-radius:3px;">${escapeHtml(payload.orderCode)}</code>` : "",
+      payload.vat && payload.vat.name ? `VAT: ${escapeHtml(payload.vat.name)}` : "",
+    ].filter(Boolean).join(" · ");
     document.getElementById("draftImportInfo").innerHTML = `
       <div style="margin-bottom:8px;">Bạn nhận được 1 đơn nháp chia sẻ:</div>
       <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
           ${draftTagBadge(payload.tag, payload.customTag)}
+          ${vatBadge}
           <b>${escapeHtml(payload.name || "(không có tên)")}</b>
         </div>
-        <div style="font-size:12px;color:var(--muted);">${payload.cart.length} dòng</div>
+        <div style="font-size:12px;color:var(--muted);">${payload.cart.length} dòng${extraInfo ? " · " + extraInfo : ""}</div>
       </div>
     `;
     document.getElementById("draftImportOverlay").classList.add("open");
@@ -2595,6 +2623,14 @@ const App = (() => {
     cart = p.cart;
     saveCart();
     render();
+    // Restore mã đơn nếu có trong link
+    if (p.orderCode) {
+      currentOrderCode = p.orderCode;
+      const codeEl = document.getElementById("orderCode");
+      if (codeEl) codeEl.value = currentOrderCode;
+      const codeEl2 = document.getElementById("payOrderCode");
+      if (codeEl2) codeEl2.value = currentOrderCode;
+    }
     if (saveAsDraft && p.name) {
       const draft = {
         id: draftGenId(),
@@ -2602,8 +2638,8 @@ const App = (() => {
         tag: p.tag || "ZALO",
         customTag: p.customTag || "",
         cart: JSON.parse(JSON.stringify(p.cart)),
-        orderCode: "",
-        vat: null,
+        orderCode: p.orderCode || "",
+        vat: p.vat || null,
       };
       const r = await DraftStore.upsert(draft);
       draftEditingId = draft.id;
