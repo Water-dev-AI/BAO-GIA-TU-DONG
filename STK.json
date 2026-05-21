@@ -6,7 +6,7 @@
     "bankName": "VPBANK",
     "template": "compact2",
     "companyName": "CÔNG TY TNHH SIMGLOBE OFFICIAL",
-    "label": "STK1 · VPBANK"
+    "label": "STK1 · Cá nhân"
   },
   {
     "accountNo": "250891",
@@ -15,6 +15,6 @@
     "bankName": "TECHCOMBANK",
     "template": "compact2",
     "companyName": "CÔNG TY TNHH SIMGLOBE OFFICIAL",
-    "label": "STK2 · TECHCOMBANK"
+    "label": "STK2 · Công ty"
   }
 ]

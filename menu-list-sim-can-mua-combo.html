@@ -244,11 +244,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
         <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
           <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;">💾 Lưu giỏ hiện tại</button>
         </div>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Đơn nháp lưu cục bộ trên máy này, tự xoá sau 7 ngày. Bấm <b>Share</b> để tạo link gửi cho người khác mở/sửa.
+        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Cache 1h, bấm 🔄 để load ngay. Bấm <b>Share</b> tạo link gửi cho người khác.
       </div>
       <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách..."
         oninput="App.draftFilter()"
@@ -558,6 +559,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <div style="font-size:11px;color:var(--muted);margin-top:3px;">Tự điền từ tên đơn nháp đang load (nếu có). Sẽ ghi vào note của ô <b>MÃ ĐƠN HÀNG</b> trên sheet.</div>
       </div>
 
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;">Tag nguồn (prefix vào tên đơn khi fill sheet)</div>
+        <div id="spTagWrap" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Mặc định "Không" — không prefix. Chọn tag sẽ thêm [Z]/[OA]/[F]/[K] trước tên.</div>
+      </div>
+
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
         <button id="spTypeRetail" class="blue" onclick="App.sheetPayloadSetType('retail')" style="margin:0;">🛒 Đơn lẻ</button>
         <button id="spTypeCompany" class="light" onclick="App.sheetPayloadSetType('company')" style="margin:0;">🏢 Đơn công ty (xuất VAT)</button>
@@ -711,6 +718,14 @@ const ComboLogic = (() => {
   }
 
   function discountFor(totalK) {
+    // Trên 4tr: công thức tuyến tính 200k + 50k mỗi 1tr thêm (5tr=250k, 6tr=300k, 10tr=500k, ...)
+    if (totalK >= 4000) {
+      const extraMillions = Math.floor((totalK - 4000) / 1000);
+      const amount = 200 + extraMillions * 50;
+      const tierLabel = extraMillions === 0 ? "Trên 4tr" : `Trên ${4 + extraMillions}tr`;
+      return { amount, label: tierLabel };
+    }
+    // Dưới 4tr: dùng bảng cũ
     for (const [threshold, amount, label] of discounts) {
       if (totalK > threshold) return { amount, label };
     }
@@ -1227,7 +1242,14 @@ const App = (() => {
       // Fallback: dùng priceRe cũ tìm giá ở cuối line
       const priceMatch = String(line).match(ComboLogic.priceRe);
       const price = priceMatch ? priceMatch[1].replace(/\s+/g,'') : "";
-      return { name: String(line), type: "", days: "", price, note: "" };
+      // Detect type/days từ nội dung khi không có tab — fix bug import share link
+      let detectedType = "";
+      if (isRechargeLine(line)) detectedType = "NẠP GÓI";
+      else if (isPhysicalLine(line)) detectedType = "SIM VẬT LÝ";
+      else if (isEsimLine(line)) detectedType = "ESIM";
+      const daysMatch = String(line).match(/(\d+)\s*(?:days?|ng[aà]y)/i);
+      const detectedDays = daysMatch ? daysMatch[1] + " Days" : "";
+      return { name: String(line), type: detectedType, days: detectedDays, price, note: "" };
     }
 
     const priceCell = cells[priceIdx];
@@ -2062,8 +2084,9 @@ const App = (() => {
   async function slPreview(idx) { await slOpen(idx); }
 
   /* ===== DRAFTS (đơn nháp) ===== */
-  const DRAFT_KEY = "combo_bill_drafts_v1";
-  const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+  const DRAFT_KEY = "combo_bill_drafts_v2"; // cache key, đổi v2 để clear cache cũ
+  const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày (server-side cũng tự purge)
+  const DRAFT_CACHE_TTL_MS = 60 * 60 * 1000; // 1h cache
 
   // Tag config: ZALO mặc định, ZALO OA, FB, KHÁC (custom text)
   const DRAFT_TAGS = [
@@ -2078,19 +2101,143 @@ const App = (() => {
   let draftSelectedTag = "ZALO";
   let pendingImportPayload = null; // payload từ URL hash chờ confirm
 
-  function draftsLoad() {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "[]"); } catch { return []; }
-  }
-  function draftsSave(list) { localStorage.setItem(DRAFT_KEY, JSON.stringify(list)); }
+  /* ─── DraftStore: online qua Web App, cache 1h trong localStorage ─── */
+  const DraftStore = (() => {
+    let list = []; // in-memory
+    let cacheTs = 0;
 
-  // Auto-cleanup drafts > 7 ngày, trả về list đã clean.
+    function loadCache() {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || !Array.isArray(obj.list)) return null;
+        return obj;
+      } catch { return null; }
+    }
+    function saveCache() {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ list, ts: cacheTs }));
+      } catch (e) { console.warn("[Drafts] cache save fail:", e); }
+    }
+
+    function getAll() {
+      // Local TTL filter (defence) — server cũng tự purge
+      const now = Date.now();
+      return list.filter(d => (now - (d.createdAt || 0)) < DRAFT_TTL_MS);
+    }
+    function getById(id) {
+      return list.find(d => d.id === id) || null;
+    }
+
+    async function refresh(force) {
+      const cfg = vatGetCfg();
+      if (!cfg.webAppUrl) {
+        console.warn("[Drafts] Chưa cấu hình webAppUrl — drafts không hoạt động online.");
+        // Vẫn dùng cache nếu có
+        const cached = loadCache();
+        if (cached) { list = cached.list || []; cacheTs = cached.ts || 0; }
+        return false;
+      }
+      if (!force) {
+        // Dùng cache nếu còn fresh
+        const cached = loadCache();
+        if (cached && (Date.now() - (cached.ts || 0)) < DRAFT_CACHE_TTL_MS) {
+          list = cached.list || []; cacheTs = cached.ts || 0;
+          return true;
+        }
+      }
+      try {
+        const res = await fetch(cfg.webAppUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "drafts_list" }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "drafts_list fail");
+        list = Array.isArray(data.drafts) ? data.drafts : [];
+        cacheTs = Date.now();
+        saveCache();
+        console.log("[Drafts] Loaded " + list.length + " drafts từ sheet" + (data.purged ? " (purged " + data.purged + ")" : ""));
+        return true;
+      } catch (e) {
+        console.warn("[Drafts] refresh fail:", e.message);
+        const cached = loadCache();
+        if (cached) { list = cached.list || []; cacheTs = cached.ts || 0; }
+        return false;
+      }
+    }
+
+    async function upsert(draft) {
+      const cfg = vatGetCfg();
+      // Cập nhật local trước (optimistic) để UI mượt
+      const idx = list.findIndex(d => d.id === draft.id);
+      const now = Date.now();
+      const merged = {
+        ...draft,
+        createdAt: idx >= 0 ? list[idx].createdAt : now,
+        updatedAt: now,
+      };
+      if (idx >= 0) list[idx] = merged; else list.unshift(merged);
+      saveCache();
+
+      if (!cfg.webAppUrl) {
+        showStatus("⚠️ Lưu local only (chưa cấu hình online).");
+        return { ok: false, offline: true };
+      }
+      try {
+        const res = await fetch(cfg.webAppUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "drafts_upsert",
+            id: draft.id,
+            name: draft.name,
+            tag: draft.tag || "ZALO",
+            customTag: draft.customTag || "",
+            orderCode: draft.orderCode || "",
+            cart: draft.cart || [],
+            vat: draft.vat || null,
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "drafts_upsert fail");
+        cacheTs = Date.now();
+        saveCache();
+        return data;
+      } catch (e) {
+        console.warn("[Drafts] upsert fail:", e.message);
+        return { ok: false, error: e.message };
+      }
+    }
+
+    async function remove(id) {
+      const cfg = vatGetCfg();
+      // Optimistic remove
+      list = list.filter(d => d.id !== id);
+      saveCache();
+      if (!cfg.webAppUrl) return { ok: false, offline: true };
+      try {
+        const res = await fetch(cfg.webAppUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "drafts_delete", id: id }),
+        });
+        const data = await res.json();
+        return data;
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
+
+    return { refresh, upsert, remove, getAll, getById };
+  })();
+
   function draftsCleanup() {
-    const now = Date.now();
-    const list = draftsLoad();
-    const fresh = list.filter(d => (now - (d.createdAt || 0)) < DRAFT_TTL_MS);
-    if (fresh.length !== list.length) draftsSave(fresh);
-    return fresh;
+    // Compat shim cho code cũ — đồng bộ, dùng cache đã load
+    return DraftStore.getAll();
   }
+  function draftsSave() { /* no-op — DraftStore.upsert tự lưu */ }
 
   function draftGenId() {
     return "d_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -2124,13 +2271,13 @@ const App = (() => {
   }
 
   function draftRender() {
-    const list = draftsCleanup();
+    const list = DraftStore.getAll();
     const wrap = document.getElementById("draftListWrap");
     document.getElementById("draftCount").textContent = list.length + " đơn";
 
     const kw = ComboLogic.norm(draftSearchKw);
     const filtered = kw ? list.filter(d => {
-      const hay = ComboLogic.norm(d.name + " " + (d.customTag || ""));
+      const hay = ComboLogic.norm(d.name + " " + (d.customTag || "") + " " + (d.orderCode || ""));
       return hay.includes(kw);
     }) : list;
 
@@ -2141,20 +2288,30 @@ const App = (() => {
       return;
     }
 
-    // Sort mới nhất lên trên
-    filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // Sort mới nhất lên trên (theo updatedAt nếu có, fallback createdAt)
+    filtered.sort((a, b) => ((b.updatedAt || b.createdAt) || 0) - ((a.updatedAt || a.createdAt) || 0));
 
     wrap.innerHTML = filtered.map(d => {
       const itemCount = (d.cart || []).length;
+      const vatBadge = d.vat && (d.vat.mst || d.vat.name)
+        ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
+        : "";
       return `
         <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:3px;">
+          <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
+              ${vatBadge}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
               <button onclick="App.draftRename('${d.id}')" title="Đổi tên" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
-            <div style="font-size:11px;color:var(--muted);">${itemCount} dòng · ${draftFormatTime(d.createdAt)}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:10.5px;color:var(--muted);">Mã đơn:</span>
+              <input type="text" value="${escapeHtml(d.orderCode || '')}" placeholder="(chưa có)"
+                onchange="App.draftSetOrderCode('${d.id}', this.value)"
+                style="font-family:'Roboto Mono',monospace;font-size:11px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;width:130px;background:#fff;" />
+              <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTime(d.updatedAt || d.createdAt)}</span>
+            </div>
           </div>
           <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
           <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}')">🔗 Share</button>
@@ -2164,9 +2321,19 @@ const App = (() => {
     }).join("");
   }
 
-  function draftRename(id) {
-    const list = draftsCleanup();
-    const d = list.find(x => x.id === id);
+  async function draftSetOrderCode(id, newCode) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    const trimmed = String(newCode || "").trim();
+    if (trimmed === (d.orderCode || "")) return;
+    d.orderCode = trimmed;
+    const r = await DraftStore.upsert(d);
+    if (r && r.ok) showStatus("✅ Đã cập nhật mã đơn cho \"" + d.name + "\".");
+    draftRender();
+  }
+
+  async function draftRename(id) {
+    const d = DraftStore.getById(id);
     if (!d) return;
     const newName = prompt("Đổi tên đơn nháp:", d.name);
     if (newName === null) return;
@@ -2176,9 +2343,10 @@ const App = (() => {
       return;
     }
     d.name = trimmed;
-    draftsSave(list);
+    const r = await DraftStore.upsert(d);
     draftRender();
-    showStatus(`✅ Đã đổi tên thành "${trimmed}".`);
+    if (r && r.ok) showStatus(`✅ Đã đổi tên thành "${trimmed}".`);
+    else showStatus("⚠️ Đổi tên local — sync online thất bại.");
   }
 
   // --- Modal Lưu đơn ---
@@ -2226,7 +2394,7 @@ const App = (() => {
     draftEditingId = null;
   }
 
-  function draftSave() {
+  async function draftSave() {
     const name = document.getElementById("draftName").value.trim();
     if (!name) {
       document.getElementById("draftSaveStatus").textContent = "⚠️ Cần nhập tên khách hàng.";
@@ -2240,48 +2408,71 @@ const App = (() => {
       return;
     }
 
-    const list = draftsCleanup();
-    const now = Date.now();
+    let draft;
     if (draftEditingId) {
-      const idx = list.findIndex(d => d.id === draftEditingId);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), updatedAt: now };
-      } else {
-        // fallback: tạo mới nếu không tìm thấy
-        list.unshift({ id: draftGenId(), name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), createdAt: now, updatedAt: now });
+      const prev = DraftStore.getById(draftEditingId);
+      if (prev) {
+        draft = { ...prev, name, tag: draftSelectedTag, customTag,
+          cart: JSON.parse(JSON.stringify(cart)),
+          orderCode: currentOrderCode || prev.orderCode || "" };
       }
-    } else {
-      list.unshift({ id: draftGenId(), name, tag: draftSelectedTag, customTag, cart: JSON.parse(JSON.stringify(cart)), createdAt: now, updatedAt: now });
     }
-    draftsSave(list);
+    if (!draft) {
+      draft = {
+        id: draftGenId(),
+        name, tag: draftSelectedTag, customTag,
+        cart: JSON.parse(JSON.stringify(cart)),
+        orderCode: currentOrderCode || "",
+        vat: null,
+      };
+    }
+    document.getElementById("draftSaveStatus").textContent = "⏳ Đang lưu lên sheet…";
+    const r = await DraftStore.upsert(draft);
+    draftEditingId = draft.id;
     draftSaveClose();
     draftRender();
-    showStatus(`✅ Đã lưu đơn nháp "${name}".`);
+    if (r && r.ok) {
+      showStatus(`✅ Đã lưu đơn nháp "${name}" lên sheet.`);
+    } else if (r && r.offline) {
+      showStatus(`⚠️ Đã lưu local (chưa cấu hình sheet online).`);
+    } else {
+      showStatus(`⚠️ Đã lưu local — sync online thất bại: ${(r && r.error) || "lỗi không xác định"}`);
+    }
   }
 
   // --- Actions trên đơn nháp ---
   function draftImport(id) {
-    const list = draftsCleanup();
-    const d = list.find(x => x.id === id);
+    const d = DraftStore.getById(id);
     if (!d) return;
     if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng đơn nháp "${d.name}"?`)) return;
     cart = JSON.parse(JSON.stringify(d.cart || []));
     saveCart();
     render();
     draftEditingId = id;
-    showStatus(`✅ Đã import đơn "${d.name}". Mọi thay đổi có thể lưu lại bằng "💾 Lưu giỏ hiện tại".`);
+    // Restore mã đơn (đồng bộ với QR card)
+    if (d.orderCode) {
+      currentOrderCode = d.orderCode;
+      const codeEl = document.getElementById("orderCode");
+      if (codeEl) codeEl.value = currentOrderCode;
+      const codeEl2 = document.getElementById("payOrderCode");
+      if (codeEl2) codeEl2.value = currentOrderCode;
+    }
+    let msg = `✅ Đã import đơn "${d.name}".`;
+    if (d.orderCode) msg += ` Mã đơn: ${d.orderCode}.`;
+    if (d.vat && (d.vat.mst || d.vat.name)) msg += " (Có VAT đã lưu.)";
+    showStatus(msg);
   }
 
-  function draftDelete(id) {
-    const list = draftsCleanup();
-    const d = list.find(x => x.id === id);
+  async function draftDelete(id) {
+    const d = DraftStore.getById(id);
     if (!d) return;
-    if (!confirm(`Xoá đơn nháp "${d.name}"?`)) return;
-    const next = list.filter(x => x.id !== id);
-    draftsSave(next);
+    if (!confirm(`Xoá đơn nháp "${d.name}"?\nXoá khỏi sheet online luôn.`)) return;
+    const r = await DraftStore.remove(id);
     if (draftEditingId === id) draftEditingId = null;
     draftRender();
-    showStatus(`✅ Đã xoá đơn "${d.name}".`);
+    if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}" khỏi sheet.`);
+    else if (r && r.offline) showStatus(`⚠️ Đã xoá local (chưa online).`);
+    else showStatus(`⚠️ Đã xoá local — sync online thất bại.`);
   }
 
   // --- Share link (encode draft vào URL hash) ---
@@ -2340,8 +2531,7 @@ const App = (() => {
   let lastShareLink = "";
 
   function draftShare(id) {
-    const list = draftsCleanup();
-    const d = list.find(x => x.id === id);
+    const d = DraftStore.getById(id);
     if (!d) return;
     lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart);
     const ta = document.getElementById("draftShareLink");
@@ -2397,36 +2587,50 @@ const App = (() => {
     pendingImportPayload = null;
   }
 
-  function draftImportConfirm(saveAsDraft) {
+  async function draftImportConfirm(saveAsDraft) {
     if (!pendingImportPayload) { draftImportClose(); return; }
     const p = pendingImportPayload;
     cart = p.cart;
     saveCart();
     render();
     if (saveAsDraft && p.name) {
-      const list = draftsCleanup();
-      const now = Date.now();
-      list.unshift({
+      const draft = {
         id: draftGenId(),
         name: p.name,
         tag: p.tag || "ZALO",
         customTag: p.customTag || "",
         cart: JSON.parse(JSON.stringify(p.cart)),
-        createdAt: now,
-        updatedAt: now
-      });
-      draftsSave(list);
+        orderCode: "",
+        vat: null,
+      };
+      const r = await DraftStore.upsert(draft);
+      draftEditingId = draft.id;
       draftRender();
-      showStatus(`✅ Đã import + lưu đơn nháp "${p.name}".`);
+      if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}" lên sheet.`);
+      else showStatus(`⚠️ Đã import + lưu local — sync online thất bại.`);
     } else {
       showStatus(`✅ Đã import đơn "${p.name || '(không tên)'}" vào giỏ.`);
     }
     draftImportClose();
   }
 
-  // Init drafts
+  // Init drafts — refresh từ server (background, không block UI)
   draftRender();
+  (async () => {
+    // Đợi VAT config load xong rồi mới refresh drafts (cùng webAppUrl)
+    await new Promise(r => setTimeout(r, 500));
+    await DraftStore.refresh(false);
+    draftRender();
+  })();
   draftCheckUrlHash();
+
+  async function draftsManualRefresh() {
+    showStatus("⏳ Đang refresh đơn nháp từ sheet…");
+    const ok = await DraftStore.refresh(true);
+    draftRender();
+    if (ok) showStatus(`✅ Đã refresh ${DraftStore.getAll().length} đơn nháp.`);
+    else showStatus("⚠️ Refresh thất bại — đang dùng cache.");
+  }
 
   /* ===== QR THANH TOÁN ===== */
   // 2 STK: STK1 mặc định, có toggle sang STK2
@@ -2438,7 +2642,7 @@ const App = (() => {
       bankName: "VPBANK",
       template: "compact2",
       companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
-      label: "STK1 · VPBANK",
+      label: "STK1 · Cá nhân",
     },
     {
       accountNo: "250891",
@@ -2447,7 +2651,7 @@ const App = (() => {
       bankName: "TECHCOMBANK",
       template: "compact2",
       companyName: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
-      label: "STK2 · TECHCOMBANK",
+      label: "STK2 · Công ty",
     },
   ];
   let stkList = JSON.parse(JSON.stringify(DEFAULT_STK_LIST));
@@ -3337,6 +3541,46 @@ const App = (() => {
   /* ===== SHEET PAYLOAD (xuất sang Google Sheet hoá đơn) ===== */
 
   let spType = "retail"; // 'retail' | 'company'
+  let spTag = ""; // "" | "ZALO" | "ZALO_OA" | "FB" | "KHAC"
+
+  const SP_TAG_OPTIONS = [
+    { id: "",        label: "Không",  prefix: "",     color: "#6b7280", bg: "#f3f4f6" },
+    { id: "ZALO",    label: "[Z] Zalo",     prefix: "[Z] ",  color: "#0068ff", bg: "#e0efff" },
+    { id: "ZALO_OA", label: "[OA] Zalo OA", prefix: "[OA] ", color: "#ff6900", bg: "#fff1e6" },
+    { id: "FB",      label: "[F] Facebook", prefix: "[F] ",  color: "#1877F2", bg: "#e7f0fd" },
+    { id: "KHAC",    label: "[K] Khác",     prefix: "[K] ",  color: "#6b7280", bg: "#f3f4f6" },
+  ];
+
+  // Map draft tag → spTag (chung enum, nhưng để chắc)
+  function draftTagToSpTag(draftTag) {
+    if (!draftTag) return "";
+    if (draftTag === "ZALO" || draftTag === "ZALO_OA" || draftTag === "FB" || draftTag === "KHAC") return draftTag;
+    return "";
+  }
+
+  function spTagPrefix() {
+    const opt = SP_TAG_OPTIONS.find(o => o.id === spTag);
+    return opt ? opt.prefix : "";
+  }
+
+  function renderSpTagToggle() {
+    const wrap = document.getElementById("spTagWrap");
+    if (!wrap) return;
+    wrap.innerHTML = SP_TAG_OPTIONS.map(opt => {
+      const active = opt.id === spTag;
+      return `<button onclick="App.sheetPayloadSetTag('${opt.id}')"
+        style="margin:0;padding:5px 11px;font-size:11px;border-radius:6px;border:1px solid ${active ? opt.color : "#cfd5df"};
+        background:${active ? opt.color : "#fff"};color:${active ? "#fff" : "#374151"};font-weight:${active ? "700" : "500"};cursor:pointer;">
+        ${active ? "● " : ""}${escapeHtml(opt.label)}
+      </button>`;
+    }).join("");
+  }
+
+  function sheetPayloadSetTag(t) {
+    spTag = t || "";
+    renderSpTagToggle();
+    sheetPayloadRegenerate();
+  }
 
   function sheetPayloadOpen() {
     if (!cart.length) {
@@ -3345,16 +3589,36 @@ const App = (() => {
     }
     document.getElementById("sheetPayloadOverlay").classList.add("open");
     spType = "retail";
+    spTag = ""; // mặc định không tag
     document.getElementById("spVatBox").style.display = "none";
     document.getElementById("spTypeRetail").className = "blue";
     document.getElementById("spTypeCompany").className = "light";
-    // Pre-fill tên đơn từ draft đang load (luôn refresh để khớp với rename mới nhất)
+    // Clear VAT box trước (khỏi giữ dữ liệu đơn trước)
+    ["spVatMst", "spVatName", "spVatAddr", "spVatEmail"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    // Pre-fill tên đơn + tag + VAT từ draft đang load
     const nameInput = document.getElementById("spOrderName");
-    if (nameInput && draftEditingId) {
-      const list = draftsCleanup();
-      const d = list.find(x => x.id === draftEditingId);
-      if (d && d.name) nameInput.value = d.name;
+    if (draftEditingId) {
+      const d = DraftStore.getById(draftEditingId);
+      if (d) {
+        if (nameInput && d.name) nameInput.value = d.name;
+        spTag = draftTagToSpTag(d.tag);
+        // Nếu draft có VAT → switch sang đơn công ty + fill
+        if (d.vat && (d.vat.mst || d.vat.name)) {
+          spType = "company";
+          document.getElementById("spVatBox").style.display = "";
+          document.getElementById("spTypeRetail").className = "light";
+          document.getElementById("spTypeCompany").className = "blue";
+          document.getElementById("spVatMst").value = d.vat.mst || "";
+          document.getElementById("spVatName").value = d.vat.name || "";
+          document.getElementById("spVatAddr").value = d.vat.addr || "";
+          document.getElementById("spVatEmail").value = d.vat.email || "";
+        }
+      }
     }
+    renderSpTagToggle();
     sheetPayloadRegenerate();
   }
 
@@ -3454,6 +3718,8 @@ const App = (() => {
       v: 1,
       kind: "simglobe_sheet_v1",
       name: orderName,
+      tag: spTag || "",
+      tagPrefix: spTagPrefix(), // sẵn để .gs dùng, không cần map lại
       orderCode: currentOrderCode,
       link: draftLink,
       items: items.map(it => ({
@@ -3499,14 +3765,28 @@ const App = (() => {
       statusEl.textContent = "📋 Đã copy payload. Mở Google Sheet → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.";
       // Auto-save VAT info lên sheet (background, không block)
       try {
+        let info = null;
         if (spType === "company") {
-          const info = {
+          info = {
             mst: document.getElementById("spVatMst")?.value.trim() || "",
             name: document.getElementById("spVatName")?.value.trim() || "",
             addr: document.getElementById("spVatAddr")?.value.trim() || "",
             email: document.getElementById("spVatEmail")?.value.trim() || "",
           };
           if (info.mst || info.name) vatSaveToSheet(info);
+        }
+        // Nếu đang edit draft → sync mã đơn + VAT vào draft (để import lại fill đủ)
+        if (draftEditingId) {
+          const prev = DraftStore.getById(draftEditingId);
+          if (prev) {
+            const updated = {
+              ...prev,
+              orderCode: currentOrderCode || prev.orderCode || "",
+              vat: info && (info.mst || info.name) ? info : (prev.vat || null),
+              cart: JSON.parse(JSON.stringify(cart)),
+            };
+            DraftStore.upsert(updated).then(() => draftRender());
+          }
         }
       } catch (e) { console.warn("VAT auto-save fail:", e); }
     } else {
@@ -3848,6 +4128,8 @@ const App = (() => {
     draftFilter,
     draftImport,
     draftRename,
+    draftSetOrderCode,
+    draftsManualRefresh,
     draftDelete,
     draftShare,
     draftShareClose,
@@ -3858,6 +4140,7 @@ const App = (() => {
     sheetPayloadOpen,
     sheetPayloadClose,
     sheetPayloadSetType,
+    sheetPayloadSetTag,
     sheetPayloadRegenerate,
     sheetPayloadCopy,
     vatRefreshHistory,
