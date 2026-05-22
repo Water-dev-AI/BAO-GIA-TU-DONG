@@ -170,7 +170,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 8.2 · 22/05/2026 · 16:50
+    Version 8.3 · 22/05/2026 · 17:05
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2809,30 +2809,32 @@ const App = (() => {
       billText = "(không tính được bill: " + e.message + ")";
     }
 
-    // 2A: bảng cart
-    const cartRows = (d.cart || []).map((it, i) => {
-      const t = parseLineForDisplay(it.line) || {};
+    // 2A: bảng cart (xử lý chắc cart null/undefined/array rỗng)
+    const dCartSafe = Array.isArray(d.cart) ? d.cart : [];
+    console.debug("[draftView]", d.id, "cart len =", dCartSafe.length, "vat =", !!d.vat);
+    const cartRows = dCartSafe.map((it, i) => {
+      const t = parseLineForDisplay(it.line || "") || {};
       const type = t.type || "?";
       const days = t.days || "";
       const price = t.price || "?";
-      const qty = it.qty || 1;
+      const qty = it.qty != null ? it.qty : 1;
       const note = it.note ? `<div style="color:#0ea5e9;font-size:11px;font-style:italic;">↳ ${escapeHtml(it.note)}</div>` : "";
       return `
         <tr>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${i+1}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(t.name || it.line)}${note}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${type}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${days}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${price}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;text-align:center;">${qty}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(t.name || it.line || "")}${note}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${escapeHtml(type)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${escapeHtml(days)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${escapeHtml(price)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;text-align:center;">${escapeHtml(String(qty))}</td>
         </tr>
       `;
     }).join("");
 
     const cartTable = `
       <div style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;overflow:hidden;">
-        <div style="padding:8px 12px;background:#eef2f7;font-weight:700;font-size:13px;">📦 Giỏ hàng (${(d.cart||[]).length} dòng)</div>
-        ${(d.cart||[]).length ? `
+        <div style="padding:8px 12px;background:#eef2f7;font-weight:700;font-size:13px;">📦 Giỏ hàng (${dCartSafe.length} dòng)</div>
+        ${dCartSafe.length ? `
           <table style="width:100%;border-collapse:collapse;">
             <thead style="background:#fafbfc;">
               <tr>
@@ -2880,9 +2882,11 @@ const App = (() => {
       ${cartTable}
       <div style="background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
         <div style="font-weight:700;font-size:12px;color:var(--muted);margin-bottom:6px;">📋 Bill text (preview)</div>
-        <pre style="margin:0;font-family:'Roboto Mono',monospace;font-size:11.5px;line-height:1.5;white-space:pre-wrap;color:#1f2937;">${escapeHtml(billText)}</pre>
+        <pre style="margin:0;background:#1e2736;color:#e2e8f0;padding:12px;border-radius:6px;font-family:'Roboto Mono',monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;">${escapeHtml(billText)}</pre>
       </div>
     `;
+    console.debug("[draftView] body.innerHTML length =", body.innerHTML.length,
+      "cartTable length =", cartTable.length, "cartRows length =", cartRows.length);
     document.getElementById("draftViewOverlay").classList.add("open");
   }
   function draftViewClose() {
