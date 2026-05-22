@@ -169,6 +169,9 @@
 <body>
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
+  <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
+    Version 8.1 · 22/05/2026 · 11:15
+  </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
     <b>Cú pháp SL:</b> <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">2</code> = 2 SIM,
@@ -217,7 +220,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-        <h2 style="margin:0;">2) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
+        <h2 style="margin:0;">2A) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
         <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
       </div>
       <div class="cart-wrap">
@@ -238,6 +241,77 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         </table>
       </div>
       <div class="totals" id="quickTotals"></div>
+    </div>
+
+    <!-- ====== Section 2B: Thông tin khách + VAT ====== -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <h2 style="margin:0;">2B) Thông tin khách / VAT</h2>
+        <button onclick="App.cust2bClear()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Xoá hết thông tin trong khung này">🧹 Xoá thông tin</button>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;">
+        Điền tên khách + tag. Bật <b>Đơn công ty</b> nếu xuất VAT. Thông tin này lưu cùng giỏ hàng vào đơn nháp.
+      </div>
+
+      <!-- Toggle Đơn lẻ / Đơn công ty -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button id="cust2bTypeRetail"  onclick="App.cust2bSetType('retail')"  style="flex:1;margin:0;padding:9px 14px;font-size:13px;font-weight:700;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;">🛒 Đơn lẻ</button>
+        <button id="cust2bTypeCompany" onclick="App.cust2bSetType('company')" style="flex:1;margin:0;padding:9px 14px;font-size:13px;font-weight:700;background:#eef2f7;color:#444;border:none;border-radius:8px;cursor:pointer;">🏢 Đơn công ty (xuất VAT)</button>
+      </div>
+
+      <!-- Tên khách (luôn hiện) -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên khách hàng <span style="color:var(--muted);">(để trống nếu chưa rõ — sẽ hỏi khi lưu nháp)</span></div>
+        <input id="cust2bName" type="text" placeholder="VD: Anh Minh / Chị Hoàn..."
+          oninput="App.cust2bOnChange()"
+          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+      </div>
+
+      <!-- Tag -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Tag nguồn</div>
+        <div id="cust2bTagOptions" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="cust2bCustomTagWrap" style="display:none;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tag tuỳ chỉnh</div>
+        <input id="cust2bCustomTag" type="text" placeholder="VD: Tiktok / Email..."
+          oninput="App.cust2bOnChange()"
+          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+      </div>
+
+      <!-- VAT box (ẩn khi Đơn lẻ) -->
+      <div id="cust2bVatBox" style="display:none;border-top:1px dashed var(--line);padding-top:12px;margin-top:6px;">
+        <div style="font-size:12.5px;font-weight:700;color:#92400e;margin-bottom:8px;">🧾 Thông tin xuất VAT</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="position:relative;">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">MST</div>
+            <input id="cust2bVatMst" type="text" placeholder="0123456789"
+              oninput="App.cust2bOnVatInput('mst')" onfocus="App.cust2bShowVatSuggest('mst')" onblur="App.cust2bHideVatSuggest()"
+              style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;font-family:'Roboto Mono',monospace;" />
+            <div id="cust2bVatSuggest_mst" class="vat-suggest" style="display:none;"></div>
+          </div>
+          <div style="position:relative;">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Tên công ty</div>
+            <input id="cust2bVatName" type="text" placeholder="CÔNG TY TNHH..."
+              oninput="App.cust2bOnVatInput('name')" onfocus="App.cust2bShowVatSuggest('name')" onblur="App.cust2bHideVatSuggest()"
+              style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
+            <div id="cust2bVatSuggest_name" class="vat-suggest" style="display:none;"></div>
+          </div>
+          <div style="grid-column:1/-1;">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Địa chỉ</div>
+            <input id="cust2bVatAddr" type="text" placeholder="Số nhà, đường, phường, quận..."
+              oninput="App.cust2bOnChange()"
+              style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
+          </div>
+          <div style="grid-column:1/-1;position:relative;">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Email</div>
+            <input id="cust2bVatEmail" type="text" placeholder="invoice@..."
+              oninput="App.cust2bOnVatInput('email')" onfocus="App.cust2bShowVatSuggest('email')" onblur="App.cust2bHideVatSuggest()"
+              style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
+            <div id="cust2bVatSuggest_email" class="vat-suggest" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -424,6 +498,24 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 .vat-dropdown-item .vd-del { padding:2px 6px; background:#fee2e2; color:#dc2626; border:none; border-radius:4px; font-size:11px; cursor:pointer; flex-shrink:0; }
 .vat-dropdown-item .vd-del:hover { background:#fecaca; }
 .vat-dropdown-empty { padding:10px 12px; color:#9ca3af; font-size:11.5px; font-style:italic; text-align:center; }
+
+/* Autocomplete dropdown trong section 2B (Cust info) */
+.vat-suggest {
+  position:absolute; top:100%; left:0; right:0; z-index:50;
+  background:#fff; border:1px solid var(--line); border-top:none;
+  border-radius:0 0 8px 8px; max-height:240px; overflow-y:auto;
+  box-shadow:0 6px 18px rgba(0,0,0,0.08);
+}
+.vat-suggest-item {
+  padding:8px 10px; cursor:pointer; border-bottom:1px solid #f3f4f6;
+  font-size:12px; line-height:1.4;
+}
+.vat-suggest-item:last-child { border-bottom:none; }
+.vat-suggest-item:hover { background:#f0f7ff; }
+.vat-suggest-item .vs-mst { font-family:'Roboto Mono',monospace; color:#0e7c3a; font-weight:600; }
+.vat-suggest-item .vs-name { font-weight:600; color:#1f2937; }
+.vat-suggest-item .vs-sub { font-size:10.5px; color:#6b7280; }
+.vat-suggest-empty { padding:10px; color:#9ca3af; font-size:11.5px; font-style:italic; text-align:center; }
 </style>
 
 <!-- Modal Lưu đơn nháp -->
@@ -502,37 +594,20 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   </div>
 </div>
 
-<!-- Modal Copy Bill + (tuỳ chọn) Lưu đơn nháp -->
-<div class="picker-overlay" id="copyBillSaveOverlay" onclick="if(event.target===this)App.copyBillSaveClose()">
-  <div class="picker-modal" style="width:min(96vw, 540px);">
+<!-- Modal Xem đơn nháp (read-only, không thay giỏ hiện tại) -->
+<div class="picker-overlay" id="draftViewOverlay" onclick="if(event.target===this)App.draftViewClose()">
+  <div class="picker-modal" style="width:min(96vw, 780px);max-height:90vh;display:flex;flex-direction:column;">
     <div class="picker-header">
-      <h3 style="margin:0;flex:1;" id="copyBillSaveTitle">📋 Copy Bill</h3>
-      <button onclick="App.copyBillSaveClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+      <h3 style="margin:0;flex:1;" id="draftViewTitle">👁 Xem đơn nháp</h3>
+      <button onclick="App.draftViewClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
-      <div id="copyBillSaveInfo" style="font-size:13px;color:#374151;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.55;"></div>
-      <div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">
-          Tên khách hàng <span id="copyBillNameRequired" style="color:var(--red);">*</span>
-        </div>
-        <input id="copyBillSaveName" type="text" placeholder="VD: Anh Minh — bỏ trống nếu chỉ copy"
-          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Tag</div>
-        <div id="copyBillSaveTagOptions" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-      </div>
-      <div id="copyBillSaveCustomTagWrap" style="display:none;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tag tuỳ chỉnh</div>
-        <input id="copyBillSaveCustomTag" type="text" placeholder="VD: Tiktok"
-          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
-      </div>
-      <div id="copyBillSaveStatus" style="font-size:12px;color:var(--red);min-height:16px;"></div>
+    <div id="draftViewBody" style="padding:18px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;">
+      <!-- content render động -->
     </div>
     <div class="picker-footer" style="flex-wrap:wrap;gap:6px;">
-      <!-- 3 nút Save sẽ render động (Update / Tạo mới / Chỉ copy) tuỳ context -->
-      <div id="copyBillSaveButtons" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
-      <button class="light" onclick="App.copyBillSaveClose()">Huỷ</button>
+      <button class="blue" style="flex:1;" onclick="App.draftViewCopyBill()">📋 Copy Bill (chỉ copy)</button>
+      <button class="green" style="flex:1;" onclick="App.draftViewImport()">📥 Import để chỉnh sửa</button>
+      <button class="light" onclick="App.draftViewClose()">Đóng</button>
     </div>
   </div>
 </div>
@@ -580,66 +655,17 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
     <div class="picker-body" style="padding:18px;">
       <div style="background:#fff8e1;border:1px solid #fbe7a3;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#7a5a00;line-height:1.55;margin-bottom:14px;">
-        💡 Payload chứa: mã đơn (DH...), link đơn nháp, danh sách gói + qty + giá + discount đã phân bổ + VAT info.
+        💡 Payload tự build từ <b>2A (giỏ hàng)</b> + <b>2B (Tên/Tag/VAT)</b>. Để sửa tên/tag/VAT, đóng modal này và sửa ở khung 2B phía trên.
         <br>Trong Google Sheet → chọn ô đầu tiên cột <b>MÃ ORDER ID</b> làm anchor → menu <b>⚙ Tools → 📥 Nhập đơn từ App</b> → paste payload.
-        <br>📌 Script fill: NƯỚC, LOẠI SIM, NGÀY, GÓI, SỐ LƯỢNG, ĐƠN GIÁ, GIẢM GIÁ, <b>MÃ ĐƠN HÀNG</b>, <b>LINK ĐƠN HÀNG</b>, MST/Tên CTY/Địa chỉ/Email (nếu CTY).
-        <br>📌 Bạn tự điền: <i>MÃ ORDER ID (anchor)</i>, NGÀY ORDER, NGÀY CUNG CẤP DV, "Đã xuất".
       </div>
 
-      <div style="margin-bottom:12px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">Tên đơn (gợi ý cho nhân viên)</div>
-        <input id="spOrderName" type="text" placeholder="VD: Chị Hằng FB / Anh Tuấn Zalo / ..."
-          oninput="App.sheetPayloadRegenerate()"
-          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;" />
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Tự điền từ tên đơn nháp đang load (nếu có). Sẽ ghi vào note của ô <b>MÃ ĐƠN HÀNG</b> trên sheet.</div>
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;">Tag nguồn (prefix vào tên đơn khi fill sheet)</div>
-        <div id="spTagWrap" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Mặc định "Không" — không prefix. Chọn tag sẽ thêm [Z]/[OA]/[F]/[K] trước tên.</div>
-      </div>
-
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
-        <button id="spTypeRetail" class="blue" onclick="App.sheetPayloadSetType('retail')" style="margin:0;">🛒 Đơn lẻ</button>
-        <button id="spTypeCompany" class="light" onclick="App.sheetPayloadSetType('company')" style="margin:0;">🏢 Đơn công ty (xuất VAT)</button>
-      </div>
-
-      <div id="spVatBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fafbfc;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--muted);font-weight:600;flex:1;">Thông tin xuất VAT công ty:</span>
-          <button onclick="App.vatRefreshHistory()" style="margin:0;padding:4px 9px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Refresh từ Google Sheet (cache 24h)">🔄 Refresh</button>
-        </div>
-        <div id="vatHistoryStatus" style="font-size:10.5px;color:var(--muted);margin-bottom:6px;"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div style="position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">MST</div>
-            <input id="spVatMst" type="text" placeholder="0123456789" autocomplete="off"
-              oninput="App.vatOnInput('mst')" onfocus="App.vatOnInput('mst')" onblur="App.vatCloseSoon()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
-            <div id="vatDropdown_mst" class="vat-dropdown"></div>
-          </div>
-          <div style="position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Email nhận hoá đơn</div>
-            <input id="spVatEmail" type="text" placeholder="ketoan@cty.vn" autocomplete="off"
-              oninput="App.vatOnInput('email')" onfocus="App.vatOnInput('email')" onblur="App.vatCloseSoon()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
-            <div id="vatDropdown_email" class="vat-dropdown"></div>
-          </div>
-          <div style="grid-column:span 2;position:relative;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Tên người mua / Tên CTY</div>
-            <input id="spVatName" type="text" placeholder="CÔNG TY ABC" autocomplete="off"
-              oninput="App.vatOnInput('name')" onfocus="App.vatOnInput('name')" onblur="App.vatCloseSoon()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" />
-            <div id="vatDropdown_name" class="vat-dropdown"></div>
-          </div>
-          <div style="grid-column:span 2;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Địa chỉ</div>
-            <input id="spVatAddr" type="text" placeholder="Số... đường... quận... TP..." autocomplete="off"
-              oninput="App.sheetPayloadRegenerate()"
-              style="width:100%;padding:7px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12.5px;font-family:inherit;" /></div>
-        </div>
+      <div id="spSummary" style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;margin-bottom:14px;">
+        <!-- summary động: tên / tag / type / vat -->
       </div>
 
       <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;">Payload (auto-generate):</div>
       <textarea id="spPayloadText" readonly
-        style="width:100%;min-height:120px;font-family:'Roboto Mono',ui-monospace,monospace;font-size:11px;background:#f7f9fc;"></textarea>
+        style="width:100%;min-height:160px;font-family:'Roboto Mono',ui-monospace,monospace;font-size:11px;background:#f7f9fc;"></textarea>
       <div id="spStatus" class="status" style="margin-top:6px;font-size:12.5px;"></div>
     </div>
     <div class="picker-footer">
@@ -1532,22 +1558,43 @@ const App = (() => {
     return result;
   }
 
+  // Append block "Thông tin hoá đơn" vào cuối bill text nếu Cust2B đang ở mode "company"
+  // và có ít nhất 1 field VAT có giá trị.
+  function _maybeAppendVatBlock(text) {
+    Cust2B.syncFromDOM();
+    const s = Cust2B.state;
+    if (s.type !== "company") return text;
+    const v = s.vat || {};
+    if (!v.mst && !v.name && !v.addr && !v.email) return text;
+    return text.trimEnd() + "\n-------------\n" + _renderVatBlock(v);
+  }
+
   async function calcAndCopyFull() {
     const result = calcOnly();
-    await copyText(result.full);
+    // Full = bill + notes; chèn VAT vào bill rồi append notes
+    const billWithVat = _maybeAppendVatBlock(result.bill);
+    const full = billWithVat + (result.notes ? "\n\n" + result.notes : "");
+    await copyText(full);
     showStatus("✅ Đã chốt combo và copy FULL: bill + notes phân bố giảm giá.");
   }
 
-  // Copy Bill khách → mở modal hỏi lưu đơn nháp TRƯỚC khi copy
+  // Copy Bill khách → copy thẳng (không popup, không hỏi save).
+  // Edit cần qua flow Import draft → sửa → "Lưu giỏ hiện tại".
   async function calcAndCopyBill() {
-    // Pre-calc để chốt bill rồi mở modal (modal sẽ trigger copy khi user chọn)
-    calcOnly();
-    copyBillSaveOpen("bill");
+    const result = calcOnly();
+    const text = _maybeAppendVatBlock(result.bill);
+    const ok = await copyText(text);
+    if (ok) showStatus("✅ Đã copy Bill khách.");
+    else showStatus("⚠️ Copy thất bại.");
   }
 
   async function calcAndCopyBillShort() {
-    calcOnly();
-    copyBillSaveOpen("billShort");
+    const result = calcOnly();
+    const base = result.billShort || result.bill;
+    const text = _maybeAppendVatBlock(base);
+    const ok = await copyText(text);
+    if (ok) showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
+    else showStatus("⚠️ Copy thất bại.");
   }
 
   async function calcAndCopyNotes() {
@@ -1556,163 +1603,11 @@ const App = (() => {
     showStatus("✅ Đã copy Notes phân bố giảm giá.");
   }
 
-  /* ─── Modal Copy Bill + (tuỳ chọn) Lưu đơn nháp ─── */
-  // State khi modal mở
-  let _copyBillMode = "bill"; // "bill" | "billShort" — quyết định copyText nào
-  let _copyBillSelectedTag = "ZALO";
-
-  function copyBillSaveOpen(mode) {
-    if (!cart.length) {
-      showStatus("⚠️ Giỏ rỗng, không có gì để copy.");
-      return;
-    }
-    _copyBillMode = mode || "bill";
-    const titleEl = document.getElementById("copyBillSaveTitle");
-    const infoEl = document.getElementById("copyBillSaveInfo");
-    const nameInput = document.getElementById("copyBillSaveName");
-    const statusEl = document.getElementById("copyBillSaveStatus");
-    const customWrap = document.getElementById("copyBillSaveCustomTagWrap");
-    const customInput = document.getElementById("copyBillSaveCustomTag");
-    statusEl.textContent = "";
-    customWrap.style.display = "none";
-    customInput.value = "";
-    titleEl.textContent = _copyBillMode === "billShort" ? "📱 Copy Bill (gọn)" : "📋 Copy Bill khách";
-
-    // Context: đang ở 1 draft → cho 3 lựa chọn; không có draft → 2 lựa chọn
-    const currentDraft = draftEditingId ? DraftStore.getById(draftEditingId) : null;
-    if (currentDraft) {
-      // Pre-fill từ draft hiện tại
-      nameInput.value = currentDraft.name || "";
-      _copyBillSelectedTag = currentDraft.tag || "ZALO";
-      if (_copyBillSelectedTag === "KHAC") {
-        customWrap.style.display = "";
-        customInput.value = currentDraft.customTag || "";
-      }
-      infoEl.innerHTML = `Đang chỉnh sửa đơn nháp: <b>${escapeHtml(currentDraft.name)}</b>${currentDraft.orderCode ? ` · Mã: <code style="font-family:monospace;background:#fff;padding:1px 4px;border-radius:3px;">${escapeHtml(currentDraft.orderCode)}</code>` : ""}`;
-    } else {
-      // Đơn mới — gợi ý từ pendingImport nếu có
-      nameInput.value = (pendingImportPayload && pendingImportPayload.name) || "";
-      _copyBillSelectedTag = pendingTagFromImport || "ZALO";
-      infoEl.innerHTML = `Copy bill vào clipboard, tuỳ chọn lưu thành đơn nháp để tra cứu sau. Mã đơn hàng tự gắn theo đơn nháp.`;
-    }
-    if (_copyBillSelectedTag === "KHAC") {
-      customWrap.style.display = "";
-      if (!customInput.value && pendingImportPayload) customInput.value = pendingImportPayload.customTag || "";
-    }
-    copyBillSaveRenderTagOptions();
-    copyBillSaveRenderButtons(!!currentDraft);
-    document.getElementById("copyBillSaveOverlay").classList.add("open");
-    setTimeout(() => nameInput.focus(), 50);
-  }
-
-  function copyBillSaveClose() {
-    document.getElementById("copyBillSaveOverlay").classList.remove("open");
-  }
-
-  function copyBillSaveRenderTagOptions() {
-    const wrap = document.getElementById("copyBillSaveTagOptions");
-    wrap.innerHTML = DRAFT_TAGS.map(t => {
-      const active = t.id === _copyBillSelectedTag;
-      const border = active ? `2px solid ${t.color}` : `2px solid transparent`;
-      return `<button onclick="App.copyBillSaveSelectTag('${t.id}')"
-        style="margin:0;padding:6px 12px;font-size:12px;font-weight:700;background:${t.bg};color:${t.color};border:${border};border-radius:6px;cursor:pointer;">
-        ${escapeHtml(t.label)}
-      </button>`;
-    }).join("");
-  }
-
-  function copyBillSaveSelectTag(id) {
-    _copyBillSelectedTag = id;
-    const customWrap = document.getElementById("copyBillSaveCustomTagWrap");
-    customWrap.style.display = id === "KHAC" ? "" : "none";
-    copyBillSaveRenderTagOptions();
-  }
-
-  function copyBillSaveRenderButtons(hasDraft) {
-    const wrap = document.getElementById("copyBillSaveButtons");
-    if (hasDraft) {
-      wrap.innerHTML = `
-        <button class="green" onclick="App.copyBillSaveDo('update')" title="Cập nhật đơn nháp hiện tại + Copy bill">💾 Cập nhật + Copy</button>
-        <button class="blue"  onclick="App.copyBillSaveDo('new')"    title="Tạo đơn nháp mới + Copy bill">➕ Tạo mới + Copy</button>
-        <button class="light" onclick="App.copyBillSaveDo('skip')"   title="Chỉ copy, không lưu draft">📋 Chỉ Copy</button>
-      `;
-    } else {
-      wrap.innerHTML = `
-        <button class="green" onclick="App.copyBillSaveDo('new')"   title="Lưu đơn nháp mới + Copy bill">💾 Lưu + Copy</button>
-        <button class="light" onclick="App.copyBillSaveDo('skip')"  title="Chỉ copy, không lưu draft">📋 Chỉ Copy</button>
-      `;
-    }
-  }
-
-  async function copyBillSaveDo(action) {
-    // Helper: copy bill theo mode
-    const doCopy = async () => {
-      const result = ComboLogic.calc(cart, getCalcOpts());
-      const text = _copyBillMode === "billShort" ? (result.billShort || result.bill) : result.bill;
-      const ok = await copyText(text);
-      const lbl = _copyBillMode === "billShort" ? "Bill (gọn)" : "Bill khách";
-      if (ok) showStatus(`✅ Đã copy ${lbl}.`);
-      else showStatus(`⚠️ Copy thất bại — có thể trình duyệt chặn clipboard.`);
-    };
-
-    if (action === "skip") {
-      copyBillSaveClose();
-      await doCopy();
-      return;
-    }
-
-    // action = "update" hoặc "new" → cần tên + tag hợp lệ
-    const name = (document.getElementById("copyBillSaveName").value || "").trim();
-    const statusEl = document.getElementById("copyBillSaveStatus");
-    if (!name) {
-      statusEl.textContent = "⚠️ Cần nhập tên khách hàng.";
-      return;
-    }
-    const tag = _copyBillSelectedTag || "ZALO";
-    const customTag = tag === "KHAC"
-      ? (document.getElementById("copyBillSaveCustomTag").value || "").trim()
-      : "";
-    if (tag === "KHAC" && !customTag) {
-      statusEl.textContent = "⚠️ Tag KHÁC cần nhập text tuỳ chỉnh.";
-      return;
-    }
-
-    let draft;
-    if (action === "update" && draftEditingId) {
-      const prev = DraftStore.getById(draftEditingId);
-      if (prev) {
-        draft = {
-          ...prev,
-          name, tag, customTag,
-          cart: JSON.parse(JSON.stringify(cart)),
-          orderCode: currentOrderCode || prev.orderCode || "",
-          // VAT giữ nguyên từ prev (Payload modal chỉnh VAT riêng)
-        };
-      }
-    }
-    if (!draft) {
-      // Tạo mới — kế thừa VAT từ pendingVatFromImport nếu có
-      draft = {
-        id: draftGenId(),
-        name, tag, customTag,
-        cart: JSON.parse(JSON.stringify(cart)),
-        orderCode: currentOrderCode || "",
-        vat: pendingVatFromImport && (pendingVatFromImport.mst || pendingVatFromImport.name)
-          ? { ...pendingVatFromImport }
-          : null,
-      };
-    }
-
-    slShowLoading("💾 Đang lưu đơn nháp + copy bill…");
-    const r = await DraftStore.upsert(draft);
-    slHideLoading();
-    draftEditingId = draft.id;
-    copyBillSaveClose();
-    draftRender();
-    await doCopy();
-    if (r && r.ok) showStatus(`✅ Đã ${action === "update" ? "cập nhật" : "lưu"} đơn nháp "${name}" + copy bill.`);
-    else showStatus(`⚠️ Đã lưu local + copy bill — sync online thất bại.`);
-  }
+  /* ─── Module Copy Bill (modal hỏi save draft) — ĐÃ XOÁ trong v8.1 ───
+     Logic save draft giờ dồn về Cust2B (section 2B) + nút "Lưu giỏ hiện tại".
+     Copy Bill / Bill gọn = copy thẳng, không hỏi.
+     Block VAT được append vào bill tự động khi Cust2B.type === "company".
+  */
 
   async function copyLinesOnly() {
     const text = ComboLogic.buildLinesOnly(cart);
@@ -1737,6 +1632,8 @@ const App = (() => {
     pendingTagFromImport = "";
     pendingImportPayload = null;
     _lastCartSig = ""; // để lần add tiếp theo trigger regen mã
+    // Clear cả section 2B
+    Cust2B.clear();
     showStatus("✅ Đã xoá giỏ.");
   }
 
@@ -2323,6 +2220,203 @@ const App = (() => {
     { id: "KHAC",    label: "KHÁC",     color: "#6b7280", bg: "#f3f4f6" },
   ];
 
+  /* ─── Cust2B: trạng thái section "Thông tin khách / VAT" (2B) ───
+     Đây là nguồn chân lý duy nhất cho:
+     - Tên khách (lưu vào draft.name)
+     - Tag + customTag (lưu vào draft.tag/customTag)
+     - VAT (lưu vào draft.vat)
+     Khi save draft / build payload / import / share → đều đọc/ghi qua Cust2B.
+     Payload modal cũ KHÔNG còn ô VAT/Tag — đã chuyển hết ra đây.
+  */
+  const Cust2B = {
+    state: {
+      type: "retail",                  // "retail" | "company"
+      name: "",
+      tag: "ZALO",
+      customTag: "",
+      vat: { mst: "", name: "", addr: "", email: "" },
+    },
+    getDraftPayload() {
+      // Trả về object để merge vào draft khi save/upsert
+      const s = this.state;
+      return {
+        name: s.name.trim(),
+        tag: s.tag,
+        customTag: s.tag === "KHAC" ? s.customTag.trim() : "",
+        vat: s.type === "company" && (s.vat.mst || s.vat.name || s.vat.addr || s.vat.email)
+          ? { mst: s.vat.mst.trim(), name: s.vat.name.trim(), addr: s.vat.addr.trim(), email: s.vat.email.trim() }
+          : null,
+      };
+    },
+    // Load từ draft vào UI (khi import)
+    loadFromDraft(d) {
+      if (!d) return;
+      const hasVat = !!(d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email));
+      this.state.type = hasVat ? "company" : "retail";
+      this.state.name = d.name || "";
+      this.state.tag = d.tag || "ZALO";
+      this.state.customTag = d.customTag || "";
+      this.state.vat = hasVat
+        ? { mst: d.vat.mst || "", name: d.vat.name || "", addr: d.vat.addr || "", email: d.vat.email || "" }
+        : { mst: "", name: "", addr: "", email: "" };
+      this.syncToDOM();
+    },
+    // Load từ share link payload (cùng format với draft)
+    loadFromImport(p) {
+      const hasVat = !!(p.vat && (p.vat.mst || p.vat.name || p.vat.addr || p.vat.email));
+      this.state.type = hasVat ? "company" : "retail";
+      this.state.name = p.name || "";
+      this.state.tag = p.tag || "ZALO";
+      this.state.customTag = p.customTag || "";
+      this.state.vat = hasVat
+        ? { mst: p.vat.mst || "", name: p.vat.name || "", addr: p.vat.addr || "", email: p.vat.email || "" }
+        : { mst: "", name: "", addr: "", email: "" };
+      this.syncToDOM();
+    },
+    clear() {
+      this.state = {
+        type: "retail",
+        name: "",
+        tag: "ZALO",
+        customTag: "",
+        vat: { mst: "", name: "", addr: "", email: "" },
+      };
+      this.syncToDOM();
+    },
+    // Đẩy state lên DOM
+    syncToDOM() {
+      const s = this.state;
+      const nameInp = document.getElementById("cust2bName");
+      if (nameInp) nameInp.value = s.name;
+      const customInp = document.getElementById("cust2bCustomTag");
+      if (customInp) customInp.value = s.customTag;
+      ["mst", "name", "addr", "email"].forEach(k => {
+        const el = document.getElementById("cust2bVat" + k.charAt(0).toUpperCase() + k.slice(1));
+        if (el) el.value = s.vat[k] || "";
+      });
+      // Toggle type buttons
+      const btnR = document.getElementById("cust2bTypeRetail");
+      const btnC = document.getElementById("cust2bTypeCompany");
+      const vatBox = document.getElementById("cust2bVatBox");
+      if (btnR && btnC && vatBox) {
+        if (s.type === "company") {
+          btnC.style.background = "var(--green)"; btnC.style.color = "white";
+          btnR.style.background = "#eef2f7"; btnR.style.color = "#444";
+          vatBox.style.display = "";
+        } else {
+          btnR.style.background = "var(--blue)"; btnR.style.color = "white";
+          btnC.style.background = "#eef2f7"; btnC.style.color = "#444";
+          vatBox.style.display = "none";
+        }
+      }
+      // Tag options
+      this.renderTagOptions();
+      const customWrap = document.getElementById("cust2bCustomTagWrap");
+      if (customWrap) customWrap.style.display = s.tag === "KHAC" ? "" : "none";
+    },
+    // Đọc state từ DOM (gọi sau khi user thao tác)
+    syncFromDOM() {
+      const s = this.state;
+      const get = id => (document.getElementById(id) || {}).value || "";
+      s.name = get("cust2bName");
+      s.customTag = get("cust2bCustomTag");
+      s.vat.mst = get("cust2bVatMst");
+      s.vat.name = get("cust2bVatName");
+      s.vat.addr = get("cust2bVatAddr");
+      s.vat.email = get("cust2bVatEmail");
+    },
+    renderTagOptions() {
+      const wrap = document.getElementById("cust2bTagOptions");
+      if (!wrap) return;
+      const cur = this.state.tag;
+      wrap.innerHTML = DRAFT_TAGS.map(t => {
+        const active = t.id === cur;
+        const border = active ? `2px solid ${t.color}` : `2px solid transparent`;
+        return `<button onclick="App.cust2bSelectTag('${t.id}')" style="
+          margin:0;padding:6px 14px;background:${t.bg};color:${t.color};
+          border:${border};border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;
+          font-family:inherit;letter-spacing:.3px;
+        ">${t.label}</button>`;
+      }).join("");
+    },
+  };
+
+  // Wrappers gọi từ DOM (onclick/oninput)
+  function cust2bSetType(t) {
+    Cust2B.state.type = t === "company" ? "company" : "retail";
+    Cust2B.syncToDOM();
+  }
+  function cust2bSelectTag(id) {
+    Cust2B.state.tag = id;
+    Cust2B.syncToDOM();
+    document.getElementById("cust2bCustomTagWrap").style.display = id === "KHAC" ? "" : "none";
+  }
+  function cust2bOnChange() {
+    Cust2B.syncFromDOM();
+  }
+  function cust2bClear() {
+    if (!confirm("Xoá hết Tên / Tag / VAT khỏi khung 2B?")) return;
+    Cust2B.clear();
+    showStatus("🧹 Đã xoá thông tin 2B.");
+  }
+  // Autocomplete VAT: gọi vat module (giữ y như cũ trong Payload modal)
+  function cust2bOnVatInput(field) {
+    Cust2B.syncFromDOM();
+    cust2bRenderVatSuggest(field);
+  }
+  function cust2bShowVatSuggest(field) {
+    cust2bRenderVatSuggest(field);
+  }
+  let _cust2bHideTimer = null;
+  function cust2bHideVatSuggest() {
+    // Delay 200ms để click trên item kịp fire
+    if (_cust2bHideTimer) clearTimeout(_cust2bHideTimer);
+    _cust2bHideTimer = setTimeout(() => {
+      ["mst", "name", "email"].forEach(f => {
+        const el = document.getElementById("cust2bVatSuggest_" + f);
+        if (el) el.style.display = "none";
+      });
+    }, 200);
+  }
+  function cust2bRenderVatSuggest(field) {
+    const el = document.getElementById("cust2bVatSuggest_" + field);
+    if (!el) return;
+    const kw = (Cust2B.state.vat[field] || "").trim().toLowerCase();
+    if (!kw || kw.length < 1) { el.style.display = "none"; return; }
+    // Lấy list từ vat module (vatList được expose ngầm trong scope)
+    const list = (typeof vatList !== "undefined" ? vatList : []) || [];
+    const filtered = list.filter(v => {
+      const target = (field === "mst" ? v.mst : field === "name" ? v.ten : v.email) || "";
+      return target.toLowerCase().includes(kw);
+    }).slice(0, 8);
+    if (!filtered.length) {
+      el.innerHTML = `<div class="vat-suggest-empty">Không có gợi ý khớp "${escapeHtml(kw)}"</div>`;
+      el.style.display = "block";
+      return;
+    }
+    el.innerHTML = filtered.map(v => {
+      const payload = encodeURIComponent(JSON.stringify(v));
+      return `<div class="vat-suggest-item" onmousedown="App.cust2bPickVat('${payload}')">
+        ${v.mst ? `<div><span class="vs-mst">${escapeHtml(v.mst)}</span> · <span class="vs-name">${escapeHtml(v.ten)}</span></div>` : `<div class="vs-name">${escapeHtml(v.ten)}</div>`}
+        ${v.diaChi ? `<div class="vs-sub">${escapeHtml(v.diaChi)}</div>` : ""}
+        ${v.email ? `<div class="vs-sub">${escapeHtml(v.email)}</div>` : ""}
+      </div>`;
+    }).join("");
+    el.style.display = "block";
+  }
+  function cust2bPickVat(enc) {
+    let v;
+    try { v = JSON.parse(decodeURIComponent(enc)); } catch { return; }
+    Cust2B.state.vat = {
+      mst: v.mst || "",
+      name: v.ten || "",
+      addr: v.diaChi || "",
+      email: v.email || "",
+    };
+    Cust2B.syncToDOM();
+    showStatus(`✅ Đã chọn VAT: ${v.ten}${v.mst ? " (" + v.mst + ")" : ""}`);
+  }
+
   let draftSearchKw = "";
   let draftEditingId = null; // nếu đang edit 1 draft, lưu id để overwrite khi Lưu
   let draftSelectedTag = "ZALO";
@@ -2540,23 +2634,26 @@ const App = (() => {
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
         : "";
+      const oc = d.orderCode || "";
+      const ocDisplay = oc ? escapeHtml(oc) : `<span style="color:#9ca3af;">(chưa có)</span>`;
       return `
         <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
           <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div id="draftNameRow_${d.id}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
               ${vatBadge}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
-              <button onclick="App.draftRename('${d.id}')" title="Đổi tên" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
+              <button onclick="App.draftEditName('${d.id}')" title="Đổi tên (Enter để lưu, Esc huỷ)" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <div id="draftCodeRow_${d.id}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-size:10.5px;color:var(--muted);">Mã đơn:</span>
-              <input type="text" value="${escapeHtml(d.orderCode || '')}" placeholder="(chưa có)"
-                onchange="App.draftSetOrderCode('${d.id}', this.value)"
-                style="font-family:'Roboto Mono',monospace;font-size:11px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;width:130px;background:#fff;" />
+              <span style="font-family:'Roboto Mono',monospace;font-size:11.5px;font-weight:600;color:#1f2937;background:#fff;padding:2px 7px;border:1px solid #d1d5db;border-radius:4px;">${ocDisplay}</span>
+              ${oc ? `<button onclick="App.draftCopyOrderCode('${d.id}')" title="Copy mã đơn" style="margin:0;padding:2px 6px;background:#dcfce7;color:#166534;font-size:11px;border:none;border-radius:4px;cursor:pointer;">📋</button>` : ""}
+              <button onclick="App.draftEditOrderCode('${d.id}')" title="Sửa mã đơn" style="margin:0;padding:2px 6px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:4px;cursor:pointer;">✏️</button>
               <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTimePair(d.createdAt, d.updatedAt)}</span>
             </div>
           </div>
+          <button style="margin:0;padding:7px 10px;font-size:12px;background:#f1f5f9;color:#1e293b;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;" onclick="App.draftView('${d.id}')" title="Xem chi tiết (không thay giỏ hiện tại)">👁 Xem</button>
           <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
           <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}')">🔗 Share</button>
           <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}')" title="Xoá đơn">✕</button>
@@ -2565,32 +2662,246 @@ const App = (() => {
     }).join("");
   }
 
-  async function draftSetOrderCode(id, newCode) {
+  async function draftCopyOrderCode(id) {
     const d = DraftStore.getById(id);
-    if (!d) return;
-    const trimmed = String(newCode || "").trim();
-    if (trimmed === (d.orderCode || "")) return;
-    d.orderCode = trimmed;
-    const r = await DraftStore.upsert(d);
-    if (r && r.ok) showStatus("✅ Đã cập nhật mã đơn cho \"" + d.name + "\".");
-    draftRender();
+    if (!d || !d.orderCode) return;
+    const ok = await copyText(d.orderCode);
+    if (ok) showStatus(`✅ Đã copy mã đơn: ${d.orderCode}`);
+    else showStatus("⚠️ Copy thất bại.");
   }
 
-  async function draftRename(id) {
+  // Inline edit tên đơn nháp — thay span+nút bằng input + 2 nút lưu/huỷ
+  function draftEditName(id) {
     const d = DraftStore.getById(id);
     if (!d) return;
-    const newName = prompt("Đổi tên đơn nháp:", d.name);
-    if (newName === null) return;
-    const trimmed = newName.trim();
-    if (!trimmed) {
+    const row = document.getElementById("draftNameRow_" + id);
+    if (!row) return;
+    row.innerHTML = `
+      ${draftTagBadge(d.tag, d.customTag)}
+      <input id="draftNameInput_${id}" type="text" value="${escapeHtml(d.name)}"
+        onkeydown="App.draftEditNameKey(event, '${id}')"
+        style="flex:1;min-width:140px;font-weight:700;font-size:14px;padding:3px 8px;border:2px solid var(--blue);border-radius:5px;font-family:inherit;" />
+      <button onclick="App.draftEditNameSave('${id}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
+      <button onclick="App.draftEditNameCancel('${id}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
+    `;
+    const inp = document.getElementById("draftNameInput_" + id);
+    inp.focus();
+    inp.select();
+  }
+  function draftEditNameKey(ev, id) {
+    if (ev.key === "Enter") { ev.preventDefault(); draftEditNameSave(id); }
+    else if (ev.key === "Escape") { ev.preventDefault(); draftEditNameCancel(id); }
+  }
+  function draftEditNameCancel(id) { draftRender(); }
+  async function draftEditNameSave(id) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    const inp = document.getElementById("draftNameInput_" + id);
+    if (!inp) return;
+    const newName = (inp.value || "").trim();
+    if (!newName) {
       showStatus("⚠️ Tên không được để trống.");
+      inp.focus();
       return;
     }
-    d.name = trimmed;
+    if (newName === d.name) { draftRender(); return; }
+    // Check trùng tên với draft khác (case-insensitive, kệ tag)
+    const dup = DraftStore.getAll().find(x => x.id !== id && _normName(x.name) === _normName(newName));
+    if (dup) {
+      showStatus(`⚠️ Đã có đơn nháp tên "${dup.name}". Vui lòng chọn tên khác.`);
+      inp.focus();
+      return;
+    }
+    d.name = newName;
+    slShowLoading("💾 Đang đổi tên...");
     const r = await DraftStore.upsert(d);
+    slHideLoading();
     draftRender();
-    if (r && r.ok) showStatus(`✅ Đã đổi tên thành "${trimmed}".`);
+    if (r && r.ok) showStatus(`✅ Đã đổi tên thành "${newName}".`);
     else showStatus("⚠️ Đổi tên local — sync online thất bại.");
+  }
+
+  // Inline edit mã đơn — input + Lưu/Huỷ
+  function draftEditOrderCode(id) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    const row = document.getElementById("draftCodeRow_" + id);
+    if (!row) return;
+    row.innerHTML = `
+      <span style="font-size:10.5px;color:var(--muted);">Mã đơn:</span>
+      <input id="draftCodeInput_${id}" type="text" value="${escapeHtml(d.orderCode || '')}"
+        placeholder="DH..." onkeydown="App.draftEditCodeKey(event, '${id}')"
+        style="font-family:'Roboto Mono',monospace;font-size:11.5px;padding:3px 7px;border:2px solid var(--blue);border-radius:4px;width:150px;" />
+      <button onclick="App.draftEditCodeSave('${id}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
+      <button onclick="App.draftEditCodeCancel('${id}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
+    `;
+    const inp = document.getElementById("draftCodeInput_" + id);
+    inp.focus();
+    inp.select();
+  }
+  function draftEditCodeKey(ev, id) {
+    if (ev.key === "Enter") { ev.preventDefault(); draftEditCodeSave(id); }
+    else if (ev.key === "Escape") { ev.preventDefault(); draftEditCodeCancel(id); }
+  }
+  function draftEditCodeCancel(id) { draftRender(); }
+  async function draftEditCodeSave(id) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    const inp = document.getElementById("draftCodeInput_" + id);
+    if (!inp) return;
+    const newCode = (inp.value || "").trim();
+    if (newCode === (d.orderCode || "")) { draftRender(); return; }
+    d.orderCode = newCode;
+    slShowLoading("💾 Đang cập nhật mã đơn...");
+    const r = await DraftStore.upsert(d);
+    slHideLoading();
+    draftRender();
+    if (r && r.ok) showStatus(`✅ Đã cập nhật mã đơn cho "${d.name}".`);
+    else showStatus("⚠️ Cập nhật local — sync online thất bại.");
+  }
+
+  // Normalize tên để compare trùng — lower + trim + collapse whitespace
+  function _normName(s) {
+    return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  /* ─── Xem đơn nháp (read-only, không thay giỏ hiện tại) ─── */
+  let _draftViewingId = null;
+
+  function draftView(id) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    _draftViewingId = id;
+    const body = document.getElementById("draftViewBody");
+    const title = document.getElementById("draftViewTitle");
+    title.innerHTML = `👁 Xem đơn nháp: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
+
+    // Calc bill từ cart của draft (không đụng cart hiện tại)
+    let billText = "(không có gói nào)";
+    try {
+      const r = ComboLogic.calc(d.cart || [], getCalcOpts());
+      billText = (r.bill || "").trim() || "(rỗng)";
+      // Nếu draft có VAT → append block "Thông tin hoá đơn"
+      if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
+        billText += "\n-------------\n" + _renderVatBlock(d.vat);
+      }
+    } catch (e) {
+      billText = "(không tính được bill: " + e.message + ")";
+    }
+
+    // 2A: bảng cart
+    const cartRows = (d.cart || []).map((it, i) => {
+      const t = parseLineForDisplay(it.line) || {};
+      const type = t.type || "?";
+      const days = t.days || "";
+      const price = t.price || "?";
+      const qty = it.qty || 1;
+      const note = it.note ? `<div style="color:#0ea5e9;font-size:11px;font-style:italic;">↳ ${escapeHtml(it.note)}</div>` : "";
+      return `
+        <tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${i+1}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(t.name || it.line)}${note}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${type}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${days}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${price}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;text-align:center;">${qty}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const cartTable = `
+      <div style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;overflow:hidden;">
+        <div style="padding:8px 12px;background:#eef2f7;font-weight:700;font-size:13px;">📦 Giỏ hàng (${(d.cart||[]).length} dòng)</div>
+        ${(d.cart||[]).length ? `
+          <table style="width:100%;border-collapse:collapse;">
+            <thead style="background:#fafbfc;">
+              <tr>
+                <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">#</th>
+                <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">Tên gói</th>
+                <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">Loại</th>
+                <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">Ngày</th>
+                <th style="padding:6px 8px;text-align:right;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">Giá</th>
+                <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted);border-bottom:1px solid #e5e7eb;">SL</th>
+              </tr>
+            </thead>
+            <tbody>${cartRows}</tbody>
+          </table>
+        ` : '<div style="padding:12px;color:var(--muted);font-size:12px;">(không có dòng nào)</div>'}
+      </div>
+    `;
+
+    // 2B: thông tin khách + VAT
+    const tagBadge = draftTagBadge(d.tag, d.customTag);
+    const vat = d.vat || {};
+    const hasVat = vat.mst || vat.name || vat.addr || vat.email;
+    const vatBlock = hasVat ? `
+      <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;">
+        <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🧾 Thông tin xuất VAT</div>
+        ${vat.mst ? `<div><span style="color:var(--muted);">MST:</span> <b>${escapeHtml(vat.mst)}</b></div>` : ""}
+        ${vat.name ? `<div><span style="color:var(--muted);">Tên CTY:</span> <b>${escapeHtml(vat.name)}</b></div>` : ""}
+        ${vat.addr ? `<div><span style="color:var(--muted);">Địa chỉ:</span> ${escapeHtml(vat.addr)}</div>` : ""}
+        ${vat.email ? `<div><span style="color:var(--muted);">Email:</span> ${escapeHtml(vat.email)}</div>` : ""}
+      </div>
+    ` : `<div style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--muted);">Đơn lẻ — không có thông tin VAT.</div>`;
+
+    const customerInfo = `
+      <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;">
+        <div style="font-weight:700;color:#1e40af;margin-bottom:6px;">👤 Thông tin khách / đơn</div>
+        <div><span style="color:var(--muted);">Tên đơn:</span> <b>${escapeHtml(d.name)}</b></div>
+        <div><span style="color:var(--muted);">Tag:</span> ${tagBadge}</div>
+        <div><span style="color:var(--muted);">Mã đơn:</span> <code style="background:#fff;padding:1px 5px;border-radius:3px;font-family:'Roboto Mono',monospace;">${escapeHtml(d.orderCode || "(chưa có)")}</code></div>
+        <div><span style="color:var(--muted);">Cập nhật:</span> ${draftFormatTimePair(d.createdAt, d.updatedAt)}</div>
+      </div>
+    `;
+
+    body.innerHTML = `
+      ${customerInfo}
+      ${vatBlock}
+      ${cartTable}
+      <div style="background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
+        <div style="font-weight:700;font-size:12px;color:var(--muted);margin-bottom:6px;">📋 Bill text (preview)</div>
+        <pre style="margin:0;font-family:'Roboto Mono',monospace;font-size:11.5px;line-height:1.5;white-space:pre-wrap;color:#1f2937;">${escapeHtml(billText)}</pre>
+      </div>
+    `;
+    document.getElementById("draftViewOverlay").classList.add("open");
+  }
+  function draftViewClose() {
+    document.getElementById("draftViewOverlay").classList.remove("open");
+    _draftViewingId = null;
+  }
+  async function draftViewCopyBill() {
+    if (!_draftViewingId) return;
+    const d = DraftStore.getById(_draftViewingId);
+    if (!d) return;
+    try {
+      const r = ComboLogic.calc(d.cart || [], getCalcOpts());
+      let text = r.bill || "";
+      if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
+        text = text.trimEnd() + "\n-------------\n" + _renderVatBlock(d.vat);
+      }
+      const ok = await copyText(text);
+      if (ok) showStatus(`✅ Đã copy bill của "${d.name}".`);
+      else showStatus("⚠️ Copy thất bại.");
+    } catch (e) {
+      showStatus("⚠️ Không tính được bill: " + e.message);
+    }
+  }
+  function draftViewImport() {
+    const id = _draftViewingId;
+    draftViewClose();
+    if (id) draftImport(id);
+  }
+
+  // Helper: render block "Thông tin hoá đơn" cho bill text (đơn có VAT)
+  function _renderVatBlock(vat) {
+    if (!vat) return "";
+    return [
+      "Thông tin hóa đơn:",
+      "MST:         " + (vat.mst || ""),
+      "Tên Công ty: " + (vat.name || ""),
+      "Địa chỉ:     " + (vat.addr || ""),
+      "Email:       " + (vat.email || ""),
+    ].join("\n");
   }
 
   // --- Modal Lưu đơn ---
@@ -2614,14 +2925,25 @@ const App = (() => {
     draftRenderTagOptions();
   }
 
+  // Mở modal "Lưu đơn nháp" — chỉ dùng khi tên 2B đang trống.
+  // Nếu 2B đã có tên → save thẳng không hỏi.
   function draftSaveOpen(prefillName, prefillTag, prefillCustom) {
-    if (!cart.length && !prefillName) {
+    if (!cart.length) {
       showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
       return;
     }
-    draftSelectedTag = prefillTag || "ZALO";
-    document.getElementById("draftName").value = prefillName || "";
-    document.getElementById("draftCustomTag").value = prefillCustom || "";
+    // Đồng bộ trạng thái 2B trước
+    Cust2B.syncFromDOM();
+    const nameInCust = (Cust2B.state.name || "").trim();
+    // Nếu 2B đã có tên → save thẳng (không mở modal)
+    if (nameInCust && !prefillName) {
+      doDraftSaveFromCust2B();
+      return;
+    }
+    // Tên trống → mở modal hỏi
+    draftSelectedTag = prefillTag || Cust2B.state.tag || "ZALO";
+    document.getElementById("draftName").value = prefillName || nameInCust;
+    document.getElementById("draftCustomTag").value = prefillCustom || Cust2B.state.customTag || "";
     document.getElementById("draftSaveStatus").textContent = "";
     document.getElementById("draftSaveTitle").textContent = draftEditingId
       ? "✏️ Cập nhật đơn nháp"
@@ -2635,55 +2957,149 @@ const App = (() => {
 
   function draftSaveClose() {
     document.getElementById("draftSaveOverlay").classList.remove("open");
-    draftEditingId = null;
+    // KHÔNG reset draftEditingId ở đây — nếu user huỷ modal Update vẫn còn link với draft đang load
   }
 
+  // Khi user bấm "Lưu" trong modal → đồng bộ value modal vào Cust2B → save
   async function draftSave() {
-    const name = document.getElementById("draftName").value.trim();
+    const name = (document.getElementById("draftName").value || "").trim();
     if (!name) {
       document.getElementById("draftSaveStatus").textContent = "⚠️ Cần nhập tên khách hàng.";
       return;
     }
     const customTag = draftSelectedTag === "KHAC"
-      ? document.getElementById("draftCustomTag").value.trim()
+      ? (document.getElementById("draftCustomTag").value || "").trim()
       : "";
     if (draftSelectedTag === "KHAC" && !customTag) {
       document.getElementById("draftSaveStatus").textContent = "⚠️ Tag KHÁC cần nhập text tuỳ chỉnh.";
       return;
     }
+    // Đồng bộ vào Cust2B rồi save
+    Cust2B.state.name = name;
+    Cust2B.state.tag = draftSelectedTag;
+    Cust2B.state.customTag = customTag;
+    Cust2B.syncToDOM();
+    draftSaveClose();
+    await doDraftSaveFromCust2B();
+  }
 
+  // Save dùng nguồn dữ liệu Cust2B (không cần modal). Xử lý conflict tên trùng.
+  async function doDraftSaveFromCust2B() {
+    Cust2B.syncFromDOM();
+    const payload = Cust2B.getDraftPayload();
+    if (!payload.name) {
+      // Tên vẫn trống → mở modal hỏi
+      draftSaveOpen("", payload.tag, payload.customTag);
+      return;
+    }
+    // Check trùng tên (case-insensitive, kệ tag) với draft KHÁC id đang edit
+    const dup = DraftStore.getAll().find(x =>
+      x.id !== draftEditingId && _normName(x.name) === _normName(payload.name)
+    );
+    if (dup) {
+      // Hỏi user: Update draft trùng / Tạo mới (đổi tên) / Huỷ
+      const choice = await _askDuplicateName(dup, payload.name);
+      if (choice === "cancel") {
+        showStatus("⏸ Đã huỷ lưu.");
+        return;
+      }
+      if (choice === "replace") {
+        // Update draft đang trùng → coi như edit draft dup
+        draftEditingId = dup.id;
+        await _persistDraftFromCust2B();
+        return;
+      }
+      if (choice === "new") {
+        // Tạo mới + regen mã đơn + bắt nhập tên khác
+        const newName = await _askNewName(payload.name);
+        if (newName === null) { showStatus("⏸ Đã huỷ lưu."); return; }
+        Cust2B.state.name = newName;
+        Cust2B.syncToDOM();
+        // Regen mã đơn mới (đơn mới)
+        regenOrderCode();
+        draftEditingId = null; // ép tạo mới
+        await _persistDraftFromCust2B();
+        return;
+      }
+    }
+    // Không trùng → save bình thường
+    await _persistDraftFromCust2B();
+  }
+
+  // Hỏi xử lý trùng tên — dùng confirm() vì đơn giản; có thể thay bằng modal nếu cần đẹp hơn
+  async function _askDuplicateName(dup, name) {
+    const dt = draftFormatTimePair(dup.createdAt, dup.updatedAt);
+    const msg = `Đã có đơn nháp tên "${dup.name}" (${dt}).\n\nBấm OK = Thay thế đơn cũ.\nBấm Cancel = Tạo mới (sẽ đổi mã đơn + bắt nhập tên khác).`;
+    if (confirm(msg)) return "replace";
+    // Cancel → hỏi tiếp: tạo mới hay huỷ
+    if (confirm(`Tạo đơn nháp MỚI với tên KHÁC?\n\nBấm OK để nhập tên mới, Cancel để huỷ lưu.`)) return "new";
+    return "cancel";
+  }
+  async function _askNewName(currentName) {
+    // Loop đến khi có tên không trùng (hoặc user huỷ)
+    let suggest = currentName + " (2)";
+    while (true) {
+      const v = prompt(`Nhập tên khác (không trùng đơn đã có):`, suggest);
+      if (v === null) return null;
+      const t = v.trim();
+      if (!t) { alert("Tên không được trống."); suggest = currentName + " (2)"; continue; }
+      const dup = DraftStore.getAll().find(x =>
+        x.id !== draftEditingId && _normName(x.name) === _normName(t)
+      );
+      if (dup) {
+        alert(`Vẫn trùng với "${dup.name}". Vui lòng chọn tên khác.`);
+        suggest = t + " (2)";
+        continue;
+      }
+      return t;
+    }
+  }
+
+  // Build + upsert draft từ Cust2B (dùng cho cả "Lưu giỏ hiện tại" và conflict resolution)
+  async function _persistDraftFromCust2B() {
+    const p = Cust2B.getDraftPayload();
     let draft;
     if (draftEditingId) {
       const prev = DraftStore.getById(draftEditingId);
       if (prev) {
-        draft = { ...prev, name, tag: draftSelectedTag, customTag,
+        draft = {
+          ...prev,
+          name: p.name,
+          tag: p.tag,
+          customTag: p.customTag,
           cart: JSON.parse(JSON.stringify(cart)),
-          orderCode: currentOrderCode || prev.orderCode || "" };
+          orderCode: currentOrderCode || prev.orderCode || "",
+          vat: p.vat,
+        };
       }
     }
     if (!draft) {
       draft = {
         id: draftGenId(),
-        name, tag: draftSelectedTag, customTag,
+        name: p.name,
+        tag: p.tag,
+        customTag: p.customTag,
         cart: JSON.parse(JSON.stringify(cart)),
         orderCode: currentOrderCode || "",
-        vat: null,
+        vat: p.vat,
       };
     }
-    document.getElementById("draftSaveStatus").textContent = "⏳ Đang lưu lên sheet…";
-    slShowLoading("💾 Đang lưu đơn nháp lên sheet…", "Vui lòng đợi vài giây.");
+    slShowLoading("💾 Đang lưu đơn nháp lên sheet…");
     const r = await DraftStore.upsert(draft);
     slHideLoading();
     draftEditingId = draft.id;
-    draftSaveClose();
     draftRender();
-    if (r && r.ok) {
-      showStatus(`✅ Đã lưu đơn nháp "${name}" lên sheet.`);
-    } else if (r && r.offline) {
-      showStatus(`⚠️ Đã lưu local (chưa cấu hình sheet online).`);
-    } else {
-      showStatus(`⚠️ Đã lưu local — sync online thất bại: ${(r && r.error) || "lỗi không xác định"}`);
+    // Sync VAT vào VAT DB nếu có và webApp configured
+    if (p.vat && (p.vat.mst || p.vat.name) && typeof vatSaveToSheet === "function") {
+      try {
+        await vatSaveToSheet({
+          mst: p.vat.mst, name: p.vat.name, addr: p.vat.addr, email: p.vat.email
+        });
+      } catch (e) { /* silent fail — không block UX */ }
     }
+    if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp "${p.name}" lên sheet.`);
+    else if (r && r.offline) showStatus(`⚠️ Đã lưu local (chưa cấu hình sheet online).`);
+    else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
   }
 
   // --- Actions trên đơn nháp ---
@@ -2698,7 +3114,9 @@ const App = (() => {
     draftEditingId = id;
     // Restore mã đơn (đồng bộ với QR card + bill)
     if (d.orderCode) setOrderCode(d.orderCode);
-    // Restore VAT/tag tạm thời để Payload modal đọc được (kể cả nếu sau này edit draft)
+    // Restore Cust2B (Tên + Tag + VAT) từ draft
+    Cust2B.loadFromDraft(d);
+    // Pending* cũng giữ để fallback (Payload modal đọc)
     pendingVatFromImport = d.vat && (d.vat.mst || d.vat.name) ? { ...d.vat } : null;
     pendingTagFromImport = draftTagToSpTag(d.tag);
     // Đồng bộ snapshot cart để liveRecalc kế tiếp không bị tưởng cart "vừa đổi"
@@ -2874,8 +3292,9 @@ const App = (() => {
     render();
     // Restore mã đơn nếu có trong link (đồng bộ với QR card + bill)
     if (p.orderCode) setOrderCode(p.orderCode);
-    // Lưu VAT + tag từ link share → khi mở Payload modal sẽ fallback đọc từ đây
-    // (kể cả khi user chọn "Chỉ Import vào giỏ", không save thành draft)
+    // Restore Cust2B từ link share
+    Cust2B.loadFromImport(p);
+    // Pending* để fallback
     pendingVatFromImport = p.vat && (p.vat.mst || p.vat.name) ? { ...p.vat } : null;
     pendingTagFromImport = draftTagToSpTag(p.tag);
     _lastCartSig = _cartSig();
@@ -3873,48 +4292,16 @@ const App = (() => {
     }
   }
 
-  /* ===== SHEET PAYLOAD (xuất sang Google Sheet hoá đơn) ===== */
+  /* ===== SHEET PAYLOAD (xuất sang Google Sheet hoá đơn) =====
+     Toàn bộ state (type, tag, vat, name) đã chuyển sang Cust2B (section 2B).
+     Modal này chỉ còn: preview payload + copy.
+  */
 
-  let spType = "retail"; // 'retail' | 'company'
-  let spTag = ""; // "" | "ZALO" | "ZALO_OA" | "FB" | "KHAC"
-
-  const SP_TAG_OPTIONS = [
-    { id: "",        label: "Không",  prefix: "",     color: "#6b7280", bg: "#f3f4f6" },
-    { id: "ZALO",    label: "[Z] Zalo",     prefix: "[Z] ",  color: "#0068ff", bg: "#e0efff" },
-    { id: "ZALO_OA", label: "[OA] Zalo OA", prefix: "[OA] ", color: "#ff6900", bg: "#fff1e6" },
-    { id: "FB",      label: "[F] Facebook", prefix: "[F] ",  color: "#1877F2", bg: "#e7f0fd" },
-    { id: "KHAC",    label: "[K] Khác",     prefix: "[K] ",  color: "#6b7280", bg: "#f3f4f6" },
-  ];
-
-  // Map draft tag → spTag (chung enum, nhưng để chắc)
+  // Map draft tag → spTag (chung enum) — dùng cho biến pendingTagFromImport
   function draftTagToSpTag(draftTag) {
     if (!draftTag) return "";
     if (draftTag === "ZALO" || draftTag === "ZALO_OA" || draftTag === "FB" || draftTag === "KHAC") return draftTag;
     return "";
-  }
-
-  function spTagPrefix() {
-    const opt = SP_TAG_OPTIONS.find(o => o.id === spTag);
-    return opt ? opt.prefix : "";
-  }
-
-  function renderSpTagToggle() {
-    const wrap = document.getElementById("spTagWrap");
-    if (!wrap) return;
-    wrap.innerHTML = SP_TAG_OPTIONS.map(opt => {
-      const active = opt.id === spTag;
-      return `<button onclick="App.sheetPayloadSetTag('${opt.id}')"
-        style="margin:0;padding:5px 11px;font-size:11px;border-radius:6px;border:1px solid ${active ? opt.color : "#cfd5df"};
-        background:${active ? opt.color : "#fff"};color:${active ? "#fff" : "#374151"};font-weight:${active ? "700" : "500"};cursor:pointer;">
-        ${active ? "● " : ""}${escapeHtml(opt.label)}
-      </button>`;
-    }).join("");
-  }
-
-  function sheetPayloadSetTag(t) {
-    spTag = t || "";
-    renderSpTagToggle();
-    sheetPayloadRegenerate();
   }
 
   function sheetPayloadOpen() {
@@ -3923,47 +4310,9 @@ const App = (() => {
       return;
     }
     document.getElementById("sheetPayloadOverlay").classList.add("open");
-    spType = "retail";
-    spTag = ""; // mặc định không tag
-    document.getElementById("spVatBox").style.display = "none";
-    document.getElementById("spTypeRetail").className = "blue";
-    document.getElementById("spTypeCompany").className = "light";
-    // Clear VAT box trước (khỏi giữ dữ liệu đơn trước)
-    ["spVatMst", "spVatName", "spVatAddr", "spVatEmail"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-    });
-    // Pre-fill tên đơn + tag + VAT từ draft đang load, hoặc từ link import (fallback)
-    const nameInput = document.getElementById("spOrderName");
-    let prefillName = "", prefillTag = "", prefillVat = null;
-    if (draftEditingId) {
-      const d = DraftStore.getById(draftEditingId);
-      if (d) {
-        prefillName = d.name || "";
-        prefillTag = draftTagToSpTag(d.tag);
-        if (d.vat && (d.vat.mst || d.vat.name)) prefillVat = d.vat;
-      }
-    } else if (pendingImportPayload || pendingVatFromImport || pendingTagFromImport) {
-      // Không có draft (case "Chỉ Import vào giỏ") → đọc từ biến pending
-      if (pendingImportPayload && pendingImportPayload.name) prefillName = pendingImportPayload.name;
-      if (pendingTagFromImport) prefillTag = pendingTagFromImport;
-      if (pendingVatFromImport && (pendingVatFromImport.mst || pendingVatFromImport.name)) {
-        prefillVat = pendingVatFromImport;
-      }
-    }
-    if (nameInput && prefillName) nameInput.value = prefillName;
-    spTag = prefillTag || "";
-    if (prefillVat) {
-      spType = "company";
-      document.getElementById("spVatBox").style.display = "";
-      document.getElementById("spTypeRetail").className = "light";
-      document.getElementById("spTypeCompany").className = "blue";
-      document.getElementById("spVatMst").value = prefillVat.mst || "";
-      document.getElementById("spVatName").value = prefillVat.name || "";
-      document.getElementById("spVatAddr").value = prefillVat.addr || "";
-      document.getElementById("spVatEmail").value = prefillVat.email || "";
-    }
-    renderSpTagToggle();
+    // Đồng bộ Cust2B từ DOM trước khi build payload
+    Cust2B.syncFromDOM();
+    _renderSpSummary();
     sheetPayloadRegenerate();
   }
 
@@ -3971,21 +4320,39 @@ const App = (() => {
     document.getElementById("sheetPayloadOverlay").classList.remove("open");
   }
 
-  function sheetPayloadSetType(t) {
-    spType = t;
-    const retail = document.getElementById("spTypeRetail");
-    const company = document.getElementById("spTypeCompany");
-    if (t === "company") {
-      retail.className = "light";
-      company.className = "blue";
-      document.getElementById("spVatBox").style.display = "";
-    } else {
-      retail.className = "blue";
-      company.className = "light";
-      document.getElementById("spVatBox").style.display = "none";
+  // Render summary box trong payload modal (đọc từ Cust2B)
+  function _renderSpSummary() {
+    const el = document.getElementById("spSummary");
+    if (!el) return;
+    const s = Cust2B.state;
+    const tagOpt = DRAFT_TAGS.find(t => t.id === s.tag);
+    const tagLabel = tagOpt ? tagOpt.label : "(không)";
+    const typeLabel = s.type === "company" ? "🏢 Đơn công ty (xuất VAT)" : "🛒 Đơn lẻ";
+    let vatHtml = "";
+    if (s.type === "company") {
+      const v = s.vat || {};
+      const has = v.mst || v.name || v.addr || v.email;
+      vatHtml = has ? `
+        <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #bfdbfe;">
+          <b>🧾 VAT:</b>
+          ${v.mst ? ` MST <code style="background:#fff;padding:0 4px;border-radius:3px;">${escapeHtml(v.mst)}</code>` : ""}
+          ${v.name ? ` · ${escapeHtml(v.name)}` : ""}
+          ${v.email ? ` · ${escapeHtml(v.email)}` : ""}
+        </div>` : `<div style="color:var(--red);margin-top:4px;">⚠️ Đơn công ty nhưng VAT trống — sửa ở khung 2B.</div>`;
     }
-    sheetPayloadRegenerate();
+    el.innerHTML = `
+      <div><b>Tên:</b> ${s.name ? escapeHtml(s.name) : `<span style="color:var(--muted);">(chưa có)</span>`}</div>
+      <div><b>Tag:</b> ${escapeHtml(tagLabel)}${s.tag === "KHAC" && s.customTag ? ` · ${escapeHtml(s.customTag)}` : ""}</div>
+      <div><b>Loại đơn:</b> ${typeLabel}</div>
+      <div><b>Mã đơn:</b> <code style="background:#fff;padding:1px 5px;border-radius:3px;">${escapeHtml(currentOrderCode || "(sẽ tạo)")}</code></div>
+      ${vatHtml}
+    `;
   }
+
+  // 2 hàm sheetPayloadSetType + sheetPayloadSetTag KHÔNG còn dùng trong UI mới,
+  // giữ lại stub để tránh lỗi nếu có code cũ reference (sẽ no-op):
+  function sheetPayloadSetType() { /* deprecated — type set qua Cust2B */ }
+  function sheetPayloadSetTag() { /* deprecated — tag set qua Cust2B */ }
 
   // Build payload items: parse từng cart line, gom thành item, phân bổ discount.
   // Logic giống ComboLogic.calc() nhưng giữ lại từng item rời (không gộp thành bill).
@@ -4007,7 +4374,7 @@ const App = (() => {
       if (regular > 0) {
         items.push({
           country,
-          packageRaw: parts.name, // = cột GÓI ở sheet
+          packageRaw: parts.name,
           type: parts.type,
           days: parts.days,
           qty: regular,
@@ -4018,7 +4385,7 @@ const App = (() => {
         });
       }
       if (recharge > 0) {
-        const rechargeUnitK = unitK - 20; // nạp gói SIM vật lý giảm 20k/SIM
+        const rechargeUnitK = unitK - 20;
         items.push({
           country,
           packageRaw: parts.name,
@@ -4045,6 +4412,9 @@ const App = (() => {
   function sheetPayloadRegenerate() {
     const ta = document.getElementById("spPayloadText");
     if (!ta) return;
+    // Đọc 2B mới nhất từ DOM (user có thể đã sửa)
+    Cust2B.syncFromDOM();
+    _renderSpSummary();
     const items = buildSheetPayloadItems();
     const statusEl = document.getElementById("spStatus");
     if (!items.length) {
@@ -4053,18 +4423,21 @@ const App = (() => {
       return;
     }
 
-    // Đảm bảo có order code (dùng chung với QR card)
     if (!currentOrderCode) regenOrderCode();
 
-    const orderName = (document.getElementById("spOrderName").value || "").trim();
-    const draftLink = buildShareLink(orderName || "Đơn từ app", "KHAC", "SHEET", cart);
+    const cust = Cust2B.getDraftPayload();
+    const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag, cust.customTag, cart);
+
+    // Map tag draft → spTag prefix
+    const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
+    const tagPrefix = cust.name && cust.tag ? (mapTagPrefix[cust.tag] || "") : "";
 
     const payload = {
       v: 1,
       kind: "simglobe_sheet_v1",
-      name: orderName,
-      tag: spTag || "",
-      tagPrefix: spTagPrefix(), // sẵn để .gs dùng, không cần map lại
+      name: cust.name,
+      tag: cust.tag || "",
+      tagPrefix,
       orderCode: currentOrderCode,
       link: draftLink,
       items: items.map(it => ({
@@ -4078,15 +4451,7 @@ const App = (() => {
         n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
       })),
     };
-    if (spType === "company") {
-      const vat = {
-        mst: document.getElementById("spVatMst").value.trim(),
-        name: document.getElementById("spVatName").value.trim(),
-        addr: document.getElementById("spVatAddr").value.trim(),
-        email: document.getElementById("spVatEmail").value.trim(),
-      };
-      if (vat.mst || vat.name) payload.vat = vat;
-    }
+    if (cust.vat) payload.vat = cust.vat;
 
     const json = JSON.stringify(payload);
     const encoded = urlSafeEncode(json);
@@ -4108,32 +4473,29 @@ const App = (() => {
     const statusEl = document.getElementById("spStatus");
     if (ok) {
       statusEl.textContent = "📋 Đã copy payload. Mở Google Sheet → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.";
-      // Auto-save VAT info lên sheet (background, không block)
+      // Auto-save VAT lên VAT DB (silent fail không block)
       try {
-        let info = null;
-        if (spType === "company") {
-          info = {
-            mst: document.getElementById("spVatMst")?.value.trim() || "",
-            name: document.getElementById("spVatName")?.value.trim() || "",
-            addr: document.getElementById("spVatAddr")?.value.trim() || "",
-            email: document.getElementById("spVatEmail")?.value.trim() || "",
-          };
-          if (info.mst || info.name) vatSaveToSheet(info);
+        const cust = Cust2B.getDraftPayload();
+        if (cust.vat && (cust.vat.mst || cust.vat.name) && typeof vatSaveToSheet === "function") {
+          vatSaveToSheet({ mst: cust.vat.mst, name: cust.vat.name, addr: cust.vat.addr, email: cust.vat.email });
         }
-        // Nếu đang edit draft → sync mã đơn + VAT vào draft (để import lại fill đủ)
+        // Sync draft đang edit
         if (draftEditingId) {
           const prev = DraftStore.getById(draftEditingId);
           if (prev) {
             const updated = {
               ...prev,
               orderCode: currentOrderCode || prev.orderCode || "",
-              vat: info && (info.mst || info.name) ? info : (prev.vat || null),
+              vat: cust.vat || prev.vat || null,
               cart: JSON.parse(JSON.stringify(cart)),
+              name: cust.name || prev.name,
+              tag: cust.tag || prev.tag,
+              customTag: cust.customTag || prev.customTag,
             };
             DraftStore.upsert(updated).then(() => draftRender());
           }
         }
-      } catch (e) { console.warn("VAT auto-save fail:", e); }
+      } catch (e) { console.warn("Auto-save fail:", e); }
     } else {
       ta.focus(); ta.select();
       statusEl.textContent = "⚠️ Không tự copy được, đã chọn text — bấm Ctrl+C.";
@@ -4329,10 +4691,15 @@ const App = (() => {
   function vatPickItem(enc) {
     let m;
     try { m = JSON.parse(decodeURIComponent(escape(atob(enc)))); } catch { return; }
-    document.getElementById("spVatMst").value = m.mst || "";
-    document.getElementById("spVatName").value = m.ten || "";
-    document.getElementById("spVatAddr").value = m.diaChi || "";
-    document.getElementById("spVatEmail").value = m.email || "";
+    // DOM cũ (spVat*) đã bị xoá ở v8.1 → chuyển hết qua Cust2B
+    Cust2B.state.type = "company";
+    Cust2B.state.vat = {
+      mst: m.mst || "",
+      name: m.ten || "",
+      addr: m.diaChi || "",
+      email: m.email || "",
+    };
+    Cust2B.syncToDOM();
     document.querySelectorAll(".vat-dropdown").forEach(d => d.classList.remove("open"));
     sheetPayloadRegenerate();
     vatSetStatus(`✅ Đã chọn: ${m.ten || m.mst}`);
@@ -4431,6 +4798,8 @@ const App = (() => {
 
   render();
   liveRecalc();
+  Cust2B.syncToDOM(); // init UI section 2B
+  // Khi render lần đầu, gắn share param vào Cust2B nếu có pendingImportPayload đã được decode trước đó
 
   return {
     addFromText,
@@ -4483,8 +4852,27 @@ const App = (() => {
     draftSelectTag,
     draftFilter,
     draftImport,
-    draftRename,
-    draftSetOrderCode,
+    draftCopyOrderCode,
+    draftEditName,
+    draftEditNameKey,
+    draftEditNameSave,
+    draftEditNameCancel,
+    draftEditOrderCode,
+    draftEditCodeKey,
+    draftEditCodeSave,
+    draftEditCodeCancel,
+    draftView,
+    draftViewClose,
+    draftViewCopyBill,
+    draftViewImport,
+    cust2bSetType,
+    cust2bSelectTag,
+    cust2bOnChange,
+    cust2bClear,
+    cust2bOnVatInput,
+    cust2bShowVatSuggest,
+    cust2bHideVatSuggest,
+    cust2bPickVat,
     draftsManualRefresh,
     draftDelete,
     draftShare,
@@ -4499,10 +4887,6 @@ const App = (() => {
     sheetPayloadSetTag,
     sheetPayloadRegenerate,
     sheetPayloadCopy,
-    copyBillSaveOpen,
-    copyBillSaveClose,
-    copyBillSaveSelectTag,
-    copyBillSaveDo,
     vatRefreshHistory,
     vatOnInput,
     vatCloseSoon,
