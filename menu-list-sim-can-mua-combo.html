@@ -2451,14 +2451,8 @@ const App = (() => {
     saveCart();
     render();
     draftEditingId = id;
-    // Restore mã đơn (đồng bộ với QR card)
-    if (d.orderCode) {
-      currentOrderCode = d.orderCode;
-      const codeEl = document.getElementById("orderCode");
-      if (codeEl) codeEl.value = currentOrderCode;
-      const codeEl2 = document.getElementById("payOrderCode");
-      if (codeEl2) codeEl2.value = currentOrderCode;
-    }
+    // Restore mã đơn (đồng bộ với QR card + bill)
+    if (d.orderCode) setOrderCode(d.orderCode);
     let msg = `✅ Đã import đơn "${d.name}".`;
     if (d.orderCode) msg += ` Mã đơn: ${d.orderCode}.`;
     if (d.vat && (d.vat.mst || d.vat.name)) msg += " (Có VAT đã lưu.)";
@@ -2623,14 +2617,8 @@ const App = (() => {
     cart = p.cart;
     saveCart();
     render();
-    // Restore mã đơn nếu có trong link
-    if (p.orderCode) {
-      currentOrderCode = p.orderCode;
-      const codeEl = document.getElementById("orderCode");
-      if (codeEl) codeEl.value = currentOrderCode;
-      const codeEl2 = document.getElementById("payOrderCode");
-      if (codeEl2) codeEl2.value = currentOrderCode;
-    }
+    // Restore mã đơn nếu có trong link (đồng bộ với QR card + bill)
+    if (p.orderCode) setOrderCode(p.orderCode);
     if (saveAsDraft && p.name) {
       const draft = {
         id: draftGenId(),
@@ -2754,6 +2742,21 @@ const App = (() => {
     const el = document.getElementById("orderCode");
     if (el) el.value = currentOrderCode;
     // Re-render bill nếu đã hiển thị (để mã đơn mới phản ánh vào header)
+    const billEl = document.getElementById("billOutput");
+    if (billEl && billEl.textContent && billEl.textContent !== "Chưa có kết quả.") {
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      billEl.textContent = r.bill;
+    }
+  }
+
+  // Set mã đơn cụ thể (không random) — dùng khi import từ draft / share link.
+  // Cập nhật state + input field + re-render bill để khớp.
+  function setOrderCode(code) {
+    if (!code) return;
+    currentOrderCode = String(code);
+    const el = document.getElementById("orderCode");
+    if (el) el.value = currentOrderCode;
+    console.log("[OrderCode] Set =", currentOrderCode, "| input value =", el ? el.value : "(no el)");
     const billEl = document.getElementById("billOutput");
     if (billEl && billEl.textContent && billEl.textContent !== "Chưa có kết quả.") {
       const r = ComboLogic.calc(cart, getCalcOpts());
