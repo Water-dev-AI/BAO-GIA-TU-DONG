@@ -2756,7 +2756,6 @@ const App = (() => {
     currentOrderCode = String(code);
     const el = document.getElementById("orderCode");
     if (el) el.value = currentOrderCode;
-    console.log("[OrderCode] Set =", currentOrderCode, "| input value =", el ? el.value : "(no el)");
     const billEl = document.getElementById("billOutput");
     if (billEl && billEl.textContent && billEl.textContent !== "Chưa có kết quả.") {
       const r = ComboLogic.calc(cart, getCalcOpts());
