@@ -502,6 +502,41 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   </div>
 </div>
 
+<!-- Modal Copy Bill + (tuỳ chọn) Lưu đơn nháp -->
+<div class="picker-overlay" id="copyBillSaveOverlay" onclick="if(event.target===this)App.copyBillSaveClose()">
+  <div class="picker-modal" style="width:min(96vw, 540px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;" id="copyBillSaveTitle">📋 Copy Bill</h3>
+      <button onclick="App.copyBillSaveClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <div id="copyBillSaveInfo" style="font-size:13px;color:#374151;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.55;"></div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">
+          Tên khách hàng <span id="copyBillNameRequired" style="color:var(--red);">*</span>
+        </div>
+        <input id="copyBillSaveName" type="text" placeholder="VD: Anh Minh — bỏ trống nếu chỉ copy"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Tag</div>
+        <div id="copyBillSaveTagOptions" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="copyBillSaveCustomTagWrap" style="display:none;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tag tuỳ chỉnh</div>
+        <input id="copyBillSaveCustomTag" type="text" placeholder="VD: Tiktok"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:inherit;" />
+      </div>
+      <div id="copyBillSaveStatus" style="font-size:12px;color:var(--red);min-height:16px;"></div>
+    </div>
+    <div class="picker-footer" style="flex-wrap:wrap;gap:6px;">
+      <!-- 3 nút Save sẽ render động (Update / Tạo mới / Chỉ copy) tuỳ context -->
+      <div id="copyBillSaveButtons" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+      <button class="light" onclick="App.copyBillSaveClose()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal QR Custom -->
 <div class="picker-overlay" id="qrCustomOverlay" onclick="if(event.target===this)App.qrCustomClose()">
   <div class="picker-modal" style="width:min(96vw, 560px);">
@@ -1126,11 +1161,37 @@ const App = (() => {
   }
 
   let _liveRecalcTimer = null;
+  let _loadingDraft = false; // true khi đang load draft / import — chặn auto-regen mã đơn
+  // Snapshot cart cuối cùng đã regen mã, để tránh regen lặp khi liveRecalc chạy nhiều lần
+  // mà cart thực ra không đổi (vd: chỉ note thay đổi).
+  let _lastCartSig = "";
+  function _cartSig() {
+    // Signature đơn giản: line + qty (note không kích hoạt regen vì không đổi giá).
+    try {
+      return cart.map(x => `${x.line}|${x.qty}`).join("\n");
+    } catch (e) { return String(Date.now()); }
+  }
+  // Auto regen mã đơn khi cart đổi (Q1=a). Skip nếu:
+  //  - Đang load draft / import (đã có mã từ draft, không random đè)
+  //  - User đã edit tay (mã không khớp pattern DH+8số)
+  //  - Cart không thực sự đổi (chỉ note thay đổi)
+  function maybeAutoRegenOrderCode() {
+    if (_loadingDraft) return;
+    const sig = _cartSig();
+    if (sig === _lastCartSig) return;
+    _lastCartSig = sig;
+    // Mã user tự gõ → giữ nguyên
+    if (currentOrderCode && !/^DH\d{8}$/.test(currentOrderCode)) return;
+    // Cart rỗng → giữ mã hiện tại, không regen
+    if (!cart.length) return;
+    regenOrderCode();
+  }
   function liveRecalc() {
     // Debounce nhẹ để gõ qty/note không lag
     if (_liveRecalcTimer) clearTimeout(_liveRecalcTimer);
     _liveRecalcTimer = setTimeout(() => {
       _liveRecalcTimer = null;
+      maybeAutoRegenOrderCode();
       const billEl = document.getElementById("billOutput");
       const notesEl = document.getElementById("notesOutput");
       if (!billEl || !notesEl) return;
@@ -1477,22 +1538,180 @@ const App = (() => {
     showStatus("✅ Đã chốt combo và copy FULL: bill + notes phân bố giảm giá.");
   }
 
+  // Copy Bill khách → mở modal hỏi lưu đơn nháp TRƯỚC khi copy
   async function calcAndCopyBill() {
-    const result = calcOnly();
-    await copyText(result.bill);
-    showStatus("✅ Đã copy Bill khách.");
+    // Pre-calc để chốt bill rồi mở modal (modal sẽ trigger copy khi user chọn)
+    calcOnly();
+    copyBillSaveOpen("bill");
   }
 
   async function calcAndCopyBillShort() {
-    const result = calcOnly();
-    await copyText(result.billShort || result.bill);
-    showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
+    calcOnly();
+    copyBillSaveOpen("billShort");
   }
 
   async function calcAndCopyNotes() {
     const result = calcOnly();
     await copyText(result.notes);
     showStatus("✅ Đã copy Notes phân bố giảm giá.");
+  }
+
+  /* ─── Modal Copy Bill + (tuỳ chọn) Lưu đơn nháp ─── */
+  // State khi modal mở
+  let _copyBillMode = "bill"; // "bill" | "billShort" — quyết định copyText nào
+  let _copyBillSelectedTag = "ZALO";
+
+  function copyBillSaveOpen(mode) {
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không có gì để copy.");
+      return;
+    }
+    _copyBillMode = mode || "bill";
+    const titleEl = document.getElementById("copyBillSaveTitle");
+    const infoEl = document.getElementById("copyBillSaveInfo");
+    const nameInput = document.getElementById("copyBillSaveName");
+    const statusEl = document.getElementById("copyBillSaveStatus");
+    const customWrap = document.getElementById("copyBillSaveCustomTagWrap");
+    const customInput = document.getElementById("copyBillSaveCustomTag");
+    statusEl.textContent = "";
+    customWrap.style.display = "none";
+    customInput.value = "";
+    titleEl.textContent = _copyBillMode === "billShort" ? "📱 Copy Bill (gọn)" : "📋 Copy Bill khách";
+
+    // Context: đang ở 1 draft → cho 3 lựa chọn; không có draft → 2 lựa chọn
+    const currentDraft = draftEditingId ? DraftStore.getById(draftEditingId) : null;
+    if (currentDraft) {
+      // Pre-fill từ draft hiện tại
+      nameInput.value = currentDraft.name || "";
+      _copyBillSelectedTag = currentDraft.tag || "ZALO";
+      if (_copyBillSelectedTag === "KHAC") {
+        customWrap.style.display = "";
+        customInput.value = currentDraft.customTag || "";
+      }
+      infoEl.innerHTML = `Đang chỉnh sửa đơn nháp: <b>${escapeHtml(currentDraft.name)}</b>${currentDraft.orderCode ? ` · Mã: <code style="font-family:monospace;background:#fff;padding:1px 4px;border-radius:3px;">${escapeHtml(currentDraft.orderCode)}</code>` : ""}`;
+    } else {
+      // Đơn mới — gợi ý từ pendingImport nếu có
+      nameInput.value = (pendingImportPayload && pendingImportPayload.name) || "";
+      _copyBillSelectedTag = pendingTagFromImport || "ZALO";
+      infoEl.innerHTML = `Copy bill vào clipboard, tuỳ chọn lưu thành đơn nháp để tra cứu sau. Mã đơn hàng tự gắn theo đơn nháp.`;
+    }
+    if (_copyBillSelectedTag === "KHAC") {
+      customWrap.style.display = "";
+      if (!customInput.value && pendingImportPayload) customInput.value = pendingImportPayload.customTag || "";
+    }
+    copyBillSaveRenderTagOptions();
+    copyBillSaveRenderButtons(!!currentDraft);
+    document.getElementById("copyBillSaveOverlay").classList.add("open");
+    setTimeout(() => nameInput.focus(), 50);
+  }
+
+  function copyBillSaveClose() {
+    document.getElementById("copyBillSaveOverlay").classList.remove("open");
+  }
+
+  function copyBillSaveRenderTagOptions() {
+    const wrap = document.getElementById("copyBillSaveTagOptions");
+    wrap.innerHTML = DRAFT_TAGS.map(t => {
+      const active = t.id === _copyBillSelectedTag;
+      const border = active ? `2px solid ${t.color}` : `2px solid transparent`;
+      return `<button onclick="App.copyBillSaveSelectTag('${t.id}')"
+        style="margin:0;padding:6px 12px;font-size:12px;font-weight:700;background:${t.bg};color:${t.color};border:${border};border-radius:6px;cursor:pointer;">
+        ${escapeHtml(t.label)}
+      </button>`;
+    }).join("");
+  }
+
+  function copyBillSaveSelectTag(id) {
+    _copyBillSelectedTag = id;
+    const customWrap = document.getElementById("copyBillSaveCustomTagWrap");
+    customWrap.style.display = id === "KHAC" ? "" : "none";
+    copyBillSaveRenderTagOptions();
+  }
+
+  function copyBillSaveRenderButtons(hasDraft) {
+    const wrap = document.getElementById("copyBillSaveButtons");
+    if (hasDraft) {
+      wrap.innerHTML = `
+        <button class="green" onclick="App.copyBillSaveDo('update')" title="Cập nhật đơn nháp hiện tại + Copy bill">💾 Cập nhật + Copy</button>
+        <button class="blue"  onclick="App.copyBillSaveDo('new')"    title="Tạo đơn nháp mới + Copy bill">➕ Tạo mới + Copy</button>
+        <button class="light" onclick="App.copyBillSaveDo('skip')"   title="Chỉ copy, không lưu draft">📋 Chỉ Copy</button>
+      `;
+    } else {
+      wrap.innerHTML = `
+        <button class="green" onclick="App.copyBillSaveDo('new')"   title="Lưu đơn nháp mới + Copy bill">💾 Lưu + Copy</button>
+        <button class="light" onclick="App.copyBillSaveDo('skip')"  title="Chỉ copy, không lưu draft">📋 Chỉ Copy</button>
+      `;
+    }
+  }
+
+  async function copyBillSaveDo(action) {
+    // Helper: copy bill theo mode
+    const doCopy = async () => {
+      const result = ComboLogic.calc(cart, getCalcOpts());
+      const text = _copyBillMode === "billShort" ? (result.billShort || result.bill) : result.bill;
+      const ok = await copyText(text);
+      const lbl = _copyBillMode === "billShort" ? "Bill (gọn)" : "Bill khách";
+      if (ok) showStatus(`✅ Đã copy ${lbl}.`);
+      else showStatus(`⚠️ Copy thất bại — có thể trình duyệt chặn clipboard.`);
+    };
+
+    if (action === "skip") {
+      copyBillSaveClose();
+      await doCopy();
+      return;
+    }
+
+    // action = "update" hoặc "new" → cần tên + tag hợp lệ
+    const name = (document.getElementById("copyBillSaveName").value || "").trim();
+    const statusEl = document.getElementById("copyBillSaveStatus");
+    if (!name) {
+      statusEl.textContent = "⚠️ Cần nhập tên khách hàng.";
+      return;
+    }
+    const tag = _copyBillSelectedTag || "ZALO";
+    const customTag = tag === "KHAC"
+      ? (document.getElementById("copyBillSaveCustomTag").value || "").trim()
+      : "";
+    if (tag === "KHAC" && !customTag) {
+      statusEl.textContent = "⚠️ Tag KHÁC cần nhập text tuỳ chỉnh.";
+      return;
+    }
+
+    let draft;
+    if (action === "update" && draftEditingId) {
+      const prev = DraftStore.getById(draftEditingId);
+      if (prev) {
+        draft = {
+          ...prev,
+          name, tag, customTag,
+          cart: JSON.parse(JSON.stringify(cart)),
+          orderCode: currentOrderCode || prev.orderCode || "",
+          // VAT giữ nguyên từ prev (Payload modal chỉnh VAT riêng)
+        };
+      }
+    }
+    if (!draft) {
+      // Tạo mới — kế thừa VAT từ pendingVatFromImport nếu có
+      draft = {
+        id: draftGenId(),
+        name, tag, customTag,
+        cart: JSON.parse(JSON.stringify(cart)),
+        orderCode: currentOrderCode || "",
+        vat: pendingVatFromImport && (pendingVatFromImport.mst || pendingVatFromImport.name)
+          ? { ...pendingVatFromImport }
+          : null,
+      };
+    }
+
+    slShowLoading("💾 Đang lưu đơn nháp + copy bill…");
+    const r = await DraftStore.upsert(draft);
+    slHideLoading();
+    draftEditingId = draft.id;
+    copyBillSaveClose();
+    draftRender();
+    await doCopy();
+    if (r && r.ok) showStatus(`✅ Đã ${action === "update" ? "cập nhật" : "lưu"} đơn nháp "${name}" + copy bill.`);
+    else showStatus(`⚠️ Đã lưu local + copy bill — sync online thất bại.`);
   }
 
   async function copyLinesOnly() {
@@ -1512,6 +1731,12 @@ const App = (() => {
     render();
     $("billOutput").textContent = "Chưa có kết quả.";
     $("notesOutput").textContent = "Chưa có notes.";
+    // Reset state đơn nháp/import — bắt đầu đơn mới hoàn toàn
+    draftEditingId = null;
+    pendingVatFromImport = null;
+    pendingTagFromImport = "";
+    pendingImportPayload = null;
+    _lastCartSig = ""; // để lần add tiếp theo trigger regen mã
     showStatus("✅ Đã xoá giỏ.");
   }
 
@@ -2102,6 +2327,10 @@ const App = (() => {
   let draftEditingId = null; // nếu đang edit 1 draft, lưu id để overwrite khi Lưu
   let draftSelectedTag = "ZALO";
   let pendingImportPayload = null; // payload từ URL hash chờ confirm
+  // Giữ VAT info + tag từ link share KHI user chọn "Chỉ Import vào giỏ" (không save draft).
+  // Khi mở Payload modal → đọc fallback từ đây nếu không có draftEditingId.
+  let pendingVatFromImport = null; // {mst, name, addr, email} hoặc null
+  let pendingTagFromImport = "";   // "" | "ZALO" | "ZALO_OA" | "FB" | "KHAC"
 
   /* ─── DraftStore: online qua Web App, cache 1h trong localStorage ─── */
   const DraftStore = (() => {
@@ -2257,6 +2486,19 @@ const App = (() => {
     return d + " ngày trước";
   }
 
+  // Format 2 mốc thời gian Tạo + Sửa. Hiện cả 2 nếu createdAt != updatedAt
+  // (cách nhau >= 1 phút để tránh hiện kiểu "Tạo: vừa xong · Sửa: vừa xong").
+  function draftFormatTimePair(createdAt, updatedAt) {
+    const c = createdAt || 0;
+    const u = updatedAt || 0;
+    if (!c && !u) return "";
+    if (!c) return `Sửa: ${draftFormatTime(u)}`;
+    if (!u) return `Tạo: ${draftFormatTime(c)}`;
+    // Nếu cách nhau dưới 1 phút (mới tạo, chưa update lần nào) → chỉ hiện Tạo
+    if (Math.abs(u - c) < 60_000) return `Tạo: ${draftFormatTime(c)}`;
+    return `Tạo: ${draftFormatTime(c)} · Sửa: ${draftFormatTime(u)}`;
+  }
+
   function draftTagBadge(tag, customTag) {
     const cfg = DRAFT_TAGS.find(t => t.id === tag) || DRAFT_TAGS[3];
     const label = tag === "KHAC" && customTag ? customTag : cfg.label;
@@ -2312,7 +2554,7 @@ const App = (() => {
               <input type="text" value="${escapeHtml(d.orderCode || '')}" placeholder="(chưa có)"
                 onchange="App.draftSetOrderCode('${d.id}', this.value)"
                 style="font-family:'Roboto Mono',monospace;font-size:11px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;width:130px;background:#fff;" />
-              <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTime(d.updatedAt || d.createdAt)}</span>
+              <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTimePair(d.createdAt, d.updatedAt)}</span>
             </div>
           </div>
           <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
@@ -2429,7 +2671,9 @@ const App = (() => {
       };
     }
     document.getElementById("draftSaveStatus").textContent = "⏳ Đang lưu lên sheet…";
+    slShowLoading("💾 Đang lưu đơn nháp lên sheet…", "Vui lòng đợi vài giây.");
     const r = await DraftStore.upsert(draft);
+    slHideLoading();
     draftEditingId = draft.id;
     draftSaveClose();
     draftRender();
@@ -2447,12 +2691,20 @@ const App = (() => {
     const d = DraftStore.getById(id);
     if (!d) return;
     if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng đơn nháp "${d.name}"?`)) return;
+    _loadingDraft = true; // chặn auto-regen mã đơn trong liveRecalc
     cart = JSON.parse(JSON.stringify(d.cart || []));
     saveCart();
     render();
     draftEditingId = id;
     // Restore mã đơn (đồng bộ với QR card + bill)
     if (d.orderCode) setOrderCode(d.orderCode);
+    // Restore VAT/tag tạm thời để Payload modal đọc được (kể cả nếu sau này edit draft)
+    pendingVatFromImport = d.vat && (d.vat.mst || d.vat.name) ? { ...d.vat } : null;
+    pendingTagFromImport = draftTagToSpTag(d.tag);
+    // Đồng bộ snapshot cart để liveRecalc kế tiếp không bị tưởng cart "vừa đổi"
+    _lastCartSig = _cartSig();
+    // Nhả cờ sau microtask để liveRecalc đầu tiên (do render trigger) skip
+    setTimeout(() => { _loadingDraft = false; }, 200);
     let msg = `✅ Đã import đơn "${d.name}".`;
     if (d.orderCode) msg += ` Mã đơn: ${d.orderCode}.`;
     if (d.vat && (d.vat.mst || d.vat.name)) msg += " (Có VAT đã lưu.)";
@@ -2463,7 +2715,9 @@ const App = (() => {
     const d = DraftStore.getById(id);
     if (!d) return;
     if (!confirm(`Xoá đơn nháp "${d.name}"?\nXoá khỏi sheet online luôn.`)) return;
+    slShowLoading("🗑 Đang xoá đơn nháp khỏi sheet…");
     const r = await DraftStore.remove(id);
+    slHideLoading();
     if (draftEditingId === id) draftEditingId = null;
     draftRender();
     if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}" khỏi sheet.`);
@@ -2614,11 +2868,18 @@ const App = (() => {
   async function draftImportConfirm(saveAsDraft) {
     if (!pendingImportPayload) { draftImportClose(); return; }
     const p = pendingImportPayload;
+    _loadingDraft = true; // chặn auto-regen mã đơn (sẽ dùng mã của link)
     cart = p.cart;
     saveCart();
     render();
     // Restore mã đơn nếu có trong link (đồng bộ với QR card + bill)
     if (p.orderCode) setOrderCode(p.orderCode);
+    // Lưu VAT + tag từ link share → khi mở Payload modal sẽ fallback đọc từ đây
+    // (kể cả khi user chọn "Chỉ Import vào giỏ", không save thành draft)
+    pendingVatFromImport = p.vat && (p.vat.mst || p.vat.name) ? { ...p.vat } : null;
+    pendingTagFromImport = draftTagToSpTag(p.tag);
+    _lastCartSig = _cartSig();
+    setTimeout(() => { _loadingDraft = false; }, 200);
     if (saveAsDraft && p.name) {
       const draft = {
         id: draftGenId(),
@@ -2629,7 +2890,9 @@ const App = (() => {
         orderCode: p.orderCode || "",
         vat: p.vat || null,
       };
+      slShowLoading("📥 Đang import + lưu đơn nháp…", "Đang đẩy lên Google Sheet.");
       const r = await DraftStore.upsert(draft);
+      slHideLoading();
       draftEditingId = draft.id;
       draftRender();
       if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}" lên sheet.`);
@@ -2652,7 +2915,9 @@ const App = (() => {
 
   async function draftsManualRefresh() {
     showStatus("⏳ Đang refresh đơn nháp từ sheet…");
+    slShowLoading("🔄 Đang load đơn nháp từ Google Sheet…");
     const ok = await DraftStore.refresh(true);
+    slHideLoading();
     draftRender();
     if (ok) showStatus(`✅ Đã refresh ${DraftStore.getAll().length} đơn nháp.`);
     else showStatus("⚠️ Refresh thất bại — đang dùng cache.");
@@ -2825,12 +3090,21 @@ const App = (() => {
   }
 
   // Render ảnh báo giá full lên canvas (#qrFullCanvas)
-  // Layout: Header logo + tên công ty | Bill text (multiline) | QR ở giữa | Footer info CK
+  // Layout VUÔNG 1200x1200: phù hợp share Zalo/Facebook/Instagram, mobile xem full không cần scroll.
+  //   ┌──────────────────────────────┐
+  //   │  LOGO  Cty + Địa chỉ + Mã ĐH │  Header (~140px)
+  //   ├──────────────────────────────┤
+  //   │  BILL (tab columns, font     │
+  //   │  shrinks if too many lines)  │  Bill area
+  //   ├──────────────────────────────┤
+  //   │  Info CK (trái)    [QR]      │  Bottom (~380px)
+  //   └──────────────────────────────┘
   async function qrRenderFull(state) {
     const canvas = document.getElementById("qrFullCanvas");
     const DPR = 2; // render hi-DPI cho sắc nét
-    const W = 900;
-    const padding = 40;
+    const W = 1200;
+    const H = 1200; // VUÔNG
+    const padding = 50;
     const billLines = state.result.bill.split("\n");
 
     // Pre-load logo + QR để biết tỉ lệ
@@ -2838,15 +3112,26 @@ const App = (() => {
     try { logoImg = await loadImage("./logo.png"); } catch(e) { /* fallback below */ }
     try { qrImg = await loadImage(state.qrUrl); } catch(e) { /* fallback below */ }
 
-    // Layout sizing
-    const headerH = 130;
-    const lineH = 32;             // chiều cao mỗi dòng bill (font 22px)
-    const billH = billLines.length * lineH + 16;
-    const qrSize = 280;           // QR nhỏ gọn ở góc
-    const qrLabelH = 36;          // chiều cao chữ "Quét QR..." bên dưới QR
-    const footerInfoH = 200;      // khu vực thông tin CK ở dưới (chiều cao tối thiểu)
-    const blockH = Math.max(qrSize + qrLabelH, footerInfoH);
-    const H = padding + headerH + billH + 30 + blockH + padding;
+    // Layout zones cố định
+    const headerH = 150;
+    const bottomH = 380;          // info CK + QR
+    const sepGap = 24;            // khoảng cách header → bill
+    const sepGap2 = 24;           // khoảng cách bill → bottom
+    const billTop = padding + headerH + sepGap;
+    const billBottom = H - padding - bottomH - sepGap2;
+    const billArea = billBottom - billTop; // không gian dọc cho bill
+
+    // Auto-shrink font cho bill nếu quá nhiều dòng để fit vào billArea.
+    // Font mặc định 22px, lineH=34. Nếu thiếu chỗ → shrink theo tỉ lệ (min 14px).
+    const defaultLineH = 34;
+    let lineH = defaultLineH;
+    let fontPx = 22;
+    const needH = billLines.length * defaultLineH + 16;
+    if (needH > billArea) {
+      const ratio = Math.max(0.55, billArea / needH);
+      lineH = Math.max(20, defaultLineH * ratio);
+      fontPx = Math.max(14, Math.floor(22 * ratio));
+    }
 
     // Hi-DPI: canvas thực = W*DPR, CSS = W
     canvas.width = W * DPR;
@@ -2856,7 +3141,6 @@ const App = (() => {
     const ctx = canvas.getContext("2d");
     ctx.scale(DPR, DPR);
     ctx.textBaseline = "alphabetic";
-    // Bật bilinear cho ảnh
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
@@ -2867,21 +3151,32 @@ const App = (() => {
     let y = padding;
 
     // === Header ===
-    const logoSize = 90;
+    const logoSize = 100;
     if (logoImg) {
       ctx.drawImage(logoImg, padding, y, logoSize, logoSize);
     }
-    const headerTextX = logoImg ? padding + logoSize + 18 : padding;
+    const headerTextX = logoImg ? padding + logoSize + 22 : padding;
+    const headerTextW = W - headerTextX - padding;
     ctx.fillStyle = "#1f2937";
-    ctx.font = "bold 26px Arial, 'Segoe UI', sans-serif";
+    ctx.font = "bold 30px Arial, 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(stkConfig.companyName || "SIMGLOBE", headerTextX, y + 34);
-    ctx.font = "16px Arial, 'Segoe UI', sans-serif";
+    ctx.fillText(stkConfig.companyName || "SIMGLOBE", headerTextX, y + 36);
+
+    // Địa chỉ — wrap nếu quá dài (font 15px)
+    const addrText = "Địa chỉ: 163/18 đường số 20, Phường An Nhơn, Thành phố Hồ Chí Minh, Việt Nam";
+    ctx.font = "15px Arial, 'Segoe UI', sans-serif";
     ctx.fillStyle = "#64748b";
-    ctx.fillText("Uy tín, chân chính, tận tâm", headerTextX, y + 62);
+    const addrLines = wrapText(ctx, addrText, headerTextW);
+    let addrY = y + 60;
+    addrLines.forEach(l => { ctx.fillText(l, headerTextX, addrY); addrY += 19; });
+
+    // Ngày + mã ĐH (dưới địa chỉ)
     const dateStr = new Date().toLocaleDateString("vi-VN");
-    ctx.fillText(`Ngày: ${dateStr}  ·  Mã ĐH: ${currentOrderCode}`, headerTextX, y + 88);
-    y += headerH;
+    ctx.font = "15px Arial, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#475569";
+    ctx.fillText(`Ngày: ${dateStr}  ·  Mã ĐH: ${currentOrderCode}`, headerTextX, addrY + 6);
+
+    y = padding + headerH;
 
     // Đường kẻ phân cách
     ctx.strokeStyle = "#e5e7eb";
@@ -2889,24 +3184,24 @@ const App = (() => {
     ctx.beginPath();
     ctx.moveTo(padding, y); ctx.lineTo(W - padding, y);
     ctx.stroke();
-    y += 28;
+    y += sepGap;
 
     // === Bill text === (font sans-serif đẹp, căn cột thủ công bằng tab stops)
     ctx.fillStyle = "#1f2937";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    const fontBody = "20px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
-    const fontBodyBold = "bold 20px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
-    const fontHeader = "bold 22px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
-    const fontTotalPay = "bold 26px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+    const fontBody = `${fontPx}px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif`;
+    const fontBodyBold = `bold ${fontPx}px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif`;
+    const fontHeader = `bold ${fontPx + 2}px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif`;
+    const fontTotalPay = `bold ${fontPx + 6}px 'Segoe UI', 'Helvetica Neue', Arial, sans-serif`;
+    const fontNote = `italic ${Math.max(12, fontPx - 4)}px 'Segoe UI', Arial, sans-serif`;
 
     // Vẽ dòng có tab: phân cột bằng pixel position
     // Layout 4 cột cho package line: [Tên gói | Loại | Ngày | Giá]
-    // Cột giá căn phải để các số thẳng cột.
     const innerW = W - padding * 2;
-    const colTypeX  = padding + innerW * 0.58;  // cột Loại bắt đầu ở ~58%
-    const colDaysX  = padding + innerW * 0.74;  // Ngày ở ~74%
-    const colPriceR = padding + innerW;          // Giá: căn phải về biên
+    const colTypeX  = padding + innerW * 0.56;
+    const colDaysX  = padding + innerW * 0.74;
+    const colPriceR = padding + innerW;
 
     function drawTabbedLine(line, font, color) {
       const cells = line.split("\t");
@@ -2916,15 +3211,11 @@ const App = (() => {
         ctx.fillText(line, padding, y);
         return;
       }
-      // Có tab → render theo cột
       const name = cells[0] || "";
       const type = cells[1] || "";
       const days = cells[2] || "";
       const price = cells[3] || "";
-      // extra (note inline...) thì gắn sau giá, render thường
       const extra = cells.slice(4).join(" ");
-
-      // Truncate tên nếu quá dài (không cho đè cột Loại)
       let drawName = name;
       const maxNameW = colTypeX - padding - 12;
       if (ctx.measureText(drawName).width > maxNameW) {
@@ -2937,18 +3228,16 @@ const App = (() => {
       ctx.fillText(drawName, padding, y);
       ctx.fillText(type, colTypeX, y);
       ctx.fillText(days, colDaysX, y);
-      // Giá: căn phải
       ctx.textAlign = "right";
       ctx.fillStyle = "#059669";
       ctx.fillText(price, colPriceR, y);
       ctx.fillStyle = color;
       ctx.textAlign = "left";
       if (extra) {
-        // Hiếm khi có; in nhỏ phía dưới
         const prevFont = ctx.font;
-        ctx.font = "14px 'Segoe UI', Arial, sans-serif";
+        ctx.font = fontNote;
         ctx.fillStyle = "#64748b";
-        ctx.fillText(extra, padding, y + 22);
+        ctx.fillText(extra, padding, y + lineH * 0.7);
         ctx.font = prevFont;
         ctx.fillStyle = color;
       }
@@ -2969,7 +3258,6 @@ const App = (() => {
         ctx.textAlign = "left";
         drawTabbedLine(line, fontBodyBold, "#1f2937");
       } else if (line.startsWith("---")) {
-        // Đường kẻ phân cách: vẽ line mảnh thay vì chuỗi gạch
         ctx.strokeStyle = "#cbd5e1";
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -2977,8 +3265,7 @@ const App = (() => {
         ctx.lineTo(W - padding, y + lineH/2);
         ctx.stroke();
       } else if (line.startsWith("   ↳")) {
-        // Note sản phẩm: italic nhỏ
-        ctx.font = "italic 16px 'Segoe UI', Arial, sans-serif";
+        ctx.font = fontNote;
         ctx.fillStyle = "#0ea5e9";
         ctx.textAlign = "left";
         ctx.fillText(line.replace(/^\s+/, "  ⓘ "), padding, y);
@@ -2988,72 +3275,80 @@ const App = (() => {
       }
       y += lineH;
     });
-    y += 30;
 
-    // === Khối dưới: bên trái = info CK, bên phải = QR ===
-    const blockTop = y;
+    // === Đường kẻ phân cách trước bottom ===
+    const bottomTop = H - padding - bottomH;
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, bottomTop - sepGap2/2);
+    ctx.lineTo(W - padding, bottomTop - sepGap2/2);
+    ctx.stroke();
+
+    // === Bottom: info CK bên trái, QR bên phải ===
+    const qrSize = 320;
     const qrX = W - padding - qrSize;
-    const qrY = blockTop;
-
-    // QR (góc dưới phải)
+    const qrY = bottomTop + 10;
     if (qrImg) {
-      // Khung nhẹ quanh QR cho dễ phân biệt
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#e5e7eb";
       ctx.lineWidth = 1;
-      ctx.fillRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
-      ctx.strokeRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+      ctx.fillRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16);
+      ctx.strokeRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16);
       ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-      // Nhãn "Quét QR thanh toán" dưới QR
       ctx.fillStyle = "#64748b";
-      ctx.font = "14px Arial, sans-serif";
+      ctx.font = "16px Arial, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Quét QR để thanh toán", qrX + qrSize / 2, qrY + qrSize + 24);
+      ctx.fillText("Quét QR để thanh toán", qrX + qrSize / 2, qrY + qrSize + 26);
     } else {
       ctx.fillStyle = "#dc2626";
-      ctx.font = "16px Arial";
+      ctx.font = "18px Arial";
       ctx.textAlign = "center";
       ctx.fillText("[QR load fail]", qrX + qrSize / 2, qrY + qrSize / 2);
     }
 
-    // Info CK bên trái (font to, rõ)
+    // Info CK bên trái — font lớn cho dễ đọc trên mobile
     ctx.textAlign = "left";
-    let infoY = blockTop + 28;
+    let infoY = bottomTop + 36;
     ctx.fillStyle = "#1f2937";
-    ctx.font = "bold 22px Arial, 'Segoe UI', sans-serif";
+    ctx.font = "bold 26px Arial, 'Segoe UI', sans-serif";
     ctx.fillText("THÔNG TIN CHUYỂN KHOẢN", padding, infoY);
-    infoY += 38;
+    infoY += 46;
 
-    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText("Ngân hàng:", padding, infoY);
-    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#1f2937";
-    ctx.fillText(stkConfig.bankName || "BANK", padding + 110, infoY);
-    infoY += 30;
+    const labelColW = 130;
+    function drawInfoRow(label, value, valueColor) {
+      ctx.font = "20px Arial, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#64748b";
+      ctx.fillText(label, padding, infoY);
+      ctx.font = "bold 20px Arial, 'Segoe UI', sans-serif";
+      ctx.fillStyle = valueColor || "#1f2937";
+      ctx.fillText(value, padding + labelColW, infoY);
+      infoY += 36;
+    }
+    drawInfoRow("Ngân hàng:", stkConfig.bankName || "BANK");
+    drawInfoRow("Số TK:", stkConfig.accountNo);
+    drawInfoRow("Tên:", stkConfig.accountName);
+    infoY += 6;
+    drawInfoRow("Nội dung:", currentOrderCode, "#dc2626");
+  }
 
-    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText("Số TK:", padding, infoY);
-    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#1f2937";
-    ctx.fillText(stkConfig.accountNo, padding + 110, infoY);
-    infoY += 30;
-
-    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText("Tên:", padding, infoY);
-    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#1f2937";
-    ctx.fillText(stkConfig.accountName, padding + 110, infoY);
-    infoY += 38;
-
-    ctx.font = "18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText("Nội dung:", padding, infoY);
-    ctx.font = "bold 18px Arial, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#dc2626";
-    ctx.fillText(currentOrderCode, padding + 110, infoY);
+  // Word-wrap text vào nhiều dòng theo maxWidth (px), trả mảng string.
+  // Dùng cho địa chỉ trong header.
+  function wrapText(ctx, text, maxWidth) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width <= maxWidth) {
+        cur = test;
+      } else {
+        if (cur) lines.push(cur);
+        cur = w;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines;
   }
 
   function qrCanvasOrImageToBlob(which) {
@@ -3638,25 +3933,35 @@ const App = (() => {
       const el = document.getElementById(id);
       if (el) el.value = "";
     });
-    // Pre-fill tên đơn + tag + VAT từ draft đang load
+    // Pre-fill tên đơn + tag + VAT từ draft đang load, hoặc từ link import (fallback)
     const nameInput = document.getElementById("spOrderName");
+    let prefillName = "", prefillTag = "", prefillVat = null;
     if (draftEditingId) {
       const d = DraftStore.getById(draftEditingId);
       if (d) {
-        if (nameInput && d.name) nameInput.value = d.name;
-        spTag = draftTagToSpTag(d.tag);
-        // Nếu draft có VAT → switch sang đơn công ty + fill
-        if (d.vat && (d.vat.mst || d.vat.name)) {
-          spType = "company";
-          document.getElementById("spVatBox").style.display = "";
-          document.getElementById("spTypeRetail").className = "light";
-          document.getElementById("spTypeCompany").className = "blue";
-          document.getElementById("spVatMst").value = d.vat.mst || "";
-          document.getElementById("spVatName").value = d.vat.name || "";
-          document.getElementById("spVatAddr").value = d.vat.addr || "";
-          document.getElementById("spVatEmail").value = d.vat.email || "";
-        }
+        prefillName = d.name || "";
+        prefillTag = draftTagToSpTag(d.tag);
+        if (d.vat && (d.vat.mst || d.vat.name)) prefillVat = d.vat;
       }
+    } else if (pendingImportPayload || pendingVatFromImport || pendingTagFromImport) {
+      // Không có draft (case "Chỉ Import vào giỏ") → đọc từ biến pending
+      if (pendingImportPayload && pendingImportPayload.name) prefillName = pendingImportPayload.name;
+      if (pendingTagFromImport) prefillTag = pendingTagFromImport;
+      if (pendingVatFromImport && (pendingVatFromImport.mst || pendingVatFromImport.name)) {
+        prefillVat = pendingVatFromImport;
+      }
+    }
+    if (nameInput && prefillName) nameInput.value = prefillName;
+    spTag = prefillTag || "";
+    if (prefillVat) {
+      spType = "company";
+      document.getElementById("spVatBox").style.display = "";
+      document.getElementById("spTypeRetail").className = "light";
+      document.getElementById("spTypeCompany").className = "blue";
+      document.getElementById("spVatMst").value = prefillVat.mst || "";
+      document.getElementById("spVatName").value = prefillVat.name || "";
+      document.getElementById("spVatAddr").value = prefillVat.addr || "";
+      document.getElementById("spVatEmail").value = prefillVat.email || "";
     }
     renderSpTagToggle();
     sheetPayloadRegenerate();
@@ -3897,6 +4202,17 @@ const App = (() => {
     return rows;
   }
 
+  // Strip prefix dùng để bảo toàn MST dạng text khi truyền qua Google Sheets CSV.
+  //   "@0123456789"  → "0123456789"  (prefix do vat-sheet.gs gắn)
+  //   "'0123456789"  → "0123456789"  (single-quote prefix tự nhiên của Sheets nếu format Plain Text)
+  // KHÔNG pad số 0: client không đoán, server đã giữ nguyên dữ liệu nhờ prefix.
+  function vatNormalizeMst(raw) {
+    let s = String(raw || "").trim();
+    if (!s) return "";
+    if (s.charAt(0) === "@" || s.charAt(0) === "'") s = s.substring(1);
+    return s.trim();
+  }
+
   function vatRowsToList(rows) {
     if (!rows || rows.length < 2) return [];
     const header = rows[0].map(h => String(h || "").trim().toUpperCase());
@@ -3917,7 +4233,7 @@ const App = (() => {
       const ten = (idx.ten >= 0 ? r[idx.ten] : "") || "";
       if (!mst && !ten) continue;
       out.push({
-        mst: String(mst).trim(),
+        mst: vatNormalizeMst(mst), // strip "@" / "'" prefix (server ghi để giữ leading 0)
         ten: String(ten).trim(),
         diaChi: String((idx.diaChi >= 0 ? r[idx.diaChi] : "") || "").trim(),
         email: String((idx.email >= 0 ? r[idx.email] : "") || "").trim(),
@@ -4183,6 +4499,10 @@ const App = (() => {
     sheetPayloadSetTag,
     sheetPayloadRegenerate,
     sheetPayloadCopy,
+    copyBillSaveOpen,
+    copyBillSaveClose,
+    copyBillSaveSelectTag,
+    copyBillSaveDo,
     vatRefreshHistory,
     vatOnInput,
     vatCloseSoon,
