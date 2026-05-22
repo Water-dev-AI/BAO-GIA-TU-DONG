@@ -170,7 +170,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 8.1 · 22/05/2026 · 11:15
+    Version 8.2 · 22/05/2026 · 16:50
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -477,7 +477,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 
 <!-- Loading overlay khi tải Google Sheet -->
-<div class="picker-overlay" id="slLoadingOverlay">
+<div class="picker-overlay" id="slLoadingOverlay" style="z-index:2000;">
   <div style="background:white;border-radius:14px;padding:28px 36px;display:flex;flex-direction:column;align-items:center;gap:16px;min-width:300px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.25);">
     <div style="width:48px;height:48px;border:4px solid #e5e7eb;border-top-color:var(--blue);border-radius:50%;animation:slSpin 0.8s linear infinite;"></div>
     <div id="slLoadingText" style="font-size:14px;font-weight:600;color:#1f2937;text-align:center;">Đang tải...</div>
@@ -1227,7 +1227,8 @@ const App = (() => {
         return;
       }
       const r = ComboLogic.calc(cart, getCalcOpts());
-      billEl.textContent = r.bill;
+      // Append VAT block nếu đang ở mode company (đồng bộ với lúc Copy Bill)
+      billEl.textContent = _maybeAppendVatBlock(r.bill);
       notesEl.textContent = r.notes;
     }, 80);
   }
@@ -2341,28 +2342,33 @@ const App = (() => {
     },
   };
 
-  // Wrappers gọi từ DOM (onclick/oninput)
+  // Wrappers gọi từ DOM (onclick/oninput) — đều trigger liveRecalc để bill realtime cập nhật VAT block.
   function cust2bSetType(t) {
     Cust2B.state.type = t === "company" ? "company" : "retail";
     Cust2B.syncToDOM();
+    liveRecalc();
   }
   function cust2bSelectTag(id) {
     Cust2B.state.tag = id;
     Cust2B.syncToDOM();
     document.getElementById("cust2bCustomTagWrap").style.display = id === "KHAC" ? "" : "none";
+    // Tag không ảnh hưởng bill — không cần liveRecalc
   }
   function cust2bOnChange() {
     Cust2B.syncFromDOM();
+    liveRecalc();
   }
   function cust2bClear() {
     if (!confirm("Xoá hết Tên / Tag / VAT khỏi khung 2B?")) return;
     Cust2B.clear();
+    liveRecalc();
     showStatus("🧹 Đã xoá thông tin 2B.");
   }
   // Autocomplete VAT: gọi vat module (giữ y như cũ trong Payload modal)
   function cust2bOnVatInput(field) {
     Cust2B.syncFromDOM();
     cust2bRenderVatSuggest(field);
+    liveRecalc();
   }
   function cust2bShowVatSuggest(field) {
     cust2bRenderVatSuggest(field);
@@ -2414,6 +2420,7 @@ const App = (() => {
       email: v.email || "",
     };
     Cust2B.syncToDOM();
+    liveRecalc();
     showStatus(`✅ Đã chọn VAT: ${v.ten}${v.mst ? " (" + v.mst + ")" : ""}`);
   }
 
@@ -2777,15 +2784,28 @@ const App = (() => {
     title.innerHTML = `👁 Xem đơn nháp: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
 
     // Calc bill từ cart của draft (không đụng cart hiện tại)
+    // Lưu ý: getCalcOpts() đọc giá trị từ DOM hiện tại (manual disc, ship fee) — KHÔNG dùng được ở đây.
+    // Tự tạo opts tối thiểu (không manual disc, không ship fee) cho cart của draft.
     let billText = "(không có gói nào)";
     try {
-      const r = ComboLogic.calc(d.cart || [], getCalcOpts());
-      billText = (r.bill || "").trim() || "(rỗng)";
-      // Nếu draft có VAT → append block "Thông tin hoá đơn"
-      if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
-        billText += "\n-------------\n" + _renderVatBlock(d.vat);
+      const dCart = d.cart || [];
+      if (!dCart.length) {
+        billText = "(không có gói nào trong giỏ)";
+      } else {
+        const opts = {
+          shipFeeK: 0,
+          orderCode: d.orderCode || "",
+          manualDiscountK: 0,
+        };
+        const r = ComboLogic.calc(dCart, opts);
+        billText = (r.bill || "").trim() || "(rỗng)";
+        // Nếu draft có VAT → append block "Thông tin hoá đơn"
+        if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
+          billText += "\n-------------\n" + _renderVatBlock(d.vat);
+        }
       }
     } catch (e) {
+      console.error("draftView calc fail:", e);
       billText = "(không tính được bill: " + e.message + ")";
     }
 
@@ -2874,7 +2894,8 @@ const App = (() => {
     const d = DraftStore.getById(_draftViewingId);
     if (!d) return;
     try {
-      const r = ComboLogic.calc(d.cart || [], getCalcOpts());
+      const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+      const r = ComboLogic.calc(d.cart || [], opts);
       let text = r.bill || "";
       if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
         text = text.trimEnd() + "\n-------------\n" + _renderVatBlock(d.vat);
@@ -3286,40 +3307,124 @@ const App = (() => {
   async function draftImportConfirm(saveAsDraft) {
     if (!pendingImportPayload) { draftImportClose(); return; }
     const p = pendingImportPayload;
+    // Đóng modal Import ngay + bật spinner (modal Import che spinner → đóng trước)
+    draftImportClose();
+    slShowLoading(
+      saveAsDraft ? "📥 Đang import + lưu đơn nháp…" : "📥 Đang import vào giỏ…",
+      "Vui lòng đợi vài giây."
+    );
+
     _loadingDraft = true; // chặn auto-regen mã đơn (sẽ dùng mã của link)
     cart = p.cart;
     saveCart();
     render();
     // Restore mã đơn nếu có trong link (đồng bộ với QR card + bill)
     if (p.orderCode) setOrderCode(p.orderCode);
-    // Restore Cust2B từ link share
+    // Restore Cust2B từ link share (gồm VAT + tag + name)
     Cust2B.loadFromImport(p);
-    // Pending* để fallback
+    // Pending* để fallback (Payload modal đọc nếu chưa save thành draft)
     pendingVatFromImport = p.vat && (p.vat.mst || p.vat.name) ? { ...p.vat } : null;
     pendingTagFromImport = draftTagToSpTag(p.tag);
     _lastCartSig = _cartSig();
     setTimeout(() => { _loadingDraft = false; }, 200);
-    if (saveAsDraft && p.name) {
-      const draft = {
-        id: draftGenId(),
-        name: p.name,
-        tag: p.tag || "ZALO",
-        customTag: p.customTag || "",
-        cart: JSON.parse(JSON.stringify(p.cart)),
-        orderCode: p.orderCode || "",
-        vat: p.vat || null,
-      };
-      slShowLoading("📥 Đang import + lưu đơn nháp…", "Đang đẩy lên Google Sheet.");
-      const r = await DraftStore.upsert(draft);
+    // Trigger liveRecalc để bill hiện VAT ngay (nếu có)
+    liveRecalc();
+
+    if (!saveAsDraft || !p.name) {
+      // Chỉ import vào giỏ, không lưu draft
       slHideLoading();
-      draftEditingId = draft.id;
-      draftRender();
-      if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}" lên sheet.`);
-      else showStatus(`⚠️ Đã import + lưu local — sync online thất bại.`);
-    } else {
-      showStatus(`✅ Đã import đơn "${p.name || '(không tên)'}" vào giỏ.`);
+      showStatus(`✅ Đã import đơn "${p.name || '(không tên)'}" vào giỏ.${p.vat && (p.vat.mst || p.vat.name) ? " (Có VAT)" : ""}`);
+      return;
     }
-    draftImportClose();
+
+    // Có yêu cầu lưu thành draft → check trùng tên trước
+    const dup = DraftStore.getAll().find(x => _normName(x.name) === _normName(p.name));
+    if (dup) {
+      slHideLoading(); // ẩn loading để hỏi user
+      const choice = await _askDuplicateOnImport(dup, p);
+      if (choice === "cancel") {
+        // Vẫn giữ giỏ đã import (user có thể xem), chỉ không lưu draft
+        showStatus(`✅ Đã import "${p.name}" vào giỏ (không lưu draft do trùng tên).`);
+        return;
+      }
+      slShowLoading("📥 Đang lưu đơn nháp…");
+      if (choice === "replace") {
+        // Update draft cũ với data mới từ link
+        const draft = {
+          ...dup,
+          tag: p.tag || dup.tag || "ZALO",
+          customTag: p.customTag || dup.customTag || "",
+          cart: JSON.parse(JSON.stringify(p.cart)),
+          orderCode: p.orderCode || dup.orderCode || "",
+          vat: p.vat || null,
+        };
+        const r = await DraftStore.upsert(draft);
+        slHideLoading();
+        draftEditingId = draft.id;
+        draftRender();
+        if (r && r.ok) showStatus(`✅ Đã ghi đè đơn nháp "${dup.name}".`);
+        else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
+        return;
+      }
+      if (choice === "new") {
+        // Hỏi tên mới (không trùng)
+        const newName = await _askNewName(p.name);
+        if (newName === null) {
+          showStatus(`⏸ Đã huỷ lưu draft. Giỏ vẫn giữ.`);
+          return;
+        }
+        slShowLoading("📥 Đang lưu đơn nháp…");
+        // Regen mã đơn mới (vì đơn mới)
+        regenOrderCode();
+        const draft = {
+          id: draftGenId(),
+          name: newName,
+          tag: p.tag || "ZALO",
+          customTag: p.customTag || "",
+          cart: JSON.parse(JSON.stringify(p.cart)),
+          orderCode: currentOrderCode,
+          vat: p.vat || null,
+        };
+        // Cập nhật Cust2B với tên mới
+        Cust2B.state.name = newName;
+        Cust2B.syncToDOM();
+        const r = await DraftStore.upsert(draft);
+        slHideLoading();
+        draftEditingId = draft.id;
+        draftRender();
+        if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp mới "${newName}".`);
+        else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
+        return;
+      }
+    }
+
+    // Không trùng → tạo mới bình thường
+    const draft = {
+      id: draftGenId(),
+      name: p.name,
+      tag: p.tag || "ZALO",
+      customTag: p.customTag || "",
+      cart: JSON.parse(JSON.stringify(p.cart)),
+      orderCode: p.orderCode || "",
+      vat: p.vat || null,
+    };
+    const r = await DraftStore.upsert(draft);
+    slHideLoading();
+    draftEditingId = draft.id;
+    draftRender();
+    if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}" lên sheet.`);
+    else showStatus(`⚠️ Đã import + lưu local — sync online thất bại.`);
+  }
+
+  // Hỏi user khi import link mà tên trùng draft đã có
+  async function _askDuplicateOnImport(dup, payload) {
+    const dt = draftFormatTimePair(dup.createdAt, dup.updatedAt);
+    const msg = `Đã có đơn nháp tên "${dup.name}" (${dt}, ${(dup.cart || []).length} dòng).\n\n` +
+      `Bấm OK = Ghi đè đơn cũ bằng dữ liệu từ link.\n` +
+      `Bấm Cancel = chọn tiếp.`;
+    if (confirm(msg)) return "replace";
+    if (confirm(`Tạo đơn nháp MỚI với tên KHÁC?\n\nBấm OK để nhập tên mới, Cancel để chỉ import vào giỏ (không lưu draft).`)) return "new";
+    return "cancel";
   }
 
   // Init drafts — refresh từ server (background, không block UI)
@@ -4426,7 +4531,10 @@ const App = (() => {
     if (!currentOrderCode) regenOrderCode();
 
     const cust = Cust2B.getDraftPayload();
-    const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag, cust.customTag, cart);
+    const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag, cust.customTag, cart, {
+      orderCode: currentOrderCode || "",
+      vat: cust.vat || null,
+    });
 
     // Map tag draft → spTag prefix
     const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
