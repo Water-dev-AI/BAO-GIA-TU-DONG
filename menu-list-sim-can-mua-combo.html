@@ -136,8 +136,8 @@
   table.cart-table td.td-qty { width: 60px; padding-left:2px; padding-right:2px; }
   table.cart-table td.td-actions { width: 72px; padding-left:2px; padding-right:4px; text-align:center; }
   table.cart-table td.td-del  { width: 40px; text-align: center; padding-left:2px; padding-right:6px; }
-  /* Font condensed nhẹ giúp tên gói dài fit 1 dòng */
-  .pkg-text { font-size: 12.5px; line-height: 1.35; word-break: normal; overflow-wrap: anywhere; font-stretch: 95%; letter-spacing: -0.1px; }
+  /* Font giữ như cũ — tên gói word-break bình thường, không condensed */
+  .pkg-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
 
   /* Ô SL max 3 ký tự — width tối thiểu để chứa 3 số + cho phép "N99" */
   input.qty  { width: 52px;  padding: 5px 6px; font-size: 12.5px; border: 1px solid #cfd5df; border-radius: 6px; font-family: inherit; text-align: center; }
@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 9.0 · 23/05/2026 · 02:17
+    Version 9.3 · 23/05/2026 · 02:29
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -431,10 +431,14 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Nhập sổ</button>
       </div>
 
-      <div id="qrResultWrap" style="display:none;">
-        <div class="cols" style="grid-template-columns:1fr 1fr;gap:14px;">
-          <div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">QR thanh toán</div>
+      <div id="qrResultWrap" style="display:none;margin-top:10px;">
+        <div id="qrResultGrid" style="display:grid;grid-template-columns:1fr;gap:14px;">
+          <!-- Cột QR simple (chỉ hiện khi bấm 🎨 QR TT) -->
+          <div id="qrSimpleCol" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-size:12px;color:var(--muted);font-weight:600;">QR thanh toán</div>
+              <button onclick="App.qrCloseSimple()" style="margin:0;padding:3px 8px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Đóng">✕ Đóng</button>
+            </div>
             <div id="qrSimpleWrap" style="background:white;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
               <img id="qrSimpleImg" alt="QR" style="max-width:100%;height:auto;" />
             </div>
@@ -443,8 +447,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
               <button class="blue"  onclick="App.qrCopyImage('simple')" style="margin:0;">📋 Copy ảnh</button>
             </div>
           </div>
-          <div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Ảnh báo giá full</div>
+          <!-- Cột Ảnh báo giá full (chỉ hiện khi bấm 🖼️ Báo giá) -->
+          <div id="qrFullCol" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div style="font-size:12px;color:var(--muted);font-weight:600;">Ảnh báo giá full</div>
+              <button onclick="App.qrCloseFull()" style="margin:0;padding:3px 8px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Đóng">✕ Đóng</button>
+            </div>
             <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow-y:auto;">
               <canvas id="qrFullCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
             </div>
@@ -652,6 +660,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div id="draftViewBody" style="padding:18px;overflow-y:auto;flex:1 1 auto;min-height:0;">
       <!-- content render động — dùng block layout, không flex, để children giữ height tự nhiên -->
     </div>
+    <!-- Status inline trong modal Xem (hiện message copy / lỗi để user không cần đóng modal) -->
+    <div id="draftViewStatus" style="padding:8px 18px;font-size:12.5px;line-height:1.5;color:#0e7c3a;background:#f0fdf4;border-top:1px solid #d1fae5;display:none;"></div>
     <div class="picker-footer" style="flex-wrap:wrap;gap:6px;">
       <!-- Hàng 1: copy nhanh -->
       <button class="blue" onclick="App.draftViewCopyBill()" style="margin:0;padding:8px 11px;font-size:12px;">📋 Bill</button>
@@ -1260,6 +1270,9 @@ const App = (() => {
     const sig = _cartSig();
     if (sig === _lastCartSig) return;
     _lastCartSig = sig;
+    // Cart vừa thực sự đổi → tự đóng kết quả QR/Báo giá để tránh hiển thị stale
+    // (mã đơn cũ + tổng tiền cũ trên ảnh trong khi giỏ đã thay)
+    try { _qrAutoCloseOnCartChange(); } catch (e) { /* DOM chưa sẵn sàng → skip */ }
     // Mã user tự gõ → giữ nguyên
     if (currentOrderCode && !/^DH\d{8}$/.test(currentOrderCode)) return;
     // Cart rỗng → giữ mã hiện tại, không regen
@@ -3010,6 +3023,27 @@ const App = (() => {
   function draftViewClose() {
     document.getElementById("draftViewOverlay").classList.remove("open");
     _draftViewingId = null;
+    // Clear status khi đóng để lần sau mở không thấy message cũ
+    const sEl = document.getElementById("draftViewStatus");
+    if (sEl) { sEl.style.display = "none"; sEl.textContent = ""; }
+  }
+
+  // Hiện status inline trong modal Xem (không bị che bởi modal).
+  // kind: "success" (xanh) | "error" (đỏ) | "info" (xám)
+  function _draftViewStatus(msg, kind) {
+    const el = document.getElementById("draftViewStatus");
+    if (!el) return;
+    const styles = {
+      success: { color: "#0e7c3a", bg: "#f0fdf4", border: "#d1fae5" },
+      error:   { color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+      info:    { color: "#1e40af", bg: "#eff6ff", border: "#bfdbfe" },
+    };
+    const st = styles[kind || "success"];
+    el.style.color = st.color;
+    el.style.background = st.bg;
+    el.style.borderTop = `1px solid ${st.border}`;
+    el.textContent = msg;
+    el.style.display = "block";
   }
   async function draftViewCopyBill() {
     if (!_draftViewingId) return;
@@ -3023,10 +3057,10 @@ const App = (() => {
         text = text.trimEnd() + "\n-------------\n" + _renderVatBlock(d.vat);
       }
       const ok = await copyText(text);
-      if (ok) showStatus(`✅ Đã copy bill của "${d.name}".`);
-      else showStatus("⚠️ Copy thất bại.");
+      if (ok) _draftViewStatus(`✅ Đã copy Bill của "${d.name}" vào clipboard. Paste vào Zalo/FB.`, "success");
+      else _draftViewStatus("⚠️ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
-      showStatus("⚠️ Không tính được bill: " + e.message);
+      _draftViewStatus("⚠️ Không tính được bill: " + e.message, "error");
     }
   }
   function draftViewImport() {
@@ -3052,10 +3086,10 @@ const App = (() => {
     if (!_draftViewingId) return;
     const d = DraftStore.getById(_draftViewingId);
     if (!d) return;
-    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
-    if (!d.orderCode) { showStatus("⚠️ Đơn nháp chưa có mã đơn. Mở Import để cấp mã."); return; }
+    if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
+    if (!d.orderCode) { _draftViewStatus("⚠️ Đơn nháp chưa có mã đơn. Mở Import để cấp mã.", "error"); return; }
     const amountVnd = _calcDraftPaymentVnd(d);
-    if (amountVnd <= 0) { showStatus("⚠️ Tổng thanh toán = 0, không tạo QR."); return; }
+    if (amountVnd <= 0) { _draftViewStatus("⚠️ Tổng thanh toán = 0, không tạo QR.", "error"); return; }
     slShowLoading("🎨 Đang tạo QR...");
     try {
       const url = buildVietQRUrl(amountVnd, d.orderCode);
@@ -3067,21 +3101,21 @@ const App = (() => {
       canvas.getContext("2d").drawImage(img, 0, 0);
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       slHideLoading();
-      if (!blob) { showStatus("❌ Tạo blob thất bại."); return; }
+      if (!blob) { _draftViewStatus("❌ Tạo blob thất bại.", "error"); return; }
       if (!navigator.clipboard || !navigator.clipboard.write) {
         // Fallback: download
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = `QR_${d.orderCode}.png`;
         a.click();
-        showStatus(`📥 Đã tải QR (browser không hỗ trợ copy ảnh).`);
+        _draftViewStatus(`📥 Đã tải QR (browser không hỗ trợ copy ảnh — file đã tải về máy).`, "info");
         return;
       }
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      showStatus(`✅ Đã copy QR của "${d.name}" vào clipboard. Paste vào Zalo/FB.`);
+      _draftViewStatus(`✅ Đã copy ảnh QR thanh toán của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
     } catch (e) {
       slHideLoading();
-      showStatus("❌ Lỗi tạo QR: " + e.message);
+      _draftViewStatus("❌ Lỗi tạo QR: " + e.message, "error");
     }
   }
 
@@ -3090,48 +3124,41 @@ const App = (() => {
     if (!_draftViewingId) return;
     const d = DraftStore.getById(_draftViewingId);
     if (!d) return;
-    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
-    if (!d.orderCode) { showStatus("⚠️ Đơn nháp chưa có mã đơn."); return; }
+    if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
+    if (!d.orderCode) { _draftViewStatus("⚠️ Đơn nháp chưa có mã đơn.", "error"); return; }
     slShowLoading("🖼️ Đang tạo ảnh báo giá...");
     try {
-      // Build state giả cho qrRenderFull — không dùng canvas hiện hữu, tạo canvas tạm
       const amountVnd = _calcDraftPaymentVnd(d);
       const qrUrl = buildVietQRUrl(amountVnd, d.orderCode);
       const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
       const r = ComboLogic.calc(d.cart || [], opts);
-      // Build "fake state" tương thích với qrRenderFull
       const state = {
         result: { bill: r.bill || "" },
         qrUrl,
         orderCode: d.orderCode,
         vat: d.vat || null,
       };
-      // qrRenderFull đang dùng canvas #qrFullCanvas — em sẽ tạo canvas tạm
-      // Để không phá API hiện tại, em render trực tiếp lên canvas #qrFullCanvas
-      // (canvas này luôn có trong DOM). Sau khi render xong, copy blob.
-      // Lưu / restore orderCode hiện tại để không phá QR card chính.
       const savedOrderCode = currentOrderCode;
       currentOrderCode = d.orderCode;
       await qrRenderFull(state);
       currentOrderCode = savedOrderCode;
-      // Copy blob từ canvas
       const canvas = document.getElementById("qrFullCanvas");
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       slHideLoading();
-      if (!blob) { showStatus("❌ Tạo blob thất bại."); return; }
+      if (!blob) { _draftViewStatus("❌ Tạo blob thất bại.", "error"); return; }
       if (!navigator.clipboard || !navigator.clipboard.write) {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = `BaoGia_${d.orderCode}.png`;
         a.click();
-        showStatus(`📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh).`);
+        _draftViewStatus(`📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh — file đã tải về máy).`, "info");
         return;
       }
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      showStatus(`✅ Đã copy ảnh báo giá của "${d.name}". Paste vào Zalo/FB.`);
+      _draftViewStatus(`✅ Đã copy ảnh báo giá full của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
     } catch (e) {
       slHideLoading();
-      showStatus("❌ Lỗi tạo ảnh: " + e.message);
+      _draftViewStatus("❌ Lỗi tạo ảnh: " + e.message, "error");
     }
   }
 
@@ -3140,19 +3167,17 @@ const App = (() => {
     if (!_draftViewingId) return;
     const d = DraftStore.getById(_draftViewingId);
     if (!d) return;
-    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
+    if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
     try {
-      // Tạm load draft cart vào biến local + tính items
       const savedCart = cart;
       const savedOrderCode = currentOrderCode;
       cart = JSON.parse(JSON.stringify(d.cart));
       if (d.orderCode) currentOrderCode = d.orderCode;
       const items = buildSheetPayloadItems();
-      // Restore ngay sau khi tính
       cart = savedCart;
       if (!items.length) {
         currentOrderCode = savedOrderCode;
-        showStatus("⚠️ Không có gói hợp lệ trong đơn nháp.");
+        _draftViewStatus("⚠️ Không có gói hợp lệ trong đơn nháp.", "error");
         return;
       }
       const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
@@ -3177,15 +3202,15 @@ const App = (() => {
         })),
       };
       if (d.vat && (d.vat.mst || d.vat.name)) payload.vat = d.vat;
-      currentOrderCode = savedOrderCode; // restore
+      currentOrderCode = savedOrderCode;
       const json = JSON.stringify(payload);
       const encoded = urlSafeEncode(json);
       const out = "SIMGLOBE-SHEET:" + encoded;
       const ok = await copyText(out);
-      if (ok) showStatus(`✅ Đã copy mã nhập của "${d.name}". Paste vào Google Sheet hoá đơn.`);
-      else showStatus("❌ Copy thất bại.");
+      if (ok) _draftViewStatus(`✅ Đã copy mã nhập của "${d.name}" vào clipboard. Mở Google Sheet hoá đơn → chọn ô MÃ ORDER ID → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.`, "success");
+      else _draftViewStatus("❌ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
-      showStatus("❌ Lỗi: " + e.message);
+      _draftViewStatus("❌ Lỗi: " + e.message, "error");
     }
   }
 
@@ -3860,23 +3885,70 @@ const App = (() => {
     return { result, finalPayK, amountVnd, qrUrl };
   }
 
+  // Bấm 🎨 QR TT: chỉ hiện cột QR simple (ẩn cột báo giá nếu đang mở)
   async function qrGenerate() {
     const s = qrGetState();
     if (!s) return;
     document.getElementById("qrResultWrap").style.display = "block";
+    document.getElementById("qrSimpleCol").style.display = "";
     document.getElementById("qrSimpleImg").src = s.qrUrl;
-    // Cũng render full luôn để 2 cột sync
-    await qrRenderFull(s);
+    // KHÔNG render full ở đây — user phải bấm nút "🖼️ Báo giá" riêng
+    _qrUpdateGridLayout();
     qrShowStatus(`✅ QR ${ComboLogic.fmtK(s.finalPayK)} — Mã ĐH: ${currentOrderCode}`);
   }
 
+  // Bấm 🖼️ Báo giá: chỉ hiện cột báo giá full
   async function qrGenerateFull() {
     const s = qrGetState();
     if (!s) return;
     document.getElementById("qrResultWrap").style.display = "block";
-    document.getElementById("qrSimpleImg").src = s.qrUrl;
+    document.getElementById("qrFullCol").style.display = "";
     await qrRenderFull(s);
+    _qrUpdateGridLayout();
     qrShowStatus(`✅ Đã tạo ảnh báo giá full.`);
+  }
+
+  function qrCloseSimple() {
+    document.getElementById("qrSimpleCol").style.display = "none";
+    _qrUpdateGridLayout();
+  }
+  function qrCloseFull() {
+    document.getElementById("qrFullCol").style.display = "none";
+    _qrUpdateGridLayout();
+  }
+
+  // Ẩn cả qrResultWrap nếu cả 2 cột đều đóng. Set grid layout:
+  //  - cả 2 mở → 2 cột (desktop)
+  //  - chỉ 1 mở → 1 cột
+  function _qrUpdateGridLayout() {
+    const simpleOpen = document.getElementById("qrSimpleCol").style.display !== "none";
+    const fullOpen = document.getElementById("qrFullCol").style.display !== "none";
+    const wrap = document.getElementById("qrResultWrap");
+    const grid = document.getElementById("qrResultGrid");
+    if (!simpleOpen && !fullOpen) {
+      wrap.style.display = "none";
+      return;
+    }
+    wrap.style.display = "block";
+    // Desktop có cả 2 → 2 cột; mobile dùng @media — em check viewport width đơn giản
+    if (simpleOpen && fullOpen && window.innerWidth > 880) {
+      grid.style.gridTemplateColumns = "1fr 1fr";
+    } else {
+      grid.style.gridTemplateColumns = "1fr";
+    }
+  }
+
+  // Tự đóng kết quả QR khi cart đổi (tránh hiển thị QR/ảnh báo giá stale với tổng tiền mới)
+  function _qrAutoCloseOnCartChange() {
+    const simpleOpen = document.getElementById("qrSimpleCol");
+    const fullOpen = document.getElementById("qrFullCol");
+    if (!simpleOpen || !fullOpen) return;
+    const anyOpen = simpleOpen.style.display !== "none" || fullOpen.style.display !== "none";
+    if (anyOpen) {
+      simpleOpen.style.display = "none";
+      fullOpen.style.display = "none";
+      _qrUpdateGridLayout();
+    }
   }
 
   function loadImage(url) {
@@ -5232,6 +5304,8 @@ const App = (() => {
     regenOrderCode,
     qrGenerate,
     qrGenerateFull,
+    qrCloseSimple,
+    qrCloseFull,
     qrDownload,
     qrCopyImage,
     qrCopySTK,
