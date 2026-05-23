@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.0 · 23/05/2026 · 08:20
+    Version 10.1 · 23/05/2026 · 08:29
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -281,7 +281,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-        <h2 style="margin:0;">2A) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
+        <h2 style="margin:0;">2) Giỏ + Thông tin khách <span id="cartCount" class="pill">0 dòng</span></h2>
         <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
       </div>
 
@@ -335,75 +335,66 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">
         Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
       </div>
-    </div>
 
-    <!-- ====== Section 2B: Thông tin khách + VAT ====== -->
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <h2 style="margin:0;">2B) Thông tin khách / VAT</h2>
-        <button onclick="App.cust2bClear()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Xoá hết thông tin trong khung này">🧹 Xoá thông tin</button>
-      </div>
-      <div style="color:var(--muted);font-size:12px;margin-bottom:12px;line-height:1.5;">
-        Điền tên khách + tag. Bật <b>Đơn công ty</b> nếu xuất VAT. Thông tin này lưu cùng giỏ hàng vào đơn nháp.
-      </div>
+      <!-- ====== Thông tin khách + VAT (gộp vào card 2 từ v10.1) ====== -->
+      <div style="border-top:1px dashed var(--line);margin-top:14px;padding-top:12px;">
+        <!-- Hàng 1: Tag dropdown + Tên khách + checkbox Xuất VAT -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <select id="cust2bTagSelect" onchange="App.cust2bSelectTagFromDropdown(this.value)"
+            style="padding:9px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;min-width:110px;">
+            <option value="ZALO">ZALO</option>
+            <option value="ZALO_OA">ZALO OA</option>
+            <option value="FB">FB</option>
+            <option value="KHAC">KHÁC</option>
+          </select>
+          <input id="cust2bName" type="text"
+            placeholder="VD: Anh Minh / Chị Hoàn... (để trống — sẽ hỏi khi lưu)"
+            oninput="App.cust2bOnChange()"
+            style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
+          <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:#92400e;cursor:pointer;user-select:none;background:#fef3c7;padding:7px 10px;border-radius:8px;border:1px solid #fcd34d;">
+            <input id="cust2bVatToggle" type="checkbox" onchange="App.cust2bToggleVat(this.checked)" style="margin:0;cursor:pointer;" />
+            <span>🧾 Xuất VAT</span>
+          </label>
+        </div>
 
-      <!-- Toggle Đơn lẻ / Đơn công ty -->
-      <div style="display:flex;gap:6px;margin-bottom:12px;">
-        <button id="cust2bTypeRetail"  onclick="App.cust2bSetType('retail')"  style="flex:1;margin:0;padding:9px 14px;font-size:13px;font-weight:700;background:var(--blue);color:white;border:none;border-radius:8px;cursor:pointer;">🛒 Đơn lẻ</button>
-        <button id="cust2bTypeCompany" onclick="App.cust2bSetType('company')" style="flex:1;margin:0;padding:9px 14px;font-size:13px;font-weight:700;background:#eef2f7;color:#444;border:none;border-radius:8px;cursor:pointer;">🏢 Đơn công ty (xuất VAT)</button>
-      </div>
+        <!-- Custom tag (chỉ hiện khi tag = KHAC) -->
+        <div id="cust2bCustomTagWrap" style="display:none;margin-top:8px;">
+          <input id="cust2bCustomTag" type="text" placeholder="Tag tuỳ chỉnh — VD: Tiktok / Email..."
+            oninput="App.cust2bOnChange()"
+            style="width:100%;padding:8px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:12.5px;font-family:inherit;" />
+        </div>
 
-      <!-- Tên khách (luôn hiện) -->
-      <div style="margin-bottom:10px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên khách hàng <span style="color:var(--muted);">(để trống nếu chưa rõ — sẽ hỏi khi lưu nháp)</span></div>
-        <input id="cust2bName" type="text" placeholder="VD: Anh Minh / Chị Hoàn..."
-          oninput="App.cust2bOnChange()"
-          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
-      </div>
-
-      <!-- Tag -->
-      <div style="margin-bottom:10px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Tag nguồn</div>
-        <div id="cust2bTagOptions" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-      </div>
-      <div id="cust2bCustomTagWrap" style="display:none;margin-bottom:10px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tag tuỳ chỉnh</div>
-        <input id="cust2bCustomTag" type="text" placeholder="VD: Tiktok / Email..."
-          oninput="App.cust2bOnChange()"
-          style="width:100%;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
-      </div>
-
-      <!-- VAT box (ẩn khi Đơn lẻ) -->
-      <div id="cust2bVatBox" style="display:none;border-top:1px dashed var(--line);padding-top:12px;margin-top:6px;">
-        <div style="font-size:12.5px;font-weight:700;color:#92400e;margin-bottom:8px;">🧾 Thông tin xuất VAT</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <!-- VAT inputs: 2 hàng 2 cột (ẩn khi không tick Xuất VAT) -->
+        <div id="cust2bVatBox" style="display:none;margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div style="position:relative;">
-            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">MST</div>
-            <input id="cust2bVatMst" type="text" placeholder="0123456789"
+            <input id="cust2bVatMst" type="text" placeholder="MST (vd 0123456789)"
               oninput="App.cust2bOnVatInput('mst')" onfocus="App.cust2bShowVatSuggest('mst')" onblur="App.cust2bHideVatSuggest()"
               style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;font-family:'Roboto Mono',monospace;" />
             <div id="cust2bVatSuggest_mst" class="vat-suggest" style="display:none;"></div>
           </div>
           <div style="position:relative;">
-            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Tên công ty</div>
-            <input id="cust2bVatName" type="text" placeholder="CÔNG TY TNHH..."
+            <input id="cust2bVatName" type="text" placeholder="Tên công ty"
               oninput="App.cust2bOnVatInput('name')" onfocus="App.cust2bShowVatSuggest('name')" onblur="App.cust2bHideVatSuggest()"
               style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
             <div id="cust2bVatSuggest_name" class="vat-suggest" style="display:none;"></div>
           </div>
-          <div style="grid-column:1/-1;">
-            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Địa chỉ</div>
-            <input id="cust2bVatAddr" type="text" placeholder="Số nhà, đường, phường, quận..."
+          <div>
+            <input id="cust2bVatAddr" type="text" placeholder="Địa chỉ"
               oninput="App.cust2bOnChange()"
               style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
           </div>
-          <div style="grid-column:1/-1;position:relative;">
-            <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">Email</div>
-            <input id="cust2bVatEmail" type="text" placeholder="invoice@..."
+          <div style="position:relative;">
+            <input id="cust2bVatEmail" type="text" placeholder="Email nhận hoá đơn"
               oninput="App.cust2bOnVatInput('email')" onfocus="App.cust2bShowVatSuggest('email')" onblur="App.cust2bHideVatSuggest()"
               style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
             <div id="cust2bVatSuggest_email" class="vat-suggest" style="display:none;"></div>
           </div>
+        </div>
+
+        <!-- Nút action dưới cùng: Lưu giỏ + Xoá thông tin -->
+        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;flex:1;min-width:160px;font-weight:700;">💾 Lưu giỏ hiện tại</button>
+          <button onclick="App.cust2bClear()" style="margin:0;padding:9px 12px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Xoá hết Tên / Tag / VAT khỏi khung này">🧹 Xoá thông tin</button>
         </div>
       </div>
     </div>
@@ -475,13 +466,10 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
         <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
-          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;">💾 Lưu giỏ hiện tại</button>
-        </div>
+        <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Cache 1h, bấm 🔄 để load ngay. Bấm <b>Share</b> tạo link gửi cho người khác.
+        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Để lưu giỏ hiện tại, dùng nút trong khung 2 phía trên.
       </div>
       <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách hoặc mã đơn (DH...)..."
         oninput="App.draftFilter()"
@@ -2443,23 +2431,18 @@ const App = (() => {
         const el = document.getElementById("cust2bVat" + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) el.value = s.vat[k] || "";
       });
-      // Toggle type buttons
-      const btnR = document.getElementById("cust2bTypeRetail");
-      const btnC = document.getElementById("cust2bTypeCompany");
+      // Checkbox Xuất VAT (v10.1) — thay cho 2 button retail/company cũ
+      const cb = document.getElementById("cust2bVatToggle");
       const vatBox = document.getElementById("cust2bVatBox");
-      if (btnR && btnC && vatBox) {
-        if (s.type === "company") {
-          btnC.style.background = "var(--green)"; btnC.style.color = "white";
-          btnR.style.background = "#eef2f7"; btnR.style.color = "#444";
-          vatBox.style.display = "";
-        } else {
-          btnR.style.background = "var(--blue)"; btnR.style.color = "white";
-          btnC.style.background = "#eef2f7"; btnC.style.color = "#444";
-          vatBox.style.display = "none";
-        }
+      if (cb && vatBox) {
+        const isCompany = s.type === "company";
+        cb.checked = isCompany;
+        // Giữ grid layout khi hiện (display:grid), ẩn khi không
+        vatBox.style.display = isCompany ? "grid" : "none";
       }
-      // Tag options
-      this.renderTagOptions();
+      // Tag dropdown
+      const sel = document.getElementById("cust2bTagSelect");
+      if (sel) sel.value = s.tag || "ZALO";
       const customWrap = document.getElementById("cust2bCustomTagWrap");
       if (customWrap) customWrap.style.display = s.tag === "KHAC" ? "" : "none";
     },
@@ -2474,32 +2457,19 @@ const App = (() => {
       s.vat.addr = get("cust2bVatAddr");
       s.vat.email = get("cust2bVatEmail");
     },
-    renderTagOptions() {
-      const wrap = document.getElementById("cust2bTagOptions");
-      if (!wrap) return;
-      const cur = this.state.tag;
-      wrap.innerHTML = DRAFT_TAGS.map(t => {
-        const active = t.id === cur;
-        const border = active ? `2px solid ${t.color}` : `2px solid transparent`;
-        return `<button onclick="App.cust2bSelectTag('${t.id}')" style="
-          margin:0;padding:6px 14px;background:${t.bg};color:${t.color};
-          border:${border};border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;
-          font-family:inherit;letter-spacing:.3px;
-        ">${t.label}</button>`;
-      }).join("");
-    },
   };
 
   // Wrappers gọi từ DOM (onclick/oninput) — đều trigger liveRecalc để bill realtime cập nhật VAT block.
-  function cust2bSetType(t) {
-    Cust2B.state.type = t === "company" ? "company" : "retail";
+  // v10.1: thay 2 button retail/company bằng checkbox "Xuất VAT"
+  function cust2bToggleVat(checked) {
+    Cust2B.state.type = checked ? "company" : "retail";
     Cust2B.syncToDOM();
     liveRecalc();
   }
-  function cust2bSelectTag(id) {
-    Cust2B.state.tag = id;
+  // v10.1: tag chuyển sang dropdown <select>
+  function cust2bSelectTagFromDropdown(value) {
+    Cust2B.state.tag = value;
     Cust2B.syncToDOM();
-    document.getElementById("cust2bCustomTagWrap").style.display = id === "KHAC" ? "" : "none";
     // Tag không ảnh hưởng bill — không cần liveRecalc
   }
   function cust2bOnChange() {
@@ -2507,10 +2477,10 @@ const App = (() => {
     liveRecalc();
   }
   function cust2bClear() {
-    if (!confirm("Xoá hết Tên / Tag / VAT khỏi khung 2B?")) return;
+    if (!confirm("Xoá hết Tên / Tag / VAT?")) return;
     Cust2B.clear();
     liveRecalc();
-    showStatus("🧹 Đã xoá thông tin 2B.");
+    showStatus("🧹 Đã xoá thông tin khách.");
   }
   // Autocomplete VAT: gọi vat module (giữ y như cũ trong Payload modal)
   function cust2bOnVatInput(field) {
@@ -5452,8 +5422,8 @@ const App = (() => {
     draftViewCopyFullImage,
     draftViewCopyPayload,
     draftViewImport,
-    cust2bSetType,
-    cust2bSelectTag,
+    cust2bToggleVat,
+    cust2bSelectTagFromDropdown,
     cust2bOnChange,
     cust2bClear,
     cust2bOnVatInput,
