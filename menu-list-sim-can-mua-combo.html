@@ -211,8 +211,9 @@
   table.picker-table td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   table.picker-table tr.selected td { background: #ebf5ff; }
   table.picker-table tr:hover td { background: #f5f9ff; cursor: pointer; }
-  table.picker-table td.col-cb { width: 36px; text-align: center; }
-  table.picker-table td.col-no { width: 46px; color: var(--muted); font-size: 12px; text-align: right; padding-right: 8px; }
+  table.picker-table td.col-cb { width: 36px; text-align: center; user-select: none; -webkit-user-select: none; }
+  table.picker-table td.col-no { width: 46px; color: var(--muted); font-size: 12px; text-align: right; padding-right: 8px; user-select: none; -webkit-user-select: none; }
+  table.picker-table th.col-cb, table.picker-table th.col-no { user-select: none; -webkit-user-select: none; }
   table.picker-table td.col-name { min-width: 200px; }
   table.picker-table td.col-type { width: 100px; }
   table.picker-table td.col-days { width: 90px; }
@@ -227,7 +228,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.4.2 · 23/05/2026 · 12:30
+    Version 10.5 · 23/05/2026 · 12:46
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -524,7 +525,11 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="picker-header">
       <h3 id="pickerTitle">Chọn gói</h3>
       <input id="pickerSearch" type="text" placeholder="🔍 Tìm kiếm..."
-        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:220px;"
+        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:200px;"
+        oninput="App.pickerFilter()" />
+      <input id="pickerDaysFilter" type="text" placeholder="📅 Ngày: 5, 7, 10..."
+        title="Lọc theo số ngày — nhập 1-5 số phân cách bằng dấu phẩy/khoảng trắng/dấu /. Vd: 5, 7, 10"
+        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:170px;font-family:inherit;"
         oninput="App.pickerFilter()" />
       <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
       <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
@@ -557,6 +562,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
     <div class="picker-footer">
       <div class="picker-sel-count" id="pickerSelCount">Chưa chọn gói nào</div>
+      <button class="blue" onclick="App.pickerCopyText()" style="margin:0;" title="Copy text các gói đã tick (hoặc tất cả nếu chưa tick), không kèm cột #">📋 Copy text</button>
       <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
       <button class="light" onclick="App.pickerClose()">Huỷ</button>
     </div>
@@ -2173,9 +2179,12 @@ const App = (() => {
 
     pickerChecked = new Set();
     pickerSearchKw = "";
+    pickerDaysFilter = []; // v10.5: reset filter ngày
     pickerActiveTab = 0;
     pickerTypeFilter = "ALL";
     document.getElementById("pickerSearch").value = "";
+    const dfInp = document.getElementById("pickerDaysFilter");
+    if (dfInp) dfInp.value = "";
     const totalGoi = pickerTables.reduce((s, t) => s + t.items.length, 0);
     const cacheNote = cached && !forceRefresh ? " ⚡" : "";
     document.getElementById("pickerTitle").textContent = item.name + " — " + pickerTables.length + " bộ, " + totalGoi + " gói" + cacheNote;
@@ -2255,7 +2264,10 @@ const App = (() => {
   function pickerSwitchTab(i) {
     pickerActiveTab = i;
     pickerSearchKw = "";
+    pickerDaysFilter = []; // v10.5: reset filter ngày khi đổi tab
     document.getElementById("pickerSearch").value = "";
+    const dfInp = document.getElementById("pickerDaysFilter");
+    if (dfInp) dfInp.value = "";
     pickerRenderTabs();
     pickerRender();
   }
@@ -2264,6 +2276,42 @@ const App = (() => {
   let pickerTypeFilter = "ALL"; // 'ALL' | 'ESIM' | 'PHYSICAL'
 
   // Helper: kiểm tra 1 item có pass filter hiện tại không
+  // v10.5: parse input ngày → array số.
+  // Hỗ trợ split bằng `[,\s/]+`. Mỗi số 1-2 chữ số. Max 5 số.
+  let pickerDaysFilter = []; // array số ngày để match (rỗng = không filter ngày)
+  function pickerParseDaysInput(raw) {
+    if (!raw) return [];
+    const parts = String(raw).split(/[,\s/]+/).map(s => s.trim()).filter(Boolean);
+    const nums = [];
+    for (const part of parts) {
+      if (/^\d{1,2}$/.test(part)) {
+        const n = parseInt(part, 10);
+        if (n > 0 && !nums.includes(n)) nums.push(n);
+        if (nums.length >= 5) break;
+      }
+    }
+    return nums;
+  }
+
+  // Check item match số ngày: tên gói chứa "5 days/day/d/ngày/ngay" HOẶC cột Ngày = "5 NGÀY"
+  function pickerMatchDays(item, daysList) {
+    if (!daysList.length) return true;
+    const p = item.parsed;
+    // 1) Match cột Ngày (vd "5 NGÀY", "30 NGÀY") — extract số đầu tiên
+    const daysCol = String(p.days || "");
+    const colMatch = daysCol.match(/\d+/);
+    const colNum = colMatch ? parseInt(colMatch[0], 10) : null;
+    if (colNum !== null && daysList.includes(colNum)) return true;
+    // 2) Match tên: regex \b<num>\s*(day|days|d|ngày|ngay)\b
+    const name = String(p.name || item.line || "").toLowerCase();
+    for (const n of daysList) {
+      // \b không hoạt động tốt với unicode/vietnamese → dùng lookahead/lookbehind
+      const re = new RegExp(`(?:^|[^\\d])${n}\\s*(day|days|d|ngày|ngay)(?:[^a-z\\u00C0-\\u1EF9]|$)`, "i");
+      if (re.test(name)) return true;
+    }
+    return false;
+  }
+
   function pickerItemMatches(item, kw) {
     const p = item.parsed;
     const text = (p.name + " " + p.type + " " + p.days + " " + p.price + " " + (p.note || "")).toLowerCase();
@@ -2273,6 +2321,8 @@ const App = (() => {
       if (pickerTypeFilter === "ESIM" && !typeNorm.includes("esim")) return false;
       if (pickerTypeFilter === "PHYSICAL" && !(typeNorm.includes("sim vat ly") || typeNorm === "sim")) return false;
     }
+    // v10.5: filter số ngày (AND với search)
+    if (pickerDaysFilter.length && !pickerMatchDays(item, pickerDaysFilter)) return false;
     return true;
   }
 
@@ -2369,6 +2419,8 @@ const App = (() => {
 
   function pickerFilter() {
     pickerSearchKw = document.getElementById("pickerSearch").value;
+    const daysInp = document.getElementById("pickerDaysFilter");
+    pickerDaysFilter = pickerParseDaysInput(daysInp ? daysInp.value : "");
     pickerRender();
   }
 
@@ -2407,6 +2459,50 @@ const App = (() => {
     const added = addItems(selected);
     document.getElementById("slStatus").textContent = "Da them " + added + " goi vao gio!";
     pickerClose();
+  }
+
+  // v10.5: Copy text các gói đã tick (hoặc toàn bộ gói đang hiển thị nếu chưa tick).
+  // Format: Tên\tLoại\tNgày\tGiá\n — không kèm cột # và buttons.
+  async function pickerCopyText() {
+    const tbl = pickerTables[pickerActiveTab];
+    if (!tbl) { document.getElementById("slStatus").textContent = "⚠️ Picker rỗng."; return; }
+    // Lấy items để copy: nếu có tick → chỉ tick (cross-tab); nếu không tick → toàn bộ items đang HIỂN THỊ (sau filter) ở tab hiện tại
+    let rows = [];
+    if (pickerChecked.size > 0) {
+      // Đã tick → lấy theo key cross-tab
+      pickerChecked.forEach(key => {
+        const [tabIdx, itemIdx] = key.split("_").map(Number);
+        const t = pickerTables[tabIdx];
+        if (t && t.items[itemIdx]) rows.push(t.items[itemIdx]);
+      });
+    } else {
+      // Chưa tick → lấy toàn bộ items đang match filter ở tab hiện tại
+      const kw = (pickerSearchKw || "").toLowerCase();
+      rows = tbl.items.filter(item => pickerItemMatches(item, kw));
+    }
+    if (!rows.length) {
+      document.getElementById("slStatus").textContent = "⚠️ Không có gói nào để copy.";
+      return;
+    }
+    // Format: Tên\tLoại\tNgày\tGiá
+    const text = rows.map(item => {
+      const p = item.parsed || {};
+      const cells = [p.name || item.line || "", p.type || "", p.days || "", p.price || ""];
+      return cells.join("\t");
+    }).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói vào clipboard.`;
+    } catch (e) {
+      // Fallback: textarea
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch {}
+      ta.remove();
+      document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói (fallback).`;
+    }
   }
 
   async function slImport(idx)  { await slOpen(idx); }
@@ -5633,6 +5729,7 @@ const App = (() => {
     pickerDeselectAll,
     pickerClose,
     pickerConfirm,
+    pickerCopyText,
     pickerSwitchTab,
     pickerRefresh,
     pickerSetTypeFilter,
