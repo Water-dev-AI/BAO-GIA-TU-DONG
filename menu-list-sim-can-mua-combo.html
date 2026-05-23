@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.2 · 23/05/2026 · 08:38
+    Version 10.3 · 23/05/2026 · 09:01
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -391,10 +391,31 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
           </div>
         </div>
 
-        <!-- Nút action dưới cùng: Lưu giỏ + Xoá thông tin -->
-        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
-          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;flex:1;min-width:160px;font-weight:700;">💾 Lưu giỏ hiện tại</button>
+        <!-- Badge "Đang sửa đơn nháp" (chỉ hiện khi đang edit draft) -->
+        <div id="draftEditingBadge" style="display:none;margin-top:12px;padding:7px 11px;background:#dbeafe;border:1px solid #93c5fd;border-radius:7px;font-size:12px;color:#1e40af;">
+          📝 Đang sửa đơn nháp: <b id="draftEditingName"></b>
+          <span style="color:var(--muted);">—</span>
+          <a href="#" onclick="event.preventDefault();App.draftEditingClear()" style="color:#1e40af;text-decoration:underline;">Bỏ liên kết, lưu thành đơn mới</a>
+        </div>
+
+        <!-- Nút action: Trạng thái 1 (chưa edit draft nào) — 1 nút "Lưu giỏ hiện tại" -->
+        <div id="saveBarState1" style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+          <button class="blue" onclick="App.doSaveNewDraft()" style="margin:0;flex:1;min-width:160px;font-weight:700;">💾 Lưu giỏ hiện tại</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#374151;cursor:pointer;user-select:none;padding:6px 10px;border:1px solid #d8dee7;border-radius:7px;background:#fff;" title="Tick = Sau khi lưu sẽ xoá giỏ + thông tin VAT, sẵn sàng cho đơn tiếp theo. Bỏ tick = Giữ giỏ để edit tiếp.">
+            <input id="saveAutoClear1" type="checkbox" onchange="App.saveAutoClearChange(this.checked)" style="margin:0;cursor:pointer;" />
+            <span>Xoá sau khi lưu</span>
+          </label>
           <button onclick="App.cust2bClear()" style="margin:0;padding:9px 12px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Xoá hết Tên / Tag / VAT khỏi khung này">🧹 Xoá thông tin</button>
+        </div>
+
+        <!-- Nút action: Trạng thái 2 (đang edit draft) — 2 nút Cập nhật + Lưu thành đơn mới -->
+        <div id="saveBarState2" style="display:none;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+          <button class="blue" onclick="App.doUpdateDraft()" style="margin:0;flex:1;min-width:140px;font-weight:700;">💾 Cập nhật đơn</button>
+          <button onclick="App.doSaveAsNewDraft()" style="margin:0;flex:1;min-width:140px;font-weight:700;padding:9px 14px;background:var(--green);color:white;border:none;border-radius:8px;cursor:pointer;font-family:inherit;">➕ Lưu thành đơn mới</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#374151;cursor:pointer;user-select:none;padding:6px 10px;border:1px solid #d8dee7;border-radius:7px;background:#fff;" title="Tick = Sau khi lưu sẽ xoá giỏ + thông tin VAT.">
+            <input id="saveAutoClear2" type="checkbox" onchange="App.saveAutoClearChange(this.checked)" style="margin:0;cursor:pointer;" />
+            <span>Xoá sau khi lưu</span>
+          </label>
         </div>
       </div>
     </div>
@@ -1770,6 +1791,7 @@ const App = (() => {
     _lastCartSig = ""; // để lần add tiếp theo trigger regen mã
     // Clear cả section 2B
     Cust2B.clear();
+    _updateSaveBarUI(); // về State 1
     showStatus("✅ Đã xoá giỏ.");
   }
 
@@ -3307,6 +3329,7 @@ const App = (() => {
     const r = await DraftStore.upsert(draft);
     draftEditingId = draft.id;
     draftRender();
+    _updateSaveBarUI();
     // Sync VAT vào VAT DB online nếu có (VAT vẫn online, không thay đổi)
     if (p.vat && (p.vat.mst || p.vat.name) && typeof vatSaveToSheet === "function") {
       try {
@@ -3317,6 +3340,184 @@ const App = (() => {
     }
     if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp "${p.name}".`);
     else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
+  }
+
+  /* ─── Save state UI (v10.3) ──────────────────────────
+     Hàng nút Lưu có 2 trạng thái:
+     - State 1: chưa edit draft nào → 1 nút "Lưu giỏ hiện tại"
+     - State 2: đang edit draft → 2 nút "Cập nhật đơn" + "Lưu thành đơn mới"
+     Mỗi state có 1 checkbox "Xoá sau khi lưu" — preference lưu localStorage.
+  */
+  const AUTO_CLEAR_KEY = "combo_bill_save_auto_clear_v1";
+  function _getAutoClear() {
+    try {
+      const v = localStorage.getItem(AUTO_CLEAR_KEY);
+      // Mặc định tick (true) nếu chưa từng set
+      return v === null ? true : v === "1";
+    } catch { return true; }
+  }
+  function _setAutoClear(v) {
+    try { localStorage.setItem(AUTO_CLEAR_KEY, v ? "1" : "0"); } catch {}
+  }
+  function saveAutoClearChange(checked) {
+    _setAutoClear(checked);
+    // Sync cả 2 checkbox cho khớp
+    const cb1 = document.getElementById("saveAutoClear1");
+    const cb2 = document.getElementById("saveAutoClear2");
+    if (cb1) cb1.checked = checked;
+    if (cb2) cb2.checked = checked;
+  }
+
+  // Render lại UI hàng nút Lưu — gọi sau mọi action có thể đổi draftEditingId
+  function _updateSaveBarUI() {
+    const isEditing = !!draftEditingId;
+    const bar1 = document.getElementById("saveBarState1");
+    const bar2 = document.getElementById("saveBarState2");
+    const badge = document.getElementById("draftEditingBadge");
+    if (!bar1 || !bar2 || !badge) return;
+    if (isEditing) {
+      bar1.style.display = "none";
+      bar2.style.display = "flex";
+      const d = DraftStore.getById(draftEditingId);
+      if (d) {
+        badge.style.display = "block";
+        document.getElementById("draftEditingName").textContent = d.name || "(không tên)";
+      } else {
+        badge.style.display = "none";
+      }
+    } else {
+      bar1.style.display = "flex";
+      bar2.style.display = "none";
+      badge.style.display = "none";
+    }
+    // Sync checkbox với preference
+    const v = _getAutoClear();
+    const cb1 = document.getElementById("saveAutoClear1");
+    const cb2 = document.getElementById("saveAutoClear2");
+    if (cb1) cb1.checked = v;
+    if (cb2) cb2.checked = v;
+  }
+
+  // Bỏ liên kết draft đang edit (giữ giỏ, quay về Trạng thái 1)
+  function draftEditingClear() {
+    if (!draftEditingId) return;
+    draftEditingId = null;
+    _updateSaveBarUI();
+    showStatus("✅ Đã bỏ liên kết. Bấm 'Lưu giỏ hiện tại' sẽ tạo đơn nháp MỚI.");
+  }
+
+  // Clear toàn bộ sau khi lưu (cart + Cust2B + orderCode + draftEditingId)
+  function _clearAllAfterSave() {
+    cart = [];
+    saveCart();
+    render();
+    Cust2B.clear();
+    draftEditingId = null;
+    currentOrderCode = "";
+    const oc = document.getElementById("orderCode");
+    if (oc) oc.value = "";
+    _lastCartSig = "";
+    pendingVatFromImport = null;
+    pendingTagFromImport = "";
+    pendingImportPayload = null;
+    _updateSaveBarUI();
+    liveRecalc();
+  }
+
+  // ─── State 1: Tạo đơn nháp mới (chưa edit draft nào) ───
+  async function doSaveNewDraft() {
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
+      return;
+    }
+    Cust2B.syncFromDOM();
+    const payload = Cust2B.getDraftPayload();
+    if (!payload.name) {
+      // Hỏi tên bằng modal cũ
+      draftSaveOpen("", payload.tag, payload.customTag);
+      return;
+    }
+    // Check trùng tên với bất kỳ draft nào
+    const dup = DraftStore.getAll().find(x => _normName(x.name) === _normName(payload.name));
+    if (dup) {
+      const choice = await _askDuplicateName(dup, payload.name);
+      if (choice === "cancel") { showStatus("⏸ Đã huỷ lưu."); return; }
+      if (choice === "replace") {
+        draftEditingId = dup.id;
+        await _persistDraftFromCust2B();
+        _afterSaveAction();
+        return;
+      }
+      if (choice === "new") {
+        const newName = await _askNewName(payload.name);
+        if (newName === null) { showStatus("⏸ Đã huỷ lưu."); return; }
+        Cust2B.state.name = newName;
+        Cust2B.syncToDOM();
+        regenOrderCode();
+        draftEditingId = null;
+        await _persistDraftFromCust2B();
+        _afterSaveAction();
+        return;
+      }
+    }
+    // Không trùng → lưu thẳng
+    await _persistDraftFromCust2B();
+    _afterSaveAction();
+  }
+
+  // ─── State 2: Cập nhật đơn nháp đang edit ───
+  async function doUpdateDraft() {
+    if (!draftEditingId) { return doSaveNewDraft(); }
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
+      return;
+    }
+    Cust2B.syncFromDOM();
+    const payload = Cust2B.getDraftPayload();
+    if (!payload.name) {
+      draftSaveOpen("", payload.tag, payload.customTag);
+      return;
+    }
+    // Check trùng tên với draft KHÁC id đang edit
+    const dup = DraftStore.getAll().find(x =>
+      x.id !== draftEditingId && _normName(x.name) === _normName(payload.name)
+    );
+    if (dup) {
+      showStatus(`⚠️ Tên trùng đơn khác "${dup.name}". Đổi tên hoặc dùng "➕ Lưu thành đơn mới".`);
+      return;
+    }
+    await _persistDraftFromCust2B();
+    _afterSaveAction();
+  }
+
+  // ─── State 2: Lưu thành đơn mới (regen mã + bắt nhập tên khác) ───
+  async function doSaveAsNewDraft() {
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
+      return;
+    }
+    Cust2B.syncFromDOM();
+    const payload = Cust2B.getDraftPayload();
+    const currentName = payload.name || "";
+    // Bắt nhập tên mới (khác tên hiện tại + khác tên các draft khác)
+    const newName = await _askNewName(currentName);
+    if (newName === null) { showStatus("⏸ Đã huỷ lưu."); return; }
+    // Set tên mới + regen mã + bỏ liên kết draft cũ
+    Cust2B.state.name = newName;
+    Cust2B.syncToDOM();
+    regenOrderCode();
+    draftEditingId = null;
+    await _persistDraftFromCust2B();
+    _afterSaveAction();
+  }
+
+  // Sau khi lưu xong (cả 3 flow trên) → check checkbox auto-clear
+  function _afterSaveAction() {
+    if (_getAutoClear()) {
+      _clearAllAfterSave();
+    } else {
+      _updateSaveBarUI(); // chuyển sang State 2 (đang edit)
+    }
   }
 
   // --- Actions trên đơn nháp ---
@@ -3340,6 +3541,7 @@ const App = (() => {
     _lastCartSig = _cartSig();
     // Nhả cờ sau microtask để liveRecalc đầu tiên (do render trigger) skip
     setTimeout(() => { _loadingDraft = false; }, 200);
+    _updateSaveBarUI(); // chuyển sang State 2 (đang edit)
     let msg = `✅ Đã import đơn "${d.name}".`;
     if (d.orderCode) msg += ` Mã đơn: ${d.orderCode}.`;
     if (d.vat && (d.vat.mst || d.vat.name)) msg += " (Có VAT đã lưu.)";
@@ -3353,6 +3555,7 @@ const App = (() => {
     const r = await DraftStore.remove(id);
     if (draftEditingId === id) draftEditingId = null;
     draftRender();
+    _updateSaveBarUI();
     if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}".`);
     else showStatus(`⚠️ Xoá thất bại.`);
   }
@@ -3553,6 +3756,7 @@ const App = (() => {
         const r = await DraftStore.upsert(draft);
         draftEditingId = draft.id;
         draftRender();
+        _updateSaveBarUI();
         if (r && r.ok) showStatus(`✅ Đã ghi đè đơn nháp "${dup.name}".`);
         else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
         return;
@@ -3581,6 +3785,7 @@ const App = (() => {
         const r = await DraftStore.upsert(draft);
         draftEditingId = draft.id;
         draftRender();
+        _updateSaveBarUI();
         if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp mới "${newName}".`);
         else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
         return;
@@ -3600,6 +3805,7 @@ const App = (() => {
     const r = await DraftStore.upsert(draft);
     draftEditingId = draft.id;
     draftRender();
+    _updateSaveBarUI();
     if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}".`);
     else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
   }
@@ -5245,6 +5451,7 @@ const App = (() => {
   render();
   liveRecalc();
   Cust2B.syncToDOM(); // init UI section 2B
+  _updateSaveBarUI(); // init UI hàng nút Lưu (State 1)
   // Khi render lần đầu, gắn share param vào Cust2B nếu có pendingImportPayload đã được decode trước đó
 
   return {
@@ -5301,6 +5508,11 @@ const App = (() => {
     pickerRefresh,
     pickerSetTypeFilter,
     draftSaveOpen,
+    doSaveNewDraft,
+    doUpdateDraft,
+    doSaveAsNewDraft,
+    draftEditingClear,
+    saveAutoClearChange,
     draftSaveClose,
     draftSave,
     draftSelectTag,
