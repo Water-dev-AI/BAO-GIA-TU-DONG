@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.3 · 23/05/2026 · 09:01
+    Version 10.4 · 23/05/2026 · 09:14
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -257,18 +257,32 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
 
     <div class="card">
-      <h2>📋 Danh sách bảng giá</h2>
-      <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Bấm <b>Import</b> để mở picker chọn gói. Tên từng bộ giá được auto-detect từ hàng 1 sheet.
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <h2 style="margin:0;">📋 Danh sách bảng giá</h2>
+        <button onclick="App.slRefreshAll()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Clear cache + reload tất cả bảng giá">🔄 Refresh</button>
       </div>
 
-      <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên..."
-        oninput="App.slFilter()"
-        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:8px;" />
+      <!-- Progress bar pre-load (chỉ hiện khi đang load) -->
+      <div id="slPreloadBar" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px;">
+          <span id="slPreloadLabel">⏳ Đang tải bảng giá nhanh...</span>
+          <span id="slPreloadCount">0 / 0</span>
+        </div>
+        <div style="background:#eef2f7;border-radius:4px;height:6px;overflow:hidden;">
+          <div id="slPreloadFill" style="background:var(--blue);height:100%;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
 
-      <div id="slFavorites" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;"></div>
+      <!-- Search box + dropdown kết quả -->
+      <div style="position:relative;">
+        <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên..."
+          oninput="App.slFilter()" onfocus="App.slFilter()" onblur="App.slBlurSearch()"
+          style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;" />
+        <div id="slSearchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;max-height:340px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.08);"></div>
+      </div>
 
-      <div id="sheetListWrap" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding-right:4px;"></div>
+      <!-- Pills thanh nước nhanh -->
+      <div id="slFavorites" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;"></div>
 
       <div id="slRestoreWrap" style="margin-top:10px;display:none;">
         <button class="light" onclick="App.slRestorePresets()" style="margin:0;font-size:12px;padding:7px 12px;">
@@ -1878,44 +1892,105 @@ const App = (() => {
     { label: "🇦🇺 Úc-NZ",       id: "uc-newzealand" },
   ];
 
-  let slFavoriteId = ""; // preset ID đang được chọn từ favorites
+  let slFavoriteId = ""; // (deprecated v10.4) — giữ stub để compat
+  // v10.4: Set chứa preset ID đã pre-loaded để hiển thị dot trong UI
+  const _slPreloadCachedIds = new Set();
 
   function slRenderFavorites() {
     const wrap = document.getElementById("slFavorites");
     if (!wrap) return;
+    const list = slLoadAll();
     wrap.innerHTML = FAVORITE_COUNTRIES.map(f => {
-      const active = slFavoriteId === f.id;
-      const bg = active ? "background:var(--blue);color:white;" : "background:#eef2f7;color:#334155;";
-      return `<button onclick="App.slFavoriteSearch('${f.id}')" style="${bg}margin:0;padding:5px 10px;border:0;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;">${f.label}</button>`;
+      // Tìm item ứng với preset id
+      const item = list.find(x => x.presetId === f.id);
+      if (!item) {
+        // Preset đã bị xoá hoặc chưa có → vẫn hiện pill nhưng disabled
+        return `<button disabled style="opacity:0.4;cursor:not-allowed;background:#f3f4f6;color:#9ca3af;margin:0;padding:5px 10px;border:0;border-radius:14px;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;" title="Preset đã bị xoá">${escapeHtml(f.label)}</button>`;
+      }
+      const realIdx = list.indexOf(item);
+      // Trạng thái cache: ✓ = đã pre-loaded, ○ = chưa
+      const isCached = _slPreloadCachedIds.has(f.id);
+      const dot = isCached ? "🟢" : "⚪";
+      return `<button onclick="App.slPillClick(${realIdx})" style="background:#eef2f7;color:#334155;margin:0;padding:5px 10px;border:0;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;" title="${isCached ? '✅ Đã preload — bấm để mở ngay' : '⏳ Chưa preload — sẽ tải khi mở'}">${dot} ${escapeHtml(f.label)}</button>`;
     }).join("");
   }
 
-  function slFavoriteSearch(id) {
-    // Toggle: bấm lại pill đang active → bỏ chọn
-    if (slFavoriteId === id) {
-      slFavoriteId = "";
-    } else {
-      slFavoriteId = id;
-      // Clear search box khi dùng favorite (2 cơ chế độc lập)
-      slSearchKw = "";
-      const inp = document.getElementById("slSearch");
-      if (inp) inp.value = "";
-    }
-    slRender();
+  // Pill click: mở picker bảng giá tương ứng ngay (không filter)
+  async function slPillClick(idx) {
+    await slOpen(idx);
   }
 
   function slFilter() {
     slSearchKw = (document.getElementById("slSearch").value || "").trim();
-    // User gõ search thủ công → bỏ favorite filter
-    if (slSearchKw) slFavoriteId = "";
-    slRender();
+    slRenderDropdown();
   }
 
+  // Khi blur search box: delay để click trong dropdown kịp fire
+  let _slBlurTimer = null;
+  function slBlurSearch() {
+    if (_slBlurTimer) clearTimeout(_slBlurTimer);
+    _slBlurTimer = setTimeout(() => {
+      const dd = document.getElementById("slSearchDropdown");
+      if (dd) dd.style.display = "none";
+    }, 200);
+  }
+
+  // Render dropdown khi search có kw
+  function slRenderDropdown() {
+    const dd = document.getElementById("slSearchDropdown");
+    if (!dd) return;
+    const kw = ComboLogic.norm(slSearchKw);
+    if (!kw) { dd.style.display = "none"; return; }
+    const list = slLoadAll();
+    const filtered = list.filter(x => ComboLogic.norm(x.name).includes(kw)).slice(0, 12);
+
+    if (!filtered.length) {
+      dd.innerHTML = `<div style="padding:10px 12px;color:var(--muted);font-size:12.5px;font-style:italic;">Không tìm thấy bảng giá khớp "${escapeHtml(slSearchKw)}".</div>`;
+      dd.style.display = "block";
+      return;
+    }
+
+    dd.innerHTML = filtered.map(item => {
+      const realIdx = list.indexOf(item);
+      const badge = item.isPreset
+        ? '<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:9.5px;font-weight:700;margin-left:6px;vertical-align:middle;">📌</span>'
+        : '';
+      const isCached = item.presetId && _slPreloadCachedIds.has(item.presetId);
+      const dot = isCached ? "🟢" : "⚪";
+      // Action buttons: Share + Mở link (KHÔNG còn Import — bấm vào hàng = mở picker)
+      const actionBtns = item.url
+        ? `
+          <button class="blue" onmousedown="event.preventDefault();App.slShare(${realIdx})" style="margin:0;padding:5px 9px;font-size:11px;" title="Copy link bảng giá kèm chính sách giảm">🔗 Share</button>
+          <button class="light" onmousedown="event.preventDefault();App.slOpenUrl(${realIdx})" style="margin:0;padding:5px 9px;font-size:11px;" title="Mở Google Sheet trong tab mới">↗ Mở link</button>
+        `
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${item.isPreset ? '#f8fbff' : '#fff'};"
+             onmousedown="event.preventDefault();App.slDropdownPick(${realIdx})"
+             title="Bấm để mở picker chọn gói">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;line-height:1.35;">${dot} ${escapeHtml(item.name)}${badge}</div>
+          </div>
+          ${actionBtns}
+          <button onmousedown="event.preventDefault();App.slDelete(${realIdx})" style="margin:0;padding:4px 7px;font-size:11px;background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;cursor:pointer;" title="Xoá khỏi danh sách">✕</button>
+        </div>
+      `;
+    }).join("");
+    dd.style.display = "block";
+  }
+
+  // Dropdown item click → mở picker + đóng dropdown
+  async function slDropdownPick(idx) {
+    document.getElementById("slSearchDropdown").style.display = "none";
+    // Clear search box sau khi chọn
+    const inp = document.getElementById("slSearch");
+    if (inp) { inp.value = ""; slSearchKw = ""; }
+    await slOpen(idx);
+  }
+
+  // slRender giờ chỉ render favorites (không còn list 4 hàng nữa)
   function slRender() {
     slRenderFavorites();
-    const list = slLoadAll();
-    const wrap = document.getElementById("sheetListWrap");
-
     // Update restore button visibility
     const bl = loadPresetBlacklist();
     const restoreWrap = document.getElementById("slRestoreWrap");
@@ -1927,50 +2002,6 @@ const App = (() => {
         restoreWrap.style.display = "none";
       }
     }
-
-    // Filter: ưu tiên favorite ID (chính xác), fallback sang search text
-    let filtered;
-    if (slFavoriteId) {
-      filtered = list.filter(x => x.presetId === slFavoriteId);
-    } else {
-      const kw = ComboLogic.norm(slSearchKw);
-      filtered = kw ? list.filter(x => ComboLogic.norm(x.name).includes(kw)) : list;
-    }
-
-    if (!filtered.length) {
-      const msg = slFavoriteId
-        ? `Preset "${slFavoriteId}" không có trong danh sách. Có thể đã bị xoá.`
-        : (slSearchKw ? `Không tìm thấy bảng giá nào khớp "${slSearchKw}".` : 'Chưa có sheet nào. Thêm vào <code>sheets.json</code>.');
-      wrap.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px;">${msg}</div>`;
-      return;
-    }
-
-    wrap.innerHTML = filtered.map(item => {
-      const realIdx = list.indexOf(item);
-      const badge = item.isPreset
-        ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;">📌 PRESET</span>'
-        : '';
-      const actionBtns = item.url
-        ? `
-          <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.slImport(${realIdx})" title="Tải bảng giá">⬇️ Import</button>
-          <button class="blue"  style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.slShare(${realIdx})" title="Copy link bảng giá kèm chính sách giảm">🔗 Share</button>
-          <button class="light" style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.slOpenUrl(${realIdx})" title="Mở Google Sheet trong tab mới">↗ Mở</button>
-        `
-        : '<button class="light" style="margin:0;padding:7px 12px;font-size:12px;opacity:.5;cursor:not-allowed;" disabled>⬇️ Import</button>';
-      const urlDisplay = item.url
-        ? ''
-        : '<div style="font-size:11px;color:var(--red);font-style:italic;">⚠️ Chưa có URL — sửa <code>sheets.json</code> để bổ sung</div>';
-      return `
-        <div style="display:flex;align-items:center;gap:6px;background:${item.isPreset ? '#f0f7ff' : '#f9fafb'};border:1px solid var(--line);border-radius:10px;padding:10px 12px;flex-wrap:wrap;flex-shrink:0;">
-          <div style="flex:1;min-width:160px;">
-            <div style="font-weight:700;font-size:14px;line-height:1.4;">${item.name}${badge}</div>
-            ${urlDisplay}
-          </div>
-          ${actionBtns}
-          <button class="red" style="margin:0;padding:7px 9px;font-size:12px;" onclick="App.slDelete(${realIdx})" title="Xoá khỏi danh sách">✕</button>
-        </div>
-      `;
-    }).join("");
   }
 
   function slAdd() {
@@ -2083,6 +2114,11 @@ const App = (() => {
       try {
         csvText = await gsFetch(_csvUrl);
         csvCache.set(_csvUrl, { csvText, fetchedAt: Date.now() });
+        // Track cached → UI dot
+        if (item.presetId) {
+          _slPreloadCachedIds.add(item.presetId);
+          slRenderFavorites();
+        }
       } catch(e) {
         slHideLoading();
         document.getElementById("slStatus").textContent = "❌ Lỗi: " + e.message;
@@ -2364,6 +2400,73 @@ const App = (() => {
 
   async function slImport(idx)  { await slOpen(idx); }
   async function slPreview(idx) { await slOpen(idx); }
+
+  /* ─── PRE-LOAD bảng giá ưu tiên (v10.4) ──────────────
+     Khi mở app:
+     - Load các bảng có preset ID trong FAVORITE_COUNTRIES (~15 bảng).
+     - Tuần tự (không parallel) để tránh đụng rate limit Google Sheets.
+     - Cache vào csvCache (Map runtime, dùng chung với slOpen).
+     - Hiện progress bar dưới h2.
+     - Các bảng khác lazy load khi user click.
+  */
+  async function slPreloadFavorites() {
+    const list = slLoadAll();
+    // Filter: chỉ preset có trong FAVORITE_COUNTRIES + có URL
+    const targets = FAVORITE_COUNTRIES
+      .map(f => list.find(x => x.presetId === f.id))
+      .filter(item => item && item.url);
+
+    if (!targets.length) return;
+
+    const bar = document.getElementById("slPreloadBar");
+    const fill = document.getElementById("slPreloadFill");
+    const count = document.getElementById("slPreloadCount");
+    const label = document.getElementById("slPreloadLabel");
+    if (bar) bar.style.display = "block";
+    if (count) count.textContent = `0 / ${targets.length}`;
+
+    let done = 0;
+    for (const item of targets) {
+      try {
+        const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+        if (!csvUrl) { done++; continue; }
+        if (csvCache.has(csvUrl)) {
+          _slPreloadCachedIds.add(item.presetId);
+          done++;
+        } else {
+          if (label) label.textContent = `⏳ Đang tải: ${item.name}`;
+          const csvText = await gsFetch(csvUrl);
+          csvCache.set(csvUrl, { csvText, fetchedAt: Date.now() });
+          _slPreloadCachedIds.add(item.presetId);
+          done++;
+        }
+      } catch (e) {
+        console.warn("[Preload] Fail " + item.name + ":", e.message);
+        done++;
+      }
+      // Update UI
+      if (count) count.textContent = `${done} / ${targets.length}`;
+      if (fill) fill.style.width = `${Math.round(done / targets.length * 100)}%`;
+      // Re-render favorites để show dot xanh cho preset đã cache
+      slRenderFavorites();
+    }
+
+    // Done — hide bar sau 1.5s
+    if (label) label.textContent = `✅ Đã preload ${done}/${targets.length} bảng giá`;
+    setTimeout(() => {
+      if (bar) bar.style.display = "none";
+    }, 1500);
+  }
+
+  // Refresh: clear cache + reload favorites
+  async function slRefreshAll() {
+    if (!confirm("Clear cache hiện có và tải lại tất cả bảng giá ưu tiên?")) return;
+    csvCache.clear();
+    _slPreloadCachedIds.clear();
+    slRenderFavorites();
+    await slPreloadFavorites();
+    document.getElementById("slStatus").textContent = "✅ Đã refresh tất cả bảng giá ưu tiên.";
+  }
 
   /* ===== DRAFTS (đơn nháp) ===== */
   const DRAFT_KEY = "combo_bill_drafts_v3"; // v3: local-only (v10.2), không còn online
@@ -4585,6 +4688,9 @@ const App = (() => {
     if (presets.length) {
       slRender();
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
+      // v10.4: Sau khi có preset → preload các bảng giá trong FAVORITE_COUNTRIES
+      // Async, không block UI. Có progress bar riêng.
+      slPreloadFavorites();
     }
   });
 
@@ -5478,6 +5584,10 @@ const App = (() => {
     slOpenUrl,
     slFilter,
     slFavoriteSearch,
+    slPillClick,
+    slBlurSearch,
+    slDropdownPick,
+    slRefreshAll,
     slRestorePresets,
     updateShipFee,
     onManualDiscChange,
