@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.1 · 23/05/2026 · 08:29
+    Version 10.2 · 23/05/2026 · 08:38
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -466,10 +466,9 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
         <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
-        <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Để lưu giỏ hiện tại, dùng nút trong khung 2 phía trên.
+        Đơn nháp lưu <b>local</b> trong trình duyệt này (không đồng bộ giữa các máy). Xoá cache/cookie sẽ mất. Để lưu giỏ hiện tại, dùng nút <b>💾 Lưu giỏ hiện tại</b> ở khung 2 phía trên.
       </div>
       <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách hoặc mã đơn (DH...)..."
         oninput="App.draftFilter()"
@@ -2345,9 +2344,7 @@ const App = (() => {
   async function slPreview(idx) { await slOpen(idx); }
 
   /* ===== DRAFTS (đơn nháp) ===== */
-  const DRAFT_KEY = "combo_bill_drafts_v2"; // cache key, đổi v2 để clear cache cũ
-  const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày (server-side cũng tự purge)
-  const DRAFT_CACHE_TTL_MS = 60 * 60 * 1000; // 1h cache
+  const DRAFT_KEY = "combo_bill_drafts_v3"; // v3: local-only (v10.2), không còn online
 
   // Tag config: ZALO mặc định, ZALO OA, FB, KHÁC (custom text)
   const DRAFT_TAGS = [
@@ -2552,75 +2549,37 @@ const App = (() => {
   let pendingTagFromImport = "";   // "" | "ZALO" | "ZALO_OA" | "FB" | "KHAC"
 
   /* ─── DraftStore: online qua Web App, cache 1h trong localStorage ─── */
+  // DraftStore v10.2: local-only (localStorage). Không sync online nữa.
+  // Mất khi user xoá browser data hoặc dùng máy khác.
   const DraftStore = (() => {
-    let list = []; // in-memory
-    let cacheTs = 0;
+    let list = []; // in-memory mirror of localStorage
 
-    function loadCache() {
+    function _load() {
       try {
         const raw = localStorage.getItem(DRAFT_KEY);
-        if (!raw) return null;
+        if (!raw) return [];
         const obj = JSON.parse(raw);
-        if (!obj || !Array.isArray(obj.list)) return null;
-        return obj;
-      } catch { return null; }
+        if (Array.isArray(obj)) return obj;       // legacy format (array thẳng)
+        if (obj && Array.isArray(obj.list)) return obj.list; // v2 format ({list, ts})
+        return [];
+      } catch { return []; }
     }
-    function saveCache() {
+    function _save() {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ list, ts: cacheTs }));
-      } catch (e) { console.warn("[Drafts] cache save fail:", e); }
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(list));
+      } catch (e) { console.warn("[Drafts] save fail:", e); }
     }
 
-    function getAll() {
-      // Local TTL filter (defence) — server cũng tự purge
-      const now = Date.now();
-      return list.filter(d => (now - (d.createdAt || 0)) < DRAFT_TTL_MS);
-    }
-    function getById(id) {
-      return list.find(d => d.id === id) || null;
-    }
+    function getAll() { return list.slice(); }
+    function getById(id) { return list.find(d => d.id === id) || null; }
 
-    async function refresh(force) {
-      const cfg = vatGetCfg();
-      if (!cfg.webAppUrl) {
-        console.warn("[Drafts] Chưa cấu hình webAppUrl — drafts không hoạt động online.");
-        // Vẫn dùng cache nếu có
-        const cached = loadCache();
-        if (cached) { list = cached.list || []; cacheTs = cached.ts || 0; }
-        return false;
-      }
-      if (!force) {
-        // Dùng cache nếu còn fresh
-        const cached = loadCache();
-        if (cached && (Date.now() - (cached.ts || 0)) < DRAFT_CACHE_TTL_MS) {
-          list = cached.list || []; cacheTs = cached.ts || 0;
-          return true;
-        }
-      }
-      try {
-        const res = await fetch(cfg.webAppUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "drafts_list" }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "drafts_list fail");
-        list = Array.isArray(data.drafts) ? data.drafts : [];
-        cacheTs = Date.now();
-        saveCache();
-        console.log("[Drafts] Loaded " + list.length + " drafts từ sheet" + (data.purged ? " (purged " + data.purged + ")" : ""));
-        return true;
-      } catch (e) {
-        console.warn("[Drafts] refresh fail:", e.message);
-        const cached = loadCache();
-        if (cached) { list = cached.list || []; cacheTs = cached.ts || 0; }
-        return false;
-      }
+    // refresh() giờ chỉ load từ localStorage — async để tương thích API cũ
+    async function refresh(/* force */) {
+      list = _load();
+      return true;
     }
 
     async function upsert(draft) {
-      const cfg = vatGetCfg();
-      // Cập nhật local trước (optimistic) để UI mượt
       const idx = list.findIndex(d => d.id === draft.id);
       const now = Date.now();
       const merged = {
@@ -2629,55 +2588,14 @@ const App = (() => {
         updatedAt: now,
       };
       if (idx >= 0) list[idx] = merged; else list.unshift(merged);
-      saveCache();
-
-      if (!cfg.webAppUrl) {
-        showStatus("⚠️ Lưu local only (chưa cấu hình online).");
-        return { ok: false, offline: true };
-      }
-      try {
-        const res = await fetch(cfg.webAppUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "drafts_upsert",
-            id: draft.id,
-            name: draft.name,
-            tag: draft.tag || "ZALO",
-            customTag: draft.customTag || "",
-            orderCode: draft.orderCode || "",
-            cart: draft.cart || [],
-            vat: draft.vat || null,
-          }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "drafts_upsert fail");
-        cacheTs = Date.now();
-        saveCache();
-        return data;
-      } catch (e) {
-        console.warn("[Drafts] upsert fail:", e.message);
-        return { ok: false, error: e.message };
-      }
+      _save();
+      return { ok: true };
     }
 
     async function remove(id) {
-      const cfg = vatGetCfg();
-      // Optimistic remove
       list = list.filter(d => d.id !== id);
-      saveCache();
-      if (!cfg.webAppUrl) return { ok: false, offline: true };
-      try {
-        const res = await fetch(cfg.webAppUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "drafts_delete", id: id }),
-        });
-        const data = await res.json();
-        return data;
-      } catch (e) {
-        return { ok: false, error: e.message };
-      }
+      _save();
+      return { ok: true };
     }
 
     return { refresh, upsert, remove, getAll, getById };
@@ -2838,12 +2756,10 @@ const App = (() => {
       return;
     }
     d.name = newName;
-    slShowLoading("💾 Đang đổi tên...");
     const r = await DraftStore.upsert(d);
-    slHideLoading();
     draftRender();
     if (r && r.ok) showStatus(`✅ Đã đổi tên thành "${newName}".`);
-    else showStatus("⚠️ Đổi tên local — sync online thất bại.");
+    else showStatus("⚠️ Đổi tên thất bại.");
   }
 
   // Inline edit mã đơn — input + Lưu/Huỷ
@@ -2877,12 +2793,10 @@ const App = (() => {
     const newCode = (inp.value || "").trim();
     if (newCode === (d.orderCode || "")) { draftRender(); return; }
     d.orderCode = newCode;
-    slShowLoading("💾 Đang cập nhật mã đơn...");
     const r = await DraftStore.upsert(d);
-    slHideLoading();
     draftRender();
     if (r && r.ok) showStatus(`✅ Đã cập nhật mã đơn cho "${d.name}".`);
-    else showStatus("⚠️ Cập nhật local — sync online thất bại.");
+    else showStatus("⚠️ Cập nhật thất bại.");
   }
 
   // Normalize tên để compare trùng — lower + trim + collapse whitespace
@@ -3390,12 +3304,10 @@ const App = (() => {
         vat: p.vat,
       };
     }
-    slShowLoading("💾 Đang lưu đơn nháp lên sheet…");
     const r = await DraftStore.upsert(draft);
-    slHideLoading();
     draftEditingId = draft.id;
     draftRender();
-    // Sync VAT vào VAT DB nếu có và webApp configured
+    // Sync VAT vào VAT DB online nếu có (VAT vẫn online, không thay đổi)
     if (p.vat && (p.vat.mst || p.vat.name) && typeof vatSaveToSheet === "function") {
       try {
         await vatSaveToSheet({
@@ -3403,9 +3315,8 @@ const App = (() => {
         });
       } catch (e) { /* silent fail — không block UX */ }
     }
-    if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp "${p.name}" lên sheet.`);
-    else if (r && r.offline) showStatus(`⚠️ Đã lưu local (chưa cấu hình sheet online).`);
-    else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
+    if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp "${p.name}".`);
+    else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
   }
 
   // --- Actions trên đơn nháp ---
@@ -3438,15 +3349,12 @@ const App = (() => {
   async function draftDelete(id) {
     const d = DraftStore.getById(id);
     if (!d) return;
-    if (!confirm(`Xoá đơn nháp "${d.name}"?\nXoá khỏi sheet online luôn.`)) return;
-    slShowLoading("🗑 Đang xoá đơn nháp khỏi sheet…");
+    if (!confirm(`Xoá đơn nháp "${d.name}"?`)) return;
     const r = await DraftStore.remove(id);
-    slHideLoading();
     if (draftEditingId === id) draftEditingId = null;
     draftRender();
-    if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}" khỏi sheet.`);
-    else if (r && r.offline) showStatus(`⚠️ Đã xoá local (chưa online).`);
-    else showStatus(`⚠️ Đã xoá local — sync online thất bại.`);
+    if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}".`);
+    else showStatus(`⚠️ Xoá thất bại.`);
   }
 
   // --- Share link (encode draft vào URL hash) ---
@@ -3632,7 +3540,6 @@ const App = (() => {
         showStatus(`✅ Đã import "${p.name}" vào giỏ (không lưu draft do trùng tên).`);
         return;
       }
-      slShowLoading("📥 Đang lưu đơn nháp…");
       if (choice === "replace") {
         // Update draft cũ với data mới từ link
         const draft = {
@@ -3644,11 +3551,10 @@ const App = (() => {
           vat: p.vat || null,
         };
         const r = await DraftStore.upsert(draft);
-        slHideLoading();
         draftEditingId = draft.id;
         draftRender();
         if (r && r.ok) showStatus(`✅ Đã ghi đè đơn nháp "${dup.name}".`);
-        else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
+        else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
         return;
       }
       if (choice === "new") {
@@ -3658,7 +3564,6 @@ const App = (() => {
           showStatus(`⏸ Đã huỷ lưu draft. Giỏ vẫn giữ.`);
           return;
         }
-        slShowLoading("📥 Đang lưu đơn nháp…");
         // Regen mã đơn mới (vì đơn mới)
         regenOrderCode();
         const draft = {
@@ -3674,11 +3579,10 @@ const App = (() => {
         Cust2B.state.name = newName;
         Cust2B.syncToDOM();
         const r = await DraftStore.upsert(draft);
-        slHideLoading();
         draftEditingId = draft.id;
         draftRender();
         if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp mới "${newName}".`);
-        else showStatus(`⚠️ Đã lưu local — sync online thất bại.`);
+        else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
         return;
       }
     }
@@ -3694,11 +3598,10 @@ const App = (() => {
       vat: p.vat || null,
     };
     const r = await DraftStore.upsert(draft);
-    slHideLoading();
     draftEditingId = draft.id;
     draftRender();
-    if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}" lên sheet.`);
-    else showStatus(`⚠️ Đã import + lưu local — sync online thất bại.`);
+    if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}".`);
+    else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
   }
 
   // Hỏi user khi import link mà tên trùng draft đã có
@@ -3723,13 +3626,10 @@ const App = (() => {
   draftCheckUrlHash();
 
   async function draftsManualRefresh() {
-    showStatus("⏳ Đang refresh đơn nháp từ sheet…");
-    slShowLoading("🔄 Đang load đơn nháp từ Google Sheet…");
-    const ok = await DraftStore.refresh(true);
-    slHideLoading();
+    // v10.2: local-only — chỉ reload từ localStorage để render lại
+    await DraftStore.refresh();
     draftRender();
-    if (ok) showStatus(`✅ Đã refresh ${DraftStore.getAll().length} đơn nháp.`);
-    else showStatus("⚠️ Refresh thất bại — đang dùng cache.");
+    showStatus(`✅ Đã load ${DraftStore.getAll().length} đơn nháp local.`);
   }
 
   /* ===== QR THANH TOÁN ===== */
