@@ -170,7 +170,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 8.3 · 22/05/2026 · 17:05
+    Version 8.4 · 22/05/2026 · 17:25
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3211,11 +3211,14 @@ const App = (() => {
   function parseSharePayload(hash) {
     if (!hash) return null;
     const m = hash.match(/[#&]d=([^&]+)/);
-    if (!m) return null;
+    if (!m) {
+      console.warn("[parseSharePayload] no #d= in hash:", hash.substring(0, 80));
+      return null;
+    }
     try {
       const json = urlSafeDecode(m[1]);
       const data = JSON.parse(json);
-      return {
+      const result = {
         name: String(data.n || ""),
         tag: String(data.t || "ZALO"),
         customTag: String(data.ct || ""),
@@ -3232,6 +3235,16 @@ const App = (() => {
           note: String(x.nt || "")
         }))
       };
+      console.debug("[parseSharePayload] decoded payload:", {
+        rawHasVat: !!data.vat,
+        rawVat: data.vat,
+        parsedVat: result.vat,
+        name: result.name,
+        orderCode: result.orderCode,
+        cartLen: result.cart.length,
+        hashLen: hash.length,
+      });
+      return result;
     } catch (e) {
       console.warn("parseSharePayload failed:", e);
       return null;
@@ -3326,6 +3339,8 @@ const App = (() => {
     if (p.orderCode) setOrderCode(p.orderCode);
     // Restore Cust2B từ link share (gồm VAT + tag + name)
     Cust2B.loadFromImport(p);
+    console.debug("[draftImportConfirm] sau loadFromImport, Cust2B.state:", JSON.parse(JSON.stringify(Cust2B.state)));
+    console.debug("[draftImportConfirm] DOM cust2bVatMst.value =", (document.getElementById("cust2bVatMst") || {}).value);
     // Pending* để fallback (Payload modal đọc nếu chưa save thành draft)
     pendingVatFromImport = p.vat && (p.vat.mst || p.vat.name) ? { ...p.vat } : null;
     pendingTagFromImport = draftTagToSpTag(p.tag);
