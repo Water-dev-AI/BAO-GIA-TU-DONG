@@ -72,13 +72,47 @@
 
   /* ── Cart table ── */
   .cart-wrap { overflow-x: auto; }
-  table.cart-table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; table-layout: fixed; }
+  /* Layout 2A: grid 2 cột (giỏ trái + bill phải), mobile thì stack */
+  .cart-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  @media (max-width: 880px) {
+    .cart-grid { grid-template-columns: 1fr; }
+  }
+  .cart-grid > .cart-grid-left { min-width: 0; }
+  .cart-grid > .cart-grid-right { min-width: 0; }
+  /* Hàng action dưới giỏ — wrap tự động, gọn */
+  .row-action-bar {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    padding: 8px 10px; background: #f7f9fc; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .row-action-bar input.mini {
+    width: 70px; padding: 6px 8px; font-size: 12px; border: 1px solid #cfd5df; border-radius: 6px;
+    font-family: inherit; text-align: center;
+  }
+  .row-action-bar .mini-label {
+    font-size: 10.5px; color: var(--muted); margin-right: -2px; font-weight: 600;
+  }
+  .row-action-bar > .spacer { flex: 1; }
+
+  /* Notes phân bổ inline expand (toggle) */
+  .notes-expand {
+    margin-top: 8px;
+    display: none;
+  }
+  .notes-expand.open { display: block; }
+
+  /* Cart table — layout v8.6: cột Tên rộng để chứa "Plus New Zealand, Australia, 30 Days, 500MB/day, 128kbps" trên 1 dòng */
+  table.cart-table { width: 100%; border-collapse: collapse; background: white; font-size: 12.5px; table-layout: auto; }
   table.cart-table th {
     background: #f0f4f8;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
     color: #444d5a;
-    padding: 8px 10px;
+    padding: 7px 8px;
     border-bottom: 2px solid #d0d7e0;
     text-align: left;
     white-space: nowrap;
@@ -86,21 +120,44 @@
     top: 0;
   }
   table.cart-table td {
-    padding: 7px 10px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--line);
     vertical-align: middle;
   }
   table.cart-table tr:hover td { background: #f7fafc; }
-  table.cart-table td.td-no  { width: 48px;  color: var(--muted); font-size: 12px; text-align: center; }
-  table.cart-table td.td-pkg { min-width: 220px; }
-  table.cart-table td.td-qty { width: 108px; }
-  table.cart-table td.td-note { width: 180px; }
-  table.cart-table td.td-del  { width: 72px; text-align: center; }
-  .pkg-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
+  table.cart-table td.td-no  { width: 36px;  color: var(--muted); font-size: 11.5px; text-align: center; padding-left:6px; padding-right:4px; }
+  /* Cột tên gói co dãn — chiếm phần còn lại sau khi các cột fixed lấy width */
+  table.cart-table td.td-pkg { padding-left:6px; padding-right:6px; }
+  table.cart-table th.th-pkg { padding-left:6px; padding-right:6px; }
+  /* Loại / Ngày / Giá: gọn, sát trái */
+  table.cart-table td.td-type, table.cart-table th.th-type { width: 60px; padding-left:4px; padding-right:4px; font-size:11.5px; }
+  table.cart-table td.td-days, table.cart-table th.th-days { width: 64px; padding-left:4px; padding-right:4px; font-size:11.5px; white-space:nowrap; }
+  table.cart-table td.td-price, table.cart-table th.th-price { width: 70px; padding-left:4px; padding-right:4px; text-align:right; white-space:nowrap; }
+  table.cart-table td.td-qty { width: 60px; padding-left:2px; padding-right:2px; }
+  table.cart-table td.td-actions { width: 72px; padding-left:2px; padding-right:4px; text-align:center; }
+  table.cart-table td.td-del  { width: 40px; text-align: center; padding-left:2px; padding-right:6px; }
+  /* Font condensed nhẹ giúp tên gói dài fit 1 dòng */
+  .pkg-text { font-size: 12.5px; line-height: 1.35; word-break: normal; overflow-wrap: anywhere; font-stretch: 95%; letter-spacing: -0.1px; }
 
-  input.qty  { width: 92px;  padding: 6px 8px; font-size: 13px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; text-align: center; }
+  /* Ô SL max 3 ký tự — width tối thiểu để chứa 3 số + cho phép "N99" */
+  input.qty  { width: 52px;  padding: 5px 6px; font-size: 12.5px; border: 1px solid #cfd5df; border-radius: 6px; font-family: inherit; text-align: center; }
   input.qty.invalid { border-color: var(--red); background: #fef2f2; }
   input.note { width: 100%;  padding: 6px 8px; font-size: 12px; border: 1px solid #cfd5df; border-radius: 8px; font-family: inherit; }
+
+  /* Nút mini trong cột actions (💬 note, dự phòng sau này) */
+  .row-mini-btn {
+    margin: 0; padding: 4px 7px; font-size: 12px; line-height: 1;
+    background: #eef2f7; color: #374151; border: 1px solid #d8dee7;
+    border-radius: 6px; cursor: pointer;
+  }
+  .row-mini-btn:hover { background: #dbe4ec; }
+  .row-mini-btn.has-data { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+  /* Note inline popover (hiện khi bấm 💬) */
+  .row-note-popover {
+    margin-top: 4px; padding: 6px;
+    background: #fffbe7; border: 1px solid #fde68a; border-radius: 6px;
+  }
+  .row-note-popover input { width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #fcd34d; border-radius: 4px; font-family: inherit; }
 
   pre {
     margin: 0;
@@ -170,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 8.5 · 22/05/2026 · 18:00
+    Version 9.0 · 23/05/2026 · 02:17
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -223,24 +280,57 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <h2 style="margin:0;">2A) Giỏ cần mua <span id="cartCount" class="pill">0 dòng</span></h2>
         <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
       </div>
-      <div class="cart-wrap">
-        <table class="cart-table">
-          <thead>
-            <tr>
-              <th style="width:52px;text-align:center;">#</th>
-              <th>Tên gói</th>
-              <th style="width:80px;text-align:center;">Loại</th>
-              <th style="width:90px;text-align:center;">Ngày</th>
-              <th style="width:95px;text-align:right;">Giá</th>
-              <th style="width:108px;text-align:center;">SL <span style="font-weight:400;color:var(--muted);font-size:11px;">(N=nạp)</span></th>
-              <th style="width:170px;">Note</th>
-              <th style="width:68px;text-align:center;">Xoá</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
+
+      <!-- Grid 2 cột: GIỎ HÀNG (trái) + BILL PREVIEW (phải) -->
+      <div class="cart-grid">
+        <div class="cart-grid-left">
+          <div class="cart-wrap">
+            <table class="cart-table">
+              <thead>
+                <tr>
+                  <th class="th-no" style="text-align:center;">#</th>
+                  <th class="th-pkg">Tên gói</th>
+                  <th class="th-type">Loại</th>
+                  <th class="th-days">Ngày</th>
+                  <th class="th-price" style="text-align:right;">Giá</th>
+                  <th class="th-qty" style="text-align:center;">SL</th>
+                  <th class="th-actions" style="text-align:center;">•••</th>
+                  <th class="th-del" style="text-align:center;">✕</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="totals" id="quickTotals"></div>
+        </div>
+        <div class="cart-grid-right">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:12.5px;font-weight:700;color:#1f2937;">📋 Bill khách (live)</div>
+            <button onclick="App.toggleNotesExpand()" id="notesExpandBtn" style="margin:0;padding:4px 9px;background:#eef2f7;color:#374151;font-size:11px;border:1px solid #d8dee7;border-radius:6px;cursor:pointer;" title="Note phân bổ giảm giá">📊 Note phân bổ ▼</button>
+          </div>
+          <pre id="billOutput" style="font-size:12px;line-height:1.5;padding:10px;max-height:420px;overflow:auto;">Chưa có kết quả.</pre>
+          <div id="notesExpandWrap" class="notes-expand">
+            <div style="font-size:11.5px;font-weight:700;color:#1f2937;margin-bottom:4px;">📊 Notes phân bổ giảm giá</div>
+            <pre id="notesOutput" style="font-size:11.5px;line-height:1.5;padding:8px;max-height:280px;overflow:auto;">Chưa có notes.</pre>
+          </div>
+        </div>
       </div>
-      <div class="totals" id="quickTotals"></div>
+
+      <!-- Hàng action nén dưới giỏ + bill -->
+      <div class="row-action-bar">
+        <button class="blue" onclick="App.calcAndCopyBill()" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
+        <button class="blue" onclick="App.calcAndCopyBillShort()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
+        <span class="spacer"></span>
+        <span class="mini-label">🚚 Ship (k)</span>
+        <input id="shipFeeK" class="mini" type="number" min="0" value="0" placeholder="0" oninput="App.updateShipFee()" />
+        <span class="mini-label">💸 Giảm (k)</span>
+        <input id="manualDiscK" class="mini" type="number" min="0" value="" placeholder="—" oninput="App.onManualDiscChange('k')" />
+        <span class="mini-label">💸 Giảm (%, ≤15)</span>
+        <input id="manualDiscPct" class="mini" type="number" min="0" max="15" step="0.1" value="" placeholder="—" oninput="App.onManualDiscChange('pct')" />
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">
+        Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
+      </div>
     </div>
 
     <!-- ====== Section 2B: Thông tin khách + VAT ====== -->
@@ -315,90 +405,30 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
 
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
-          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;">💾 Lưu giỏ hiện tại</button>
-        </div>
-      </div>
-      <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Cache 1h, bấm 🔄 để load ngay. Bấm <b>Share</b> tạo link gửi cho người khác.
-      </div>
-      <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách..."
-        oninput="App.draftFilter()"
-        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
-      <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
-    </div>
-
-    <div class="card">
-      <h2>3) Chốt combo</h2>
-      <button class="blue" onclick="App.calcAndCopyBill()">📋 Copy Bill khách</button>
-      <button class="blue" onclick="App.calcAndCopyBillShort()" style="background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
-
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">🚚 Phí ship (k)</div>
-          <input id="shipFeeK" type="number" min="0" value="0" placeholder="0"
-            oninput="App.updateShipFee()"
-            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">💸 Giảm thủ công (k)</div>
-          <input id="manualDiscK" type="number" min="0" value="" placeholder="—"
-            oninput="App.onManualDiscChange('k')"
-            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">💸 Giảm thủ công (% — tối đa 15)</div>
-          <input id="manualDiscPct" type="number" min="0" max="15" step="0.1" value="" placeholder="—"
-            oninput="App.onManualDiscChange('pct')"
-            style="width:90px;padding:7px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
-        </div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.4;flex:1;min-width:160px;">
-          Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
-        </div>
-      </div>
-    </div>
-
-    <div class="cols">
-      <div class="card">
-        <h2>Bill khách</h2>
-        <pre id="billOutput">Chưa có kết quả.</pre>
-      </div>
-      <div class="card">
-        <h2>Notes phân bố giảm giá</h2>
-        <pre id="notesOutput">Chưa có notes.</pre>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>4) QR thanh toán</h2>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f3f4f6;border-radius:8px;">
-        <span style="font-size:11px;color:var(--muted);font-weight:600;">Tài khoản nhận:</span>
+      <h2 style="margin:0 0 10px;">3) QR thanh toán</h2>
+      <!-- Hàng 1: STK toggle + Mã đơn + Tổng (compact, wrap nếu mobile) -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f3f4f6;border-radius:8px;">
+        <span style="font-size:11px;color:var(--muted);font-weight:600;">STK:</span>
         <div id="stkToggleWrap" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px;">
-        <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Mã đơn hàng (auto)</div>
-          <div style="display:flex;gap:6px;">
-            <input id="orderCode" type="text" readonly
-              style="width:160px;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;font-family:'Roboto Mono',monospace;background:#f9fafb;" />
-            <button class="light" onclick="App.regenOrderCode()" style="margin:0;padding:9px 12px;" title="Tạo mã mới">🔄</button>
-          </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:var(--muted);font-weight:600;">Mã đơn:</span>
+          <input id="orderCode" type="text" readonly
+            style="width:135px;padding:6px 9px;border:1px solid #cfd5df;border-radius:7px;font-size:12px;font-family:'Roboto Mono',monospace;background:#fff;" />
+          <button class="light" onclick="App.regenOrderCode()" style="margin:0;padding:6px 8px;font-size:11px;" title="Tạo mã mới">🔄</button>
         </div>
-        <div style="flex:1;min-width:200px;">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tổng thanh toán</div>
-          <div id="qrTotalDisplay" style="font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">0k</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <span style="font-size:11px;color:var(--muted);font-weight:600;">Tổng:</span>
+          <span id="qrTotalDisplay" style="font-size:16px;font-weight:700;color:var(--green);">0k</span>
         </div>
       </div>
 
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-        <button class="green" onclick="App.qrGenerate()">🎨 Tạo QR thanh toán</button>
-        <button class="blue" onclick="App.qrGenerateFull()">🖼️ Tạo Ảnh báo giá full</button>
-        <button class="amber" onclick="App.qrCustomOpen()" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
-        <button class="light" onclick="App.qrCopySTK()" title="Copy thông tin chuyển khoản text">📋 Copy thông tin CK</button>
-        <button style="background:#0e7c3a;color:white;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Payload Sheet</button>
+      <!-- Hàng 2: 5 nút action (rút gọn) -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+        <button class="green" onclick="App.qrGenerate()" style="margin:0;padding:8px 12px;font-size:12.5px;">🎨 QR TT</button>
+        <button class="blue" onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;">🖼️ Báo giá</button>
+        <button class="amber" onclick="App.qrCustomOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
+        <button class="light" onclick="App.qrCopySTK()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Copy thông tin chuyển khoản text">📋 Thông tin CK</button>
+        <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Nhập sổ</button>
       </div>
 
       <div id="qrResultWrap" style="display:none;">
@@ -427,6 +457,24 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       </div>
 
       <div id="qrStatus" class="status" style="font-size:13px;margin-top:8px;"></div>
+    </div>
+
+    <!-- ====== Đơn nháp (đặt cuối cùng — sau QR) ====== -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <h2 style="margin:0;">💾 Đơn nháp <span id="draftCount" class="pill">0 đơn</span></h2>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="App.draftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Reload đơn nháp từ Google Sheet">🔄 Refresh</button>
+          <button class="blue" onclick="App.draftSaveOpen()" style="margin:0;">💾 Lưu giỏ hiện tại</button>
+        </div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
+        Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Cache 1h, bấm 🔄 để load ngay. Bấm <b>Share</b> tạo link gửi cho người khác.
+      </div>
+      <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách..."
+        oninput="App.draftFilter()"
+        style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
+      <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
     </div>
   </div>
 </div>
@@ -605,9 +653,15 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <!-- content render động — dùng block layout, không flex, để children giữ height tự nhiên -->
     </div>
     <div class="picker-footer" style="flex-wrap:wrap;gap:6px;">
-      <button class="blue" style="flex:1;" onclick="App.draftViewCopyBill()">📋 Copy Bill (chỉ copy)</button>
-      <button class="green" style="flex:1;" onclick="App.draftViewImport()">📥 Import để chỉnh sửa</button>
-      <button class="light" onclick="App.draftViewClose()">Đóng</button>
+      <!-- Hàng 1: copy nhanh -->
+      <button class="blue" onclick="App.draftViewCopyBill()" style="margin:0;padding:8px 11px;font-size:12px;">📋 Bill</button>
+      <button onclick="App.draftViewCopyQR()" style="margin:0;padding:8px 11px;font-size:12px;background:var(--green);color:white;border:none;border-radius:7px;cursor:pointer;">🎨 QR TT</button>
+      <button onclick="App.draftViewCopyFullImage()" style="margin:0;padding:8px 11px;font-size:12px;background:#2563eb;color:white;border:none;border-radius:7px;cursor:pointer;">🖼️ Báo giá</button>
+      <button onclick="App.draftViewCopyPayload()" style="margin:0;padding:8px 11px;font-size:12px;background:#0e7c3a;color:white;border:none;border-radius:7px;cursor:pointer;">📤 Copy mã nhập</button>
+      <!-- Spacer + nút chính -->
+      <span style="flex:1;min-width:8px;"></span>
+      <button class="green" onclick="App.draftViewImport()" style="margin:0;padding:8px 14px;font-size:12.5px;font-weight:700;">📥 Import để chỉnh sửa</button>
+      <button class="light" onclick="App.draftViewClose()" style="margin:0;padding:8px 11px;font-size:12px;">Đóng</button>
     </div>
   </div>
 </div>
@@ -1376,20 +1430,31 @@ const App = (() => {
       if (p.note) {
         const noteDiv = document.createElement("div");
         noteDiv.textContent = "ⓘ " + p.note;
-        noteDiv.style.cssText = "font-size:11px;color:#0ea5e9;font-style:italic;margin-top:3px;line-height:1.4;white-space:pre-wrap;word-break:break-word;";
+        noteDiv.style.cssText = "font-size:11px;color:#0ea5e9;font-style:italic;margin-top:3px;line-height:1.35;white-space:pre-wrap;word-break:break-word;";
         tdName.appendChild(noteDiv);
+      }
+      // Nếu user đã điền custom note → hiển thị inline ngay dưới tên (nhỏ, vàng)
+      if (item.note) {
+        const customNoteDiv = document.createElement("div");
+        customNoteDiv.id = `customNote_${idx}`;
+        customNoteDiv.textContent = "💬 " + item.note;
+        customNoteDiv.style.cssText = "font-size:11px;color:#92400e;background:#fef9e7;padding:2px 6px;border-radius:4px;margin-top:3px;line-height:1.35;display:inline-block;";
+        tdName.appendChild(customNoteDiv);
       }
 
       const tdType = document.createElement("td");
-      tdType.style.cssText = "text-align:center;font-size:12px;color:#444;";
+      tdType.className = "td-type";
+      tdType.style.cssText = "color:#444;";
       tdType.textContent = p.type;
 
       const tdDays = document.createElement("td");
-      tdDays.style.cssText = "text-align:center;font-size:12px;color:#444;white-space:nowrap;";
+      tdDays.className = "td-days";
+      tdDays.style.cssText = "color:#444;";
       tdDays.textContent = p.days;
 
       const tdPrice = document.createElement("td");
-      tdPrice.style.cssText = "text-align:right;font-weight:600;color:var(--green);white-space:nowrap;";
+      tdPrice.className = "td-price";
+      tdPrice.style.cssText = "font-weight:600;color:var(--green);";
       tdPrice.textContent = p.price;
 
       const tdQty = document.createElement("td");
@@ -1398,12 +1463,12 @@ const App = (() => {
       const qty = document.createElement("input");
       qty.className = "qty";
       qty.type = "text";
+      qty.maxLength = 3; // SL tối đa 3 ký tự (vd "99" hoặc "N9")
       qty.value = item.qty ?? 1;
       qty.placeholder = "1";
       qty.title = "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
       const validateQty = () => {
         const parsed = ComboLogic.parseQtyExpression(qty.value);
-        // Check kỹ: nếu có N mà type là ESIM → đánh dấu lỗi
         const typeNorm = (p.type || "").toLowerCase();
         const isPhysical = typeNorm.includes("sim vat ly") || typeNorm.includes("sim vật lý");
         const isEsim = typeNorm.includes("esim");
@@ -1411,35 +1476,69 @@ const App = (() => {
         const nOnEsim = hasRecharge && isEsim && !isPhysical;
         const invalid = !parsed.valid || nOnEsim;
         qty.classList.toggle("invalid", invalid);
-        if (nOnEsim) {
-          qty.title = "❌ Lỗi: Nạp gói (N) chỉ áp dụng cho SIM VẬT LÝ, không áp dụng cho ESIM. Hãy bỏ chữ N.";
-        } else {
-          qty.title = "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
-        }
+        if (nOnEsim) qty.title = "❌ Nạp gói (N) chỉ áp dụng cho SIM VẬT LÝ.";
+        else qty.title = "Cú pháp: 2 | N3 | 2+N3 (max 3 ký tự)";
       };
       qty.oninput = () => { cart[idx].qty = qty.value; saveCart(); validateQty(); updateQuickTotals(); };
       validateQty();
       tdQty.appendChild(qty);
 
-      const tdNote = document.createElement("td");
-      tdNote.className = "td-note";
-      const note = document.createElement("input");
-      note.className = "note";
-      note.placeholder = "tuỳ chọn";
-      note.value = item.note || "";
-      note.oninput = () => { cart[idx].note = note.value; saveCart(); };
-      tdNote.appendChild(note);
+      // Cột actions: 💬 Note (dự phòng thêm 1-2 nút sau)
+      const tdActions = document.createElement("td");
+      tdActions.className = "td-actions";
+      const noteBtn = document.createElement("button");
+      noteBtn.className = "row-mini-btn";
+      noteBtn.textContent = "💬";
+      noteBtn.title = item.note ? `Note: ${item.note}` : "Thêm note cho dòng này";
+      if (item.note) noteBtn.classList.add("has-data");
+      noteBtn.onclick = (ev) => { ev.stopPropagation(); App.toggleRowNote(idx); };
+      tdActions.appendChild(noteBtn);
+      // Popover note inline (ẩn mặc định, sẽ toggle)
+      const notePopover = document.createElement("div");
+      notePopover.id = `notePopover_${idx}`;
+      notePopover.className = "row-note-popover";
+      notePopover.style.display = "none";
+      const noteInput = document.createElement("input");
+      noteInput.type = "text";
+      noteInput.placeholder = "Note cho dòng này (Enter để lưu)";
+      noteInput.value = item.note || "";
+      noteInput.oninput = () => {
+        cart[idx].note = noteInput.value;
+        saveCart();
+        // Update nút state + inline display
+        noteBtn.classList.toggle("has-data", !!noteInput.value);
+        const inlineEl = document.getElementById(`customNote_${idx}`);
+        if (inlineEl) inlineEl.textContent = "💬 " + noteInput.value;
+        else if (noteInput.value) {
+          // Tạo mới nếu chưa có
+          const d = document.createElement("div");
+          d.id = `customNote_${idx}`;
+          d.textContent = "💬 " + noteInput.value;
+          d.style.cssText = "font-size:11px;color:#92400e;background:#fef9e7;padding:2px 6px;border-radius:4px;margin-top:3px;line-height:1.35;display:inline-block;";
+          tdName.appendChild(d);
+        }
+        if (!noteInput.value && document.getElementById(`customNote_${idx}`)) {
+          document.getElementById(`customNote_${idx}`).remove();
+        }
+        liveRecalc();
+      };
+      noteInput.onkeydown = (ev) => {
+        if (ev.key === "Enter" || ev.key === "Escape") { ev.preventDefault(); App.toggleRowNote(idx); }
+      };
+      notePopover.appendChild(noteInput);
+      tdActions.appendChild(notePopover);
 
       const tdDel = document.createElement("td");
       tdDel.className = "td-del row-actions";
       const del = document.createElement("button");
       del.className = "red";
       del.textContent = "✕";
+      del.style.cssText = "padding:4px 7px;font-size:12px;margin:0;";
       del.title = "Xoá dòng này";
       del.onclick = () => { cart.splice(idx, 1); saveCart(); render(); };
       tdDel.appendChild(del);
 
-      tr.append(tdNo, tdName, tdType, tdDays, tdPrice, tdQty, tdNote, tdDel);
+      tr.append(tdNo, tdName, tdType, tdDays, tdPrice, tdQty, tdActions, tdDel);
       tbody.appendChild(tr);
     });
     $("cartCount").textContent = cart.length + " dòng";
@@ -1619,6 +1718,28 @@ const App = (() => {
     $("billOutput").textContent = text;
     await copyText(text);
     showStatus("✅ Đã copy dòng chuẩn vào clipboard.");
+  }
+
+  // Toggle popover note inline cho từng dòng giỏ — bấm 💬 hiện input, bấm lại để ẩn
+  function toggleRowNote(idx) {
+    const el = document.getElementById(`notePopover_${idx}`);
+    if (!el) return;
+    const willOpen = el.style.display === "none";
+    el.style.display = willOpen ? "block" : "none";
+    if (willOpen) {
+      const inp = el.querySelector("input");
+      if (inp) { setTimeout(() => { inp.focus(); inp.select(); }, 30); }
+    }
+  }
+
+  // Toggle expand notes phân bổ giảm giá (inline trong khung Bill preview)
+  function toggleNotesExpand() {
+    const wrap = document.getElementById("notesExpandWrap");
+    const btn = document.getElementById("notesExpandBtn");
+    if (!wrap || !btn) return;
+    const willOpen = !wrap.classList.contains("open");
+    wrap.classList.toggle("open", willOpen);
+    btn.innerHTML = willOpen ? "📊 Note phân bổ ▲" : "📊 Note phân bổ ▼";
   }
 
   function clearCart() {
@@ -2914,6 +3035,160 @@ const App = (() => {
     if (id) draftImport(id);
   }
 
+  // ─── Quick actions trong modal Xem đơn nháp (KHÔNG đụng state hiện tại) ───
+  // Tính total cuối cùng của draft (sau discount, ship) — đơn vị VND
+  function _calcDraftPaymentVnd(d) {
+    const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+    const r = ComboLogic.calc(d.cart || [], opts);
+    // finalPayK nằm trong r.summary
+    const k = (r && r.summary && typeof r.summary.finalPayK === "number")
+      ? r.summary.finalPayK
+      : 0;
+    return k * 1000;
+  }
+
+  // Copy ảnh QR thanh toán của draft vào clipboard
+  async function draftViewCopyQR() {
+    if (!_draftViewingId) return;
+    const d = DraftStore.getById(_draftViewingId);
+    if (!d) return;
+    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
+    if (!d.orderCode) { showStatus("⚠️ Đơn nháp chưa có mã đơn. Mở Import để cấp mã."); return; }
+    const amountVnd = _calcDraftPaymentVnd(d);
+    if (amountVnd <= 0) { showStatus("⚠️ Tổng thanh toán = 0, không tạo QR."); return; }
+    slShowLoading("🎨 Đang tạo QR...");
+    try {
+      const url = buildVietQRUrl(amountVnd, d.orderCode);
+      const img = await loadImage(url);
+      // Render ra canvas tạm để có blob
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || 500;
+      canvas.height = img.naturalHeight || 500;
+      canvas.getContext("2d").drawImage(img, 0, 0);
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      slHideLoading();
+      if (!blob) { showStatus("❌ Tạo blob thất bại."); return; }
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        // Fallback: download
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `QR_${d.orderCode}.png`;
+        a.click();
+        showStatus(`📥 Đã tải QR (browser không hỗ trợ copy ảnh).`);
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showStatus(`✅ Đã copy QR của "${d.name}" vào clipboard. Paste vào Zalo/FB.`);
+    } catch (e) {
+      slHideLoading();
+      showStatus("❌ Lỗi tạo QR: " + e.message);
+    }
+  }
+
+  // Copy ảnh báo giá full của draft vào clipboard
+  async function draftViewCopyFullImage() {
+    if (!_draftViewingId) return;
+    const d = DraftStore.getById(_draftViewingId);
+    if (!d) return;
+    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
+    if (!d.orderCode) { showStatus("⚠️ Đơn nháp chưa có mã đơn."); return; }
+    slShowLoading("🖼️ Đang tạo ảnh báo giá...");
+    try {
+      // Build state giả cho qrRenderFull — không dùng canvas hiện hữu, tạo canvas tạm
+      const amountVnd = _calcDraftPaymentVnd(d);
+      const qrUrl = buildVietQRUrl(amountVnd, d.orderCode);
+      const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+      const r = ComboLogic.calc(d.cart || [], opts);
+      // Build "fake state" tương thích với qrRenderFull
+      const state = {
+        result: { bill: r.bill || "" },
+        qrUrl,
+        orderCode: d.orderCode,
+        vat: d.vat || null,
+      };
+      // qrRenderFull đang dùng canvas #qrFullCanvas — em sẽ tạo canvas tạm
+      // Để không phá API hiện tại, em render trực tiếp lên canvas #qrFullCanvas
+      // (canvas này luôn có trong DOM). Sau khi render xong, copy blob.
+      // Lưu / restore orderCode hiện tại để không phá QR card chính.
+      const savedOrderCode = currentOrderCode;
+      currentOrderCode = d.orderCode;
+      await qrRenderFull(state);
+      currentOrderCode = savedOrderCode;
+      // Copy blob từ canvas
+      const canvas = document.getElementById("qrFullCanvas");
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      slHideLoading();
+      if (!blob) { showStatus("❌ Tạo blob thất bại."); return; }
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `BaoGia_${d.orderCode}.png`;
+        a.click();
+        showStatus(`📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh).`);
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showStatus(`✅ Đã copy ảnh báo giá của "${d.name}". Paste vào Zalo/FB.`);
+    } catch (e) {
+      slHideLoading();
+      showStatus("❌ Lỗi tạo ảnh: " + e.message);
+    }
+  }
+
+  // Copy payload (mã nhập sổ) của draft vào clipboard
+  async function draftViewCopyPayload() {
+    if (!_draftViewingId) return;
+    const d = DraftStore.getById(_draftViewingId);
+    if (!d) return;
+    if (!(d.cart || []).length) { showStatus("⚠️ Đơn nháp không có gói."); return; }
+    try {
+      // Tạm load draft cart vào biến local + tính items
+      const savedCart = cart;
+      const savedOrderCode = currentOrderCode;
+      cart = JSON.parse(JSON.stringify(d.cart));
+      if (d.orderCode) currentOrderCode = d.orderCode;
+      const items = buildSheetPayloadItems();
+      // Restore ngay sau khi tính
+      cart = savedCart;
+      if (!items.length) {
+        currentOrderCode = savedOrderCode;
+        showStatus("⚠️ Không có gói hợp lệ trong đơn nháp.");
+        return;
+      }
+      const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
+      const tagPrefix = d.name && d.tag ? (mapTagPrefix[d.tag] || "") : "";
+      const draftLink = buildShareLink(d.name || "Đơn từ app", d.tag || "ZALO", d.customTag || "", d.cart, {
+        orderCode: d.orderCode || "",
+        vat: d.vat || null,
+      });
+      const payload = {
+        v: 1,
+        kind: "simglobe_sheet_v1",
+        name: d.name || "",
+        tag: d.tag || "",
+        tagPrefix,
+        orderCode: d.orderCode || "",
+        link: draftLink,
+        items: items.map(it => ({
+          p: it.packageRaw, t: it.type, d: it.days, q: it.qty,
+          u: it.unitPriceK, g: it.discountAllocK,
+          r: it.isRecharge ? 1 : 0,
+          n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
+        })),
+      };
+      if (d.vat && (d.vat.mst || d.vat.name)) payload.vat = d.vat;
+      currentOrderCode = savedOrderCode; // restore
+      const json = JSON.stringify(payload);
+      const encoded = urlSafeEncode(json);
+      const out = "SIMGLOBE-SHEET:" + encoded;
+      const ok = await copyText(out);
+      if (ok) showStatus(`✅ Đã copy mã nhập của "${d.name}". Paste vào Google Sheet hoá đơn.`);
+      else showStatus("❌ Copy thất bại.");
+    } catch (e) {
+      showStatus("❌ Lỗi: " + e.message);
+    }
+  }
+
   // Helper: render block "Thông tin hoá đơn" cho bill text (đơn có VAT)
   function _renderVatBlock(vat) {
     if (!vat) return "";
@@ -3630,7 +3905,24 @@ const App = (() => {
     const W = 1200;
     const H = 1200; // VUÔNG
     const padding = 50;
-    const billLines = state.result.bill.split("\n");
+
+    // Lấy VAT: ưu tiên từ state (vd draftViewCopyFullImage truyền draft.vat),
+    // fallback Cust2B (đơn đang làm). Append block VAT vào cuối bill.
+    let billText = state.result.bill || "";
+    let vatInfo = state.vat;
+    if (vatInfo === undefined) {
+      // Caller không truyền explicit → fallback Cust2B
+      Cust2B.syncFromDOM();
+      const s = Cust2B.state;
+      if (s.type === "company") {
+        const v = s.vat || {};
+        if (v.mst || v.name || v.addr || v.email) vatInfo = v;
+      }
+    }
+    if (vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email)) {
+      billText = billText.trimEnd() + "\n-------------\n" + _renderVatBlock(vatInfo);
+    }
+    const billLines = billText.split("\n");
 
     // Pre-load logo + QR để biết tỉ lệ
     let logoImg = null, qrImg = null;
@@ -4920,6 +5212,8 @@ const App = (() => {
     calcAndCopyNotes,
     copyLinesOnly,
     clearCart,
+    toggleRowNote,
+    toggleNotesExpand,
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
@@ -4973,6 +5267,9 @@ const App = (() => {
     draftView,
     draftViewClose,
     draftViewCopyBill,
+    draftViewCopyQR,
+    draftViewCopyFullImage,
+    draftViewCopyPayload,
     draftViewImport,
     cust2bSetType,
     cust2bSelectTag,
