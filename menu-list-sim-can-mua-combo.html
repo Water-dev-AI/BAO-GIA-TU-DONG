@@ -227,7 +227,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 9.3 · 23/05/2026 · 02:29
+    Version 10.0 · 23/05/2026 · 08:20
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -238,18 +238,22 @@
 
   <div class="grid">
     <div class="card">
-      <h2>1) Thêm gói vào giỏ</h2>
-      <textarea id="pasteBox" placeholder="Dán 1 hoặc nhiều dòng gói ở đây. Ví dụ:
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="App.toggleSection1()">
+        <h2 style="margin:0;">1) Thêm gói vào giỏ <span style="font-size:11px;color:var(--muted);font-weight:400;">(bấm để mở/đóng)</span></h2>
+        <button id="section1Toggle" style="margin:0;padding:5px 11px;background:#eef2f7;color:#444;border:none;border-radius:6px;font-size:12px;cursor:pointer;">▼ Mở</button>
+      </div>
+      <div id="section1Body" style="display:none;margin-top:12px;">
+        <textarea id="pasteBox" placeholder="Dán 1 hoặc nhiều dòng gói ở đây. Ví dụ:
 Mainland China A, 30 Days, 50GB, 128kbps	ESIM	299k
 Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
-      <div>
-        <button onclick="App.addFromText()">➕ Thêm vào giỏ</button>
-        <button class="blue" onclick="App.pasteClipboardAndAdd()">📋 Dán clipboard + thêm</button>
-        <button class="light" onclick="App.copyLinesOnly()">Copy dòng chuẩn</button>
-        <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
+        <div>
+          <button onclick="App.addFromText()">➕ Thêm vào giỏ</button>
+          <button class="blue" onclick="App.pasteClipboardAndAdd()">📋 Dán clipboard + thêm</button>
+          <button class="light" onclick="App.copyLinesOnly()">Copy dòng chuẩn</button>
+          <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
+        </div>
+        <div id="status" class="status"></div>
       </div>
-
-      <div id="status" class="status"></div>
     </div>
 
     <div class="card">
@@ -318,15 +322,15 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
       <!-- Hàng action nén dưới giỏ + bill -->
       <div class="row-action-bar">
-        <button class="blue" onclick="App.calcAndCopyBill()" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
-        <button class="blue" onclick="App.calcAndCopyBillShort()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
-        <span class="spacer"></span>
         <span class="mini-label">🚚 Ship (k)</span>
         <input id="shipFeeK" class="mini" type="number" min="0" value="0" placeholder="0" oninput="App.updateShipFee()" />
         <span class="mini-label">💸 Giảm (k)</span>
         <input id="manualDiscK" class="mini" type="number" min="0" value="" placeholder="—" oninput="App.onManualDiscChange('k')" />
         <span class="mini-label">💸 Giảm (%, ≤15)</span>
         <input id="manualDiscPct" class="mini" type="number" min="0" max="15" step="0.1" value="" placeholder="—" oninput="App.onManualDiscChange('pct')" />
+        <span class="spacer"></span>
+        <button class="blue" onclick="App.calcAndCopyBill()" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
+        <button class="blue" onclick="App.calcAndCopyBillShort()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">
         Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
@@ -422,10 +426,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         </div>
       </div>
 
-      <!-- Hàng 2: 5 nút action (rút gọn) -->
+      <!-- Hàng 2: nút action (Copy nhanh + Xem) -->
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-        <button class="green" onclick="App.qrGenerate()" style="margin:0;padding:8px 12px;font-size:12.5px;">🎨 QR TT</button>
-        <button class="blue" onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;">🖼️ Báo giá</button>
+        <button class="green" onclick="App.qrCopyQuick()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR + Copy ảnh vào clipboard ngay (không hiển thị)">🎨 Copy QR TT</button>
+        <button onclick="App.qrGenerate()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#a7f3d0;color:#065f46;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị QR thanh toán">🎨 Xem QR TT</button>
+        <button class="blue" onclick="App.qrCopyFullQuick()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo ảnh báo giá full + Copy vào clipboard ngay (không hiển thị)">🖼️ Copy Báo giá</button>
+        <button onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#bfdbfe;color:#1e40af;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị ảnh báo giá full">🖼️ Xem Báo giá</button>
         <button class="amber" onclick="App.qrCustomOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Copy thông tin chuyển khoản text">📋 Thông tin CK</button>
         <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Nhập sổ</button>
@@ -433,21 +439,20 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
       <div id="qrResultWrap" style="display:none;margin-top:10px;">
         <div id="qrResultGrid" style="display:grid;grid-template-columns:1fr;gap:14px;">
-          <!-- Cột QR simple (chỉ hiện khi bấm 🎨 QR TT) -->
+          <!-- Cột QR simple (chỉ hiện khi bấm 🎨 Xem QR TT) -->
           <div id="qrSimpleCol" style="display:none;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
               <div style="font-size:12px;color:var(--muted);font-weight:600;">QR thanh toán</div>
               <button onclick="App.qrCloseSimple()" style="margin:0;padding:3px 8px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Đóng">✕ Đóng</button>
             </div>
             <div id="qrSimpleWrap" style="background:white;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
-              <img id="qrSimpleImg" alt="QR" style="max-width:100%;height:auto;" />
+              <img id="qrSimpleImg" alt="QR" style="max-width:340px;width:100%;height:auto;" />
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-              <button class="green" onclick="App.qrDownload('simple')" style="margin:0;">💾 Tải QR</button>
-              <button class="blue"  onclick="App.qrCopyImage('simple')" style="margin:0;">📋 Copy ảnh</button>
+              <button class="green" onclick="App.qrDownloadAndClose('simple')" style="margin:0;">💾 Tải ảnh</button>
             </div>
           </div>
-          <!-- Cột Ảnh báo giá full (chỉ hiện khi bấm 🖼️ Báo giá) -->
+          <!-- Cột Ảnh báo giá full (chỉ hiện khi bấm 🖼️ Xem Báo giá) -->
           <div id="qrFullCol" style="display:none;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
               <div style="font-size:12px;color:var(--muted);font-weight:600;">Ảnh báo giá full</div>
@@ -457,8 +462,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
               <canvas id="qrFullCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-              <button class="green" onclick="App.qrDownload('full')" style="margin:0;">💾 Tải ảnh</button>
-              <button class="blue"  onclick="App.qrCopyImage('full')" style="margin:0;">📋 Copy ảnh</button>
+              <button class="green" onclick="App.qrDownloadAndClose('full')" style="margin:0;">💾 Tải ảnh</button>
             </div>
           </div>
         </div>
@@ -479,7 +483,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
         Đơn nháp lưu online trên Google Sheet (tab DRAFTS), đồng bộ giữa các máy. Tự xoá sau 7 ngày. Cache 1h, bấm 🔄 để load ngay. Bấm <b>Share</b> tạo link gửi cho người khác.
       </div>
-      <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách..."
+      <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách hoặc mã đơn (DH...)..."
         oninput="App.draftFilter()"
         style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
       <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
@@ -1743,6 +1747,16 @@ const App = (() => {
       const inp = el.querySelector("input");
       if (inp) { setTimeout(() => { inp.focus(); inp.select(); }, 30); }
     }
+  }
+
+  // Toggle expand section 1 (Thêm vào giỏ) — mặc định ẩn để gọn UI
+  function toggleSection1() {
+    const body = document.getElementById("section1Body");
+    const btn = document.getElementById("section1Toggle");
+    if (!body || !btn) return;
+    const willOpen = body.style.display === "none";
+    body.style.display = willOpen ? "block" : "none";
+    btn.textContent = willOpen ? "▲ Đóng" : "▼ Mở";
   }
 
   // Toggle expand notes phân bổ giảm giá (inline trong khung Bill preview)
@@ -3975,7 +3989,6 @@ const App = (() => {
     const canvas = document.getElementById("qrFullCanvas");
     const DPR = 2; // render hi-DPI cho sắc nét
     const W = 1200;
-    const H = 1200; // VUÔNG
     const padding = 50;
 
     // Lấy VAT: ưu tiên từ state (vd draftViewCopyFullImage truyền draft.vat),
@@ -4006,21 +4019,22 @@ const App = (() => {
     const bottomH = 380;          // info CK + QR
     const sepGap = 24;            // khoảng cách header → bill
     const sepGap2 = 24;           // khoảng cách bill → bottom
+
+    // ─── PHƯƠNG ÁN A: Canvas cao ĐỘNG ───
+    // Giữ font mặc định 22px / lineH 34, không shrink. Thay vì shrink → tăng H.
+    // Min H = 1200 (vuông) khi bill ít dòng. Nhiều dòng → H tăng tuyến tính theo billNeedH.
+    const lineH = 34;
+    const fontPx = 22;
+    const billNeedH = billLines.length * lineH + 16; // 16 = padding nội bộ
+    // H tối thiểu = layout cũ (1200) để ảnh ít dòng vẫn vuông
+    const MIN_H = 1200;
+    const requiredH = padding + headerH + sepGap + billNeedH + sepGap2 + bottomH + padding;
+    const H = Math.max(MIN_H, requiredH);
+
+    // Tính vị trí bill area sau khi đã biết H
     const billTop = padding + headerH + sepGap;
     const billBottom = H - padding - bottomH - sepGap2;
-    const billArea = billBottom - billTop; // không gian dọc cho bill
-
-    // Auto-shrink font cho bill nếu quá nhiều dòng để fit vào billArea.
-    // Font mặc định 22px, lineH=34. Nếu thiếu chỗ → shrink theo tỉ lệ (min 14px).
-    const defaultLineH = 34;
-    let lineH = defaultLineH;
-    let fontPx = 22;
-    const needH = billLines.length * defaultLineH + 16;
-    if (needH > billArea) {
-      const ratio = Math.max(0.55, billArea / needH);
-      lineH = Math.max(20, defaultLineH * ratio);
-      fontPx = Math.max(14, Math.floor(22 * ratio));
-    }
+    const billArea = billBottom - billTop; // không gian dọc cho bill (giờ luôn ≥ billNeedH)
 
     // Hi-DPI: canvas thực = W*DPR, CSS = W
     canvas.width = W * DPR;
@@ -4280,6 +4294,95 @@ const App = (() => {
       qrShowStatus("✅ Đã copy ảnh vào clipboard.");
     } catch(e) {
       qrShowStatus("❌ Lỗi copy: " + e.message);
+    }
+  }
+
+  // Tải ảnh + tự đóng cột tương ứng sau khi tải (v10.0)
+  async function qrDownloadAndClose(which) {
+    try {
+      const blob = await qrCanvasOrImageToBlob(which);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (which === "full" ? "BaoGia_" : "QR_") + currentOrderCode + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      qrShowStatus("✅ Đã tải ảnh.");
+      // Tự đóng cột tương ứng để gọn UI
+      if (which === "full") qrCloseFull();
+      else qrCloseSimple();
+    } catch(e) {
+      qrShowStatus("❌ Lỗi tải: " + e.message);
+    }
+  }
+
+  // Copy nhanh QR TT vào clipboard mà KHÔNG hiển thị (v10.0).
+  // Build QR → render canvas tạm → toBlob → clipboard write.
+  async function qrCopyQuick() {
+    const s = qrGetState();
+    if (!s) return;
+    slShowLoading("🎨 Đang tạo QR…");
+    try {
+      const img = await loadImage(s.qrUrl);
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth || 500;
+      c.height = img.naturalHeight || 500;
+      c.getContext("2d").drawImage(img, 0, 0);
+      const blob = await new Promise(res => c.toBlob(res, "image/png"));
+      slHideLoading();
+      if (!blob) { qrShowStatus("❌ Tạo ảnh thất bại."); return; }
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        // Fallback download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `QR_${currentOrderCode}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        qrShowStatus("📥 Đã tải QR (browser không hỗ trợ copy ảnh).");
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      qrShowStatus(`✅ Đã copy QR thanh toán ${ComboLogic.fmtK(s.finalPayK)} vào clipboard. Paste vào Zalo/FB.`);
+    } catch (e) {
+      slHideLoading();
+      qrShowStatus("❌ Lỗi: " + e.message);
+    }
+  }
+
+  // Copy nhanh ảnh báo giá full vào clipboard mà KHÔNG hiển thị (v10.0).
+  async function qrCopyFullQuick() {
+    const s = qrGetState();
+    if (!s) return;
+    slShowLoading("🖼️ Đang tạo ảnh báo giá…");
+    try {
+      // Cần render lên canvas #qrFullCanvas (qrRenderFull đang dùng nó cố định)
+      // Tạm ẩn cột full để user không thấy canvas "nhấp nháy" trong lúc render
+      const fullColEl = document.getElementById("qrFullCol");
+      const wasOpen = fullColEl.style.display !== "none";
+      await qrRenderFull(s);
+      const canvas = document.getElementById("qrFullCanvas");
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      // Nếu cột full không đang mở từ trước → giấu lại để không show ra
+      if (!wasOpen) {
+        fullColEl.style.display = "none";
+        _qrUpdateGridLayout();
+      }
+      slHideLoading();
+      if (!blob) { qrShowStatus("❌ Tạo ảnh thất bại."); return; }
+      if (!navigator.clipboard || !navigator.clipboard.write) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `BaoGia_${currentOrderCode}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        qrShowStatus("📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh).");
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      qrShowStatus(`✅ Đã copy ảnh báo giá full vào clipboard. Paste vào Zalo/FB.`);
+    } catch (e) {
+      slHideLoading();
+      qrShowStatus("❌ Lỗi: " + e.message);
     }
   }
 
@@ -5286,6 +5389,7 @@ const App = (() => {
     clearCart,
     toggleRowNote,
     toggleNotesExpand,
+    toggleSection1,
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
@@ -5307,7 +5411,10 @@ const App = (() => {
     qrCloseSimple,
     qrCloseFull,
     qrDownload,
+    qrDownloadAndClose,
     qrCopyImage,
+    qrCopyQuick,
+    qrCopyFullQuick,
     qrCopySTK,
     qrCustomOpen,
     qrCustomClose,
