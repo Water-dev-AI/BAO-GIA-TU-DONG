@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8 · 24/05/2026 · 03:29
+    Version 10.8.1 · 24/05/2026 · 06:25
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1456,7 +1456,8 @@ const App = (() => {
     const lines = text.split(/\r?\n/);
 
     // Detect summary/section keywords (case-insensitive, không dấu)
-    const summaryRe = /^(tạm tính|tam tinh|giảm|giam|ship|tổng thanh toán|tong thanh toan|tổng|tong)\s*:/i;
+    // v10.8.1: mở rộng để skip các dòng khuyến mãi như "Trên 1tr: -70k", "Còn: 1.7M", "Free ship", "SL trên 10"...
+    const summaryRe = /^(tạm tính|tam tinh|giảm|giam|ship|tổng thanh toán|tong thanh toan|tổng|tong|còn|con|trên\s*\d|tren\s*\d|dưới\s*\d|duoi\s*\d|sl trên|sl tren|free\s*ship|miễn phí|mien phi)/i;
     const vatHeaderRe = /^(thông tin (hóa|hoá) đơn|thong tin hoa don|thông tin xuất vat|thong tin xuat vat)\s*:?/i;
     const orderCodeRe = /^(mã đơn hàng|ma don hang|mã đơn|ma don)\s*:\s*(\S+)/i;
     const noteContinuationRe = /^\s*(?:↳|ⓘ|ⓘ|►|▶|>|\*\*\*|---)/; // dòng note/separator
@@ -1528,6 +1529,11 @@ const App = (() => {
   // Trả về { line, qty } hoặc null.
   function _parsePackageLine(raw) {
     if (!raw) return null;
+    // v10.8.1: Reject các dòng khuyến mãi/summary mà có thể lọt qua summaryRe của parseBillText
+    // (vd: "Trên 1tr: -70k", "Free ship", "Còn: ...", "SL trên 10")
+    const skipRe = /^(còn|con|trên\s*\d|tren\s*\d|dưới\s*\d|duoi\s*\d|sl trên|sl tren|free\s*ship|miễn phí|mien phi|tổng|tong|tạm tính|tam tinh|giảm|giam|ship\s*[:\s]|\s*-\s*\d)/i;
+    if (skipRe.test(raw.trim())) return null;
+
     // Loại bỏ trailing whitespace, đè " x N", "*N", "× N", "× N cái", "N cái", "N SIM"... → tách qty
     let s = raw;
 
@@ -1632,12 +1638,11 @@ const App = (() => {
       }
     }
 
-    // Build line chuẩn: tên\tloại\tgiá (skip ngày nếu rỗng để tránh tab thừa)
+    // Build line chuẩn 4 cells: tên\tloại\tngày\tgiá
+    // QUAN TRỌNG: parseLineForDisplay expect format này (loại ở priceIdx-2, ngày ở priceIdx-1).
+    // Phải luôn có 4 cells, ngày rỗng → cell empty (tab thừa).
     const priceStr = priceK + "k";
-    const parts = [name, type];
-    if (days) parts.push(days);
-    parts.push(priceStr);
-    const line = parts.join("\t");
+    const line = [name, type, days, priceStr].join("\t");
 
     // Build qty expression
     const qtyExpr = isRecharge ? ("N" + qty) : String(qty);
