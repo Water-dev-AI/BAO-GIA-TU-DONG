@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.6 · 24/05/2026 · 00:44
+    Version 10.7 · 24/05/2026 · 01:32
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1524,6 +1524,40 @@ const App = (() => {
     return "other";
   }
   // Group order: esim (1), physical (2), other (3) — giữ thứ tự gốc trong từng nhóm.
+  // v10.7: Analyze nhóm trong cart của 1 draft để biết hiển thị bao nhiêu ô input mã.
+  // Trả về:
+  //   { mode: 'esim_only' | 'physical_only' | 'both_grouped' | 'mixed_disabled' | 'empty' }
+  // Logic:
+  //   - cart rỗng → 'empty'
+  //   - chỉ ESIM → 'esim_only' (1 ô tag ESIM)
+  //   - chỉ SIM VẬT LÝ → 'physical_only' (1 ô tag SIM VL)
+  //   - có cả 2 + groupByType true + thực sự gộp (ESIM hết rồi mới SIM VL) → 'both_grouped' (2 ô)
+  //   - có cả 2 + không gộp (xen kẽ) → 'mixed_disabled' (Q6: ẩn ô)
+  function _analyzeDraftGroups(d) {
+    const carr = Array.isArray(d.cart) ? d.cart : [];
+    if (!carr.length) return { mode: "empty" };
+    const types = carr.map(it => _itemType(it));
+    const hasEsim = types.includes("esim");
+    const hasPhysical = types.includes("physical");
+    if (hasEsim && !hasPhysical) return { mode: "esim_only" };
+    if (!hasEsim && hasPhysical) return { mode: "physical_only" };
+    if (!hasEsim && !hasPhysical) return { mode: "mixed_disabled" }; // chỉ có "other"
+    // Có cả 2 loại — check có gộp không
+    const groupByType = d.groupByType === true;
+    if (!groupByType) return { mode: "mixed_disabled" };
+    // Check thực sự là sorted: tất cả ESIM ở đầu hoặc tất cả ở cuối, không xen kẽ
+    // (Vì user có thể drag/drop xáo)
+    let lastNonOther = "";
+    let transitions = 0;
+    for (const t of types) {
+      if (t === "other") continue;
+      if (lastNonOther && lastNonOther !== t) transitions++;
+      lastNonOther = t;
+    }
+    if (transitions > 1) return { mode: "mixed_disabled" }; // đã xáo lung tung
+    return { mode: "both_grouped" };
+  }
+
   function _sortCartByGroup() {
     const ord = { esim: 1, physical: 2, other: 3 };
     cart.sort((a, b) => {
@@ -1873,6 +1907,30 @@ const App = (() => {
       btnEl.title = "✅ Đã copy!";
       setTimeout(() => { btnEl.classList.remove("copied"); btnEl.title = oldTitle; }, 1200);
     }
+  }
+
+  // v10.7: Lưu mã eSIM / mã SIM VL của draft (autosave on blur)
+  async function _draftSaveCode(draftId, which, value) {
+    const d = DraftStore.getById(draftId);
+    if (!d) return;
+    if (!d.codes) d.codes = { esim: "", physical: "" };
+    const newVal = String(value || "").trim();
+    if (d.codes[which] === newVal) return; // không đổi
+    d.codes[which] = newVal;
+    await DraftStore.upsert(d);
+    // Update inline status modal Xem (không refresh modal vì user đang gõ)
+    _draftViewStatus(`✅ Đã lưu mã ${which === "esim" ? "eSIM" : "SIM VL"}.`, "success");
+    draftRender(); // update list nháp dưới
+  }
+
+  // v10.7: Toggle "Import bằng mã" cho 1 draft
+  async function _draftToggleUseCode(draftId, checked) {
+    const d = DraftStore.getById(draftId);
+    if (!d) return;
+    d.useCode = !!checked;
+    await DraftStore.upsert(d);
+    _draftViewStatus(checked ? "✅ Đã bật: nhập sổ sẽ dùng mã làm anchor." : "✅ Đã tắt: nhập sổ dùng tên đơn + tag (mặc định).", "success");
+    draftRender();
   }
 
   // Tạo nút copy inline cho 1 chuỗi text (vd tên gói).
@@ -3104,6 +3162,15 @@ const App = (() => {
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
         : "";
+      // v10.7: badge code + useCode (Q3)
+      const codes = d.codes || {};
+      const hasAnyCode = (codes.esim && codes.esim.trim()) || (codes.physical && codes.physical.trim());
+      const codeBadge = hasAnyCode
+        ? `<span style="background:#fef9e7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #fde68a;" title="${[codes.esim ? 'eSIM: ' + codes.esim : '', codes.physical ? 'SIM VL: ' + codes.physical : ''].filter(Boolean).join(' · ')}">🔖 CODE</span>`
+        : "";
+      const useCodeBadge = d.useCode === true
+        ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Nhập sổ sẽ dùng mã làm anchor (thay tên đơn)">📥 BẰNG MÃ</span>`
+        : "";
       const oc = d.orderCode || "";
       const ocDisplay = oc ? escapeHtml(oc) : `<span style="color:#9ca3af;">(chưa có)</span>`;
       return `
@@ -3112,6 +3179,8 @@ const App = (() => {
             <div id="draftNameRow_${d.id}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
               ${vatBadge}
+              ${codeBadge}
+              ${useCodeBadge}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
               <button onclick="App.draftEditName('${d.id}')" title="Đổi tên (Enter để lưu, Esc huỷ)" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
@@ -3337,8 +3406,74 @@ const App = (() => {
       </div>
     `;
 
+    // v10.7: Codes block (mã eSIM / mã SIM VL) — chỉ hiện theo mode group
+    const grp = _analyzeDraftGroups(d);
+    const codes = d.codes || { esim: "", physical: "" };
+    const useCode = d.useCode === true;
+    let codesBlock = "";
+    if (grp.mode === "esim_only") {
+      codesBlock = `
+        <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
+          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (sẽ điền vào ô anchor khi nhập sổ)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <span style="color:var(--muted);">Mã eSIM:</span>
+            <input type="text" value="${escapeHtml(codes.esim || '')}" placeholder="vd: b0000262605220047" maxlength="32"
+              onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
+              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:200px;" />
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
+            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
+            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag)</span>
+          </label>
+        </div>
+      `;
+    } else if (grp.mode === "physical_only") {
+      codesBlock = `
+        <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
+          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <span style="color:var(--muted);">Mã SIM VL:</span>
+            <input type="text" value="${escapeHtml(codes.physical || '')}" placeholder="vd: b0000262605220047" maxlength="32"
+              onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
+              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:200px;" />
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
+            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
+            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag)</span>
+          </label>
+        </div>
+      `;
+    } else if (grp.mode === "both_grouped") {
+      codesBlock = `
+        <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
+          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (mỗi nhóm 1 ô anchor riêng)</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;">
+            <span style="color:var(--muted);">Mã eSIM:</span>
+            <input type="text" value="${escapeHtml(codes.esim || '')}" placeholder="vd: b0000262605220047" maxlength="32"
+              onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
+              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:220px;" />
+            <span style="color:var(--muted);">Mã SIM VL:</span>
+            <input type="text" value="${escapeHtml(codes.physical || '')}" placeholder="vd: b0000262605220048" maxlength="32"
+              onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
+              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:220px;" />
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none;">
+            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
+            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag) — mỗi nhóm dùng mã tương ứng</span>
+          </label>
+        </div>
+      `;
+    } else if (grp.mode === "mixed_disabled") {
+      codesBlock = `
+        <div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:11.5px;color:#6b7280;font-style:italic;">
+          ℹ️ Đơn có nhiều loại nhưng KHÔNG gộp phân loại (esim/sim vật lý xen kẽ) → không có ô anchor riêng → không cho điền mã. Bật "📑 Gộp phân loại" rồi Import lại đơn này để gộp + điền mã.
+        </div>
+      `;
+    }
+
     body.innerHTML = `
       <div style="margin-bottom:14px;">${customerInfo}</div>
+      ${codesBlock ? `<div style="margin-bottom:14px;">${codesBlock}</div>` : ""}
       <div style="margin-bottom:14px;">${vatBlock}</div>
       <div style="margin-bottom:14px;">${cartTable}</div>
       <div style="background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
@@ -3530,6 +3665,12 @@ const App = (() => {
         })),
       };
       if (d.vat && (d.vat.mst || d.vat.name)) payload.vat = d.vat;
+      // v10.7: codes/useCode/groupByType từ draft
+      if (d.codes && (d.codes.esim || d.codes.physical)) {
+        payload.codes = { esim: d.codes.esim || "", physical: d.codes.physical || "" };
+      }
+      if (d.useCode === true) payload.useCode = true;
+      if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
       currentOrderCode = savedOrderCode;
       const json = JSON.stringify(payload);
       const encoded = urlSafeEncode(json);
@@ -3720,6 +3861,11 @@ const App = (() => {
           cart: JSON.parse(JSON.stringify(cart)),
           orderCode: currentOrderCode || prev.orderCode || "",
           vat: p.vat,
+          // v10.7: snapshot toggle gộp hiện tại (Q5 — mỗi draft nhớ riêng)
+          groupByType: _getGroupToggle(),
+          // Giữ codes + useCode nếu có sẵn (user đã điền trước)
+          codes: prev.codes || { esim: "", physical: "" },
+          useCode: prev.useCode || false,
         };
       }
     }
@@ -3732,6 +3878,10 @@ const App = (() => {
         cart: JSON.parse(JSON.stringify(cart)),
         orderCode: currentOrderCode || "",
         vat: p.vat,
+        // v10.7
+        groupByType: _getGroupToggle(),
+        codes: { esim: "", physical: "" },
+        useCode: false,
       };
     }
     const r = await DraftStore.upsert(draft);
@@ -3936,6 +4086,10 @@ const App = (() => {
     _loadingDraft = true; // chặn auto-regen mã đơn trong liveRecalc
     cart = JSON.parse(JSON.stringify(d.cart || []));
     saveCart();
+    // v10.7: Restore toggle groupByType từ draft (nếu draft có lưu — không thì giữ nguyên)
+    if (typeof d.groupByType === "boolean") {
+      _setGroupToggle(d.groupByType);
+    }
     render();
     draftEditingId = id;
     // Restore mã đơn (đồng bộ với QR card + bill)
@@ -5525,6 +5679,26 @@ const App = (() => {
     };
     if (cust.vat) payload.vat = cust.vat;
 
+    // v10.7: thêm codes + useCode + groupByType từ draft đang edit
+    // (nếu đang edit draft thì lấy; đơn mới chưa save → bỏ qua)
+    if (draftEditingId) {
+      const d = DraftStore.getById(draftEditingId);
+      if (d) {
+        if (d.codes && (d.codes.esim || d.codes.physical)) {
+          payload.codes = {
+            esim: d.codes.esim || "",
+            physical: d.codes.physical || "",
+          };
+        }
+        if (d.useCode === true) payload.useCode = true;
+        if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
+      }
+    }
+    // Fallback: lấy groupByType hiện tại nếu chưa có (cho đơn mới chưa save)
+    if (typeof payload.groupByType !== "boolean") {
+      payload.groupByType = _getGroupToggle();
+    }
+
     const json = JSON.stringify(payload);
     const encoded = urlSafeEncode(json);
     const out = "SIMGLOBE-SHEET:" + encoded;
@@ -5889,6 +6063,8 @@ const App = (() => {
     toggleSection1,
     toggleGroupByType,
     _copyPkgNameInline,
+    _draftSaveCode,
+    _draftToggleUseCode,
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
