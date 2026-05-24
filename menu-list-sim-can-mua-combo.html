@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.2 · 24/05/2026 · 06:32
+    Version 10.8.5 · 24/05/2026 · 06:53
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1396,8 +1396,11 @@ const App = (() => {
         found.qty = ComboLogic.qtyToString(reg, rec);
         // Cập nhật country nếu lần này có mà found chưa có
         if (item.country && !found.country) found.country = item.country;
+        // v10.8.4: append note nếu pkg mới có note + found chưa có
+        if (item.note && !found.note) found.note = item.note;
       } else {
-        const newItem = { line: item.line, qty: item.qty || "1", note: "" };
+        // v10.8.4: pickup note từ item (parser bill có thể truyền note từ dòng ↳)
+        const newItem = { line: item.line, qty: item.qty || "1", note: item.note || "" };
         if (item.country) newItem.country = item.country;
         cart.push(newItem);
       }
@@ -1465,6 +1468,8 @@ const App = (() => {
     // → tìm pattern DH + 6-12 chữ số trong dòng có keyword "đơn hàng" / "báo giá" / "mã đơn"
     const orderCodeRe = /^(mã đơn hàng|ma don hang|mã đơn|ma don)\s*:\s*(\S+)/i;
     const orderCodeAltRe = /(?:báo giá|bao gia|đơn hàng|don hang|order\s*id|order\s*no)[^a-z\d]*?(DH\d{6,12})\b/i;
+    // v10.8.3: Dòng standalone chỉ có mã đơn (vd "DH11790956" đứng 1 mình)
+    const orderCodeStandaloneRe = /^(DH\d{6,12})\s*$/i;
     const noteContinuationRe = /^\s*(?:↳|ⓘ|ⓘ|►|▶|>|\*\*\*|---)/; // dòng note/separator
 
     // VAT field patterns (cho phép nhiều label đồng nghĩa)
@@ -1479,7 +1484,7 @@ const App = (() => {
     let hasBillStructure = false;
     for (const ln of lines) {
       const t = ln.trim();
-      if (summaryRe.test(t) || vatHeaderRe.test(t) || orderCodeRe.test(t)) {
+      if (summaryRe.test(t) || vatHeaderRe.test(t) || orderCodeRe.test(t) || orderCodeAltRe.test(t) || orderCodeStandaloneRe.test(t)) {
         hasBillStructure = true; break;
       }
     }
@@ -1494,9 +1499,15 @@ const App = (() => {
       const t = raw.trim();
       if (!t) { inVatBlock = false; continue; } // dòng trống reset block VAT
 
-      // Order code — try cả 2 dạng
+      // Order code — try cả 3 dạng
       const ocMatch = t.match(orderCodeRe);
       if (ocMatch) { orderCode = ocMatch[2].trim(); inVatBlock = false; continue; }
+      const ocStandaloneMatch = t.match(orderCodeStandaloneRe);
+      if (ocStandaloneMatch) {
+        if (!orderCode) orderCode = ocStandaloneMatch[1].trim();
+        inVatBlock = false;
+        continue;
+      }
       const ocAltMatch = t.match(orderCodeAltRe);
       if (ocAltMatch) {
         if (!orderCode) orderCode = ocAltMatch[1].trim();
@@ -1525,8 +1536,17 @@ const App = (() => {
       // Summary line → skip
       if (summaryRe.test(t)) continue;
 
-      // Note continuation → skip (note của gói trước)
-      if (noteContinuationRe.test(t)) continue;
+      // v10.8.4: Note continuation (↳, ⓘ, >...) → gán làm note của gói cuối cùng (thay vì skip).
+      if (noteContinuationRe.test(t)) {
+        // Tách prefix marker → còn lại là nội dung note
+        const noteText = t.replace(/^\s*(?:↳|ⓘ|ⓘ|►|▶|>)\s*/, "").trim();
+        if (noteText && packages.length > 0) {
+          const lastPkg = packages[packages.length - 1];
+          // Append vào note đã có (nếu có) hoặc set mới
+          lastPkg.note = lastPkg.note ? (lastPkg.note + " | " + noteText) : noteText;
+        }
+        continue;
+      }
 
       // Còn lại → parse như line gói. Cần extract tên + loại + giá + qty.
       const pkg = _parsePackageLine(t);
@@ -5850,7 +5870,10 @@ const App = (() => {
         const type  = (row[tbl.typeCol]  || "").trim();
         const days  = tbl.dateCol >= 0 ? (row[tbl.dateCol] || "").trim() : "";
         const price = (row[tbl.priceCol] || "").trim();
-        const note  = tbl.noteCol >= 0 ? (row[tbl.noteCol] || "").trim() : "";
+        // v10.8.5: Flatten newline trong cell note thành ' · ' để không bị buildCartFromText split sai.
+        // Google Sheets cell với Alt+Enter → CSV cell có \n bên trong → giữ nguyên \n sẽ làm
+        // line bị chia thành nhiều "gói" giả khi split bởi \n ở pickerOpen.
+        const note  = tbl.noteCol >= 0 ? (row[tbl.noteCol] || "").trim().replace(/\s*\n+\s*/g, " · ") : "";
 
         // Verify dòng data hợp lệ
         if (!PRICE_RE_STRICT.test(price)) continue;
