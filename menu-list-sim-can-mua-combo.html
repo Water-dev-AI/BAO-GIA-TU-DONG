@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.1 · 24/05/2026 · 06:25
+    Version 10.8.2 · 24/05/2026 · 06:32
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1459,7 +1459,12 @@ const App = (() => {
     // v10.8.1: mở rộng để skip các dòng khuyến mãi như "Trên 1tr: -70k", "Còn: 1.7M", "Free ship", "SL trên 10"...
     const summaryRe = /^(tạm tính|tam tinh|giảm|giam|ship|tổng thanh toán|tong thanh toan|tổng|tong|còn|con|trên\s*\d|tren\s*\d|dưới\s*\d|duoi\s*\d|sl trên|sl tren|free\s*ship|miễn phí|mien phi)/i;
     const vatHeaderRe = /^(thông tin (hóa|hoá) đơn|thong tin hoa don|thông tin xuất vat|thong tin xuat vat)\s*:?/i;
+    // v10.8.2: orderCode bắt được cả 2 dạng:
+    //   - "Mã đơn hàng: DH12345678"
+    //   - "SHOP GỬI BÁO GIÁ ĐƠN HÀNG: DH12345678"
+    // → tìm pattern DH + 6-12 chữ số trong dòng có keyword "đơn hàng" / "báo giá" / "mã đơn"
     const orderCodeRe = /^(mã đơn hàng|ma don hang|mã đơn|ma don)\s*:\s*(\S+)/i;
+    const orderCodeAltRe = /(?:báo giá|bao gia|đơn hàng|don hang|order\s*id|order\s*no)[^a-z\d]*?(DH\d{6,12})\b/i;
     const noteContinuationRe = /^\s*(?:↳|ⓘ|ⓘ|►|▶|>|\*\*\*|---)/; // dòng note/separator
 
     // VAT field patterns (cho phép nhiều label đồng nghĩa)
@@ -1489,9 +1494,15 @@ const App = (() => {
       const t = raw.trim();
       if (!t) { inVatBlock = false; continue; } // dòng trống reset block VAT
 
-      // Order code
+      // Order code — try cả 2 dạng
       const ocMatch = t.match(orderCodeRe);
       if (ocMatch) { orderCode = ocMatch[2].trim(); inVatBlock = false; continue; }
+      const ocAltMatch = t.match(orderCodeAltRe);
+      if (ocAltMatch) {
+        if (!orderCode) orderCode = ocAltMatch[1].trim();
+        inVatBlock = false;
+        continue; // skip dòng "SHOP GỬI BÁO GIÁ..."
+      }
 
       // VAT header → bật mode VAT cho các dòng sau
       if (vatHeaderRe.test(t)) { inVatBlock = true; continue; }
@@ -1610,6 +1621,9 @@ const App = (() => {
       // Số nhỏ không có k → assume k (vd "146")
       priceK = priceNum;
     }
+    // v10.8.2: Reject giá phi lý (> 10,000k = 10tr / 1 gói SIM)
+    // Vd "SHOP GỬI BÁO GIÁ ĐƠN HÀNG: DH88108824" → match 88108824 → reject
+    if (priceK > 10000) return null;
 
     // Cắt phần giá khỏi s → còn lại là "tên\tloại"
     const beforePrice = s.slice(0, pm.index).trim().replace(/[\t\s]+$/, "");
