@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.6 · 24/05/2026 · 07:00
+    Version 10.8.7 · 24/05/2026 · 07:06
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1470,7 +1470,9 @@ const App = (() => {
     const orderCodeAltRe = /(?:báo giá|bao gia|đơn hàng|don hang|order\s*id|order\s*no)[^a-z\d]*?(DH\d{6,12})\b/i;
     // v10.8.3: Dòng standalone chỉ có mã đơn (vd "DH11790956" đứng 1 mình)
     const orderCodeStandaloneRe = /^(DH\d{6,12})\s*$/i;
-    const noteContinuationRe = /^\s*(?:↳|ⓘ|ⓘ|►|▶|>|\*\*\*|---)/; // dòng note/separator
+    const noteContinuationRe = /^\s*(?:↳|ⓘ|►|▶|>)/; // dòng note prefix thật sự
+    // v10.8.7: Dòng separator (--- / ***) → skip hoàn toàn, không phải note
+    const separatorRe = /^\s*[-*=_~]{3,}\s*$/;
 
     // VAT field patterns (cho phép nhiều label đồng nghĩa)
     const vatFieldRe = {
@@ -1536,10 +1538,13 @@ const App = (() => {
       // Summary line → skip
       if (summaryRe.test(t)) continue;
 
+      // v10.8.7: Dòng separator (------ / ****** / =====) → skip hoàn toàn (không phải note, không phải gói)
+      if (separatorRe.test(t)) continue;
+
       // v10.8.4: Note continuation (↳, ⓘ, >...) → gán làm note của gói cuối cùng (thay vì skip).
       if (noteContinuationRe.test(t)) {
         // Tách prefix marker → còn lại là nội dung note
-        const noteText = t.replace(/^\s*(?:↳|ⓘ|ⓘ|►|▶|>)\s*/, "").trim();
+        const noteText = t.replace(/^\s*(?:↳|ⓘ|►|▶|>)\s*/, "").trim();
         if (noteText && packages.length > 0) {
           const lastPkg = packages[packages.length - 1];
           // Append vào note đã có (nếu có) hoặc set mới
