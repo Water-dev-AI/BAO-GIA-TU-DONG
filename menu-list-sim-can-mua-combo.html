@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.5 · 24/05/2026 · 06:53
+    Version 10.8.6 · 24/05/2026 · 07:00
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1557,7 +1557,7 @@ const App = (() => {
   }
 
   // Parse 1 dòng thành line chuẩn (tên\tloại\tngày\tgiá) + qty.
-  // Trả về { line, qty } hoặc null.
+  // Trả về { line, qty, note? } hoặc null.
   function _parsePackageLine(raw) {
     if (!raw) return null;
     // v10.8.1: Reject các dòng khuyến mãi/summary mà có thể lọt qua summaryRe của parseBillText
@@ -1567,6 +1567,22 @@ const App = (() => {
 
     // Loại bỏ trailing whitespace, đè " x N", "*N", "× N", "× N cái", "N cái", "N SIM"... → tách qty
     let s = raw;
+
+    // v10.8.6: Strip "[note]" / "(note)" / "{note}" ở cuối line trước (vd "191k  [CHỈ QUÉT ESIM...]")
+    // Regex cho phép paren/brace lồng bên trong (chỉ exclude closing bracket cùng loại)
+    let inlineNote = "";
+    let nbm = null;
+    // Try [...] đầu tiên
+    let m = s.match(/\s*\[([^\]]+)\]\s*$/);
+    if (m) { nbm = m; inlineNote = m[1].trim(); }
+    else {
+      // Try {...}
+      m = s.match(/\s*\{([^\}]+)\}\s*$/);
+      if (m) { nbm = m; inlineNote = m[1].trim(); }
+    }
+    if (nbm) {
+      s = s.slice(0, nbm.index).trim();
+    }
 
     // Detect qty patterns. Ưu tiên các pattern explicit (*N, xN, ×N) trước.
     let qty = 1;
@@ -1681,7 +1697,10 @@ const App = (() => {
     // Build qty expression
     const qtyExpr = isRecharge ? ("N" + qty) : String(qty);
 
-    return { line, qty: qtyExpr };
+    // v10.8.6: Trả về note nếu line có [note] inline (vd "191k [CHỈ QUÉT ESIM...]")
+    const out = { line, qty: qtyExpr };
+    if (inlineNote) out.note = inlineNote;
+    return out;
   }
 
 
