@@ -159,6 +159,40 @@
   }
   .row-note-popover input { width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #fcd34d; border-radius: 4px; font-family: inherit; }
 
+  /* v10.6: Icon copy inline sau tên gói */
+  .copy-icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin: 0 0 0 6px; padding: 2px 4px;
+    background: transparent; border: none; cursor: pointer;
+    color: #9ca3af; vertical-align: middle;
+    transition: color 0.15s;
+  }
+  .copy-icon-btn:hover { color: #2563eb; background: #eff6ff; border-radius: 4px; }
+  .copy-icon-btn:active { color: #1d4ed8; }
+  .copy-icon-btn.copied { color: #10b981; }
+  .copy-icon-btn svg { width: 13px; height: 13px; }
+
+  /* v10.6: Drag handle cột đầu (giỏ hàng) */
+  table.cart-table td.td-drag {
+    width: 22px; padding: 0 2px; text-align: center;
+    cursor: grab; user-select: none; color: #9ca3af; font-size: 14px;
+  }
+  table.cart-table td.td-drag:hover { color: #2563eb; }
+  table.cart-table td.td-drag:active { cursor: grabbing; }
+  /* Trạng thái drag */
+  tr.dragging { opacity: 0.4; }
+  tr.drop-above td { box-shadow: inset 0 2px 0 0 var(--blue); }
+  tr.drop-below td { box-shadow: inset 0 -2px 0 0 var(--blue); }
+
+  /* v10.6: Toggle gộp phân loại — style nhỏ trong header section 2 */
+  .group-toggle-label {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; color: #374151; cursor: pointer; user-select: none;
+    padding: 5px 9px; border: 1px solid #d8dee7; border-radius: 6px;
+    background: #fff;
+  }
+  .group-toggle-label.active { background: #ecfdf5; border-color: #10b981; color: #065f46; }
+
   pre {
     margin: 0;
     background: #1e2736;
@@ -228,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.5 · 23/05/2026 · 12:46
+    Version 10.6 · 24/05/2026 · 00:44
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -302,7 +336,13 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
         <h2 style="margin:0;">2) Giỏ + Thông tin khách <span id="cartCount" class="pill">0 dòng</span></h2>
-        <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label id="groupToggleLabel" class="group-toggle-label" title="Tự động gộp tất cả ESIM lên trên, SIM VẬT LÝ xuống dưới khi thêm gói mới">
+            <input id="groupToggleInput" type="checkbox" onchange="App.toggleGroupByType(this.checked)" style="margin:0;cursor:pointer;" />
+            <span>📑 Gộp phân loại</span>
+          </label>
+          <button class="red" onclick="App.clearCart()" style="margin:0;">🗑 Xoá toàn bộ giỏ</button>
+        </div>
       </div>
 
       <!-- Grid 2 cột: GIỎ HÀNG (trái) + BILL PREVIEW (phải) -->
@@ -312,6 +352,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
             <table class="cart-table">
               <thead>
                 <tr>
+                  <th class="th-drag" style="width:22px;"></th>
                   <th class="th-no" style="text-align:center;">#</th>
                   <th class="th-pkg">Tên gói</th>
                   <th class="th-type">Loại</th>
@@ -1357,6 +1398,8 @@ const App = (() => {
       }
       added += 1;
     });
+    // v10.6: Nếu toggle gộp phân loại ON → re-sort sau khi thêm
+    _maybeReGroupCart();
     saveCart();
     render();
     return added;
@@ -1459,13 +1502,124 @@ const App = (() => {
     return { name, type, days, price: priceOnly, note };
   }
 
+  /* ─── v10.6: Group sort + Drag-drop reorder ─────────────
+     - Toggle "Gộp phân loại" → tất cả ESIM nằm trên, SIM VẬT LÝ nằm dưới.
+     - State lưu localStorage, default OFF.
+     - Drag-drop trong cùng nhóm: tự do.
+     - Khi toggle ON: thêm gói mới → tự re-sort. Drag-drop sang nhóm khác → bị "kéo về" nhóm gốc khi re-sort.
+  */
+  const GROUP_TOGGLE_KEY = "combo_bill_group_by_type_v1";
+  function _getGroupToggle() {
+    try { return localStorage.getItem(GROUP_TOGGLE_KEY) === "1"; } catch { return false; }
+  }
+  function _setGroupToggle(v) {
+    try { localStorage.setItem(GROUP_TOGGLE_KEY, v ? "1" : "0"); } catch {}
+  }
+  // Lấy loại từ item (parse line nếu cần)
+  function _itemType(item) {
+    const p = parseLineForDisplay(item.line);
+    const t = (p.type || "").toLowerCase();
+    if (t.includes("esim")) return "esim";
+    if (t.includes("sim vat ly") || t.includes("sim vật lý") || t.includes("sim")) return "physical";
+    return "other";
+  }
+  // Group order: esim (1), physical (2), other (3) — giữ thứ tự gốc trong từng nhóm.
+  function _sortCartByGroup() {
+    const ord = { esim: 1, physical: 2, other: 3 };
+    cart.sort((a, b) => {
+      const da = ord[_itemType(a)] || 9;
+      const db = ord[_itemType(b)] || 9;
+      return da - db;
+    });
+  }
+  // Gọi sau mọi thay đổi cart nếu toggle ON
+  function _maybeReGroupCart() {
+    if (_getGroupToggle()) _sortCartByGroup();
+  }
+
+  // Toggle handler — gọi từ checkbox UI
+  function toggleGroupByType(checked) {
+    _setGroupToggle(checked);
+    if (checked) {
+      _sortCartByGroup();
+      saveCart();
+    }
+    render();
+    showStatus(checked ? "✅ Đã bật gộp phân loại — ESIM trên, SIM VẬT LÝ dưới." : "✅ Đã tắt gộp phân loại.");
+  }
+
+  // ─── Drag-drop state + handlers ───
+  let _dragFromIdx = -1;
+  function _cartDragStart(ev, idx, tr) {
+    _dragFromIdx = idx;
+    tr.classList.add("dragging");
+    try { ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", String(idx)); } catch {}
+  }
+  function _cartDragOver(ev, tr) {
+    ev.preventDefault();
+    try { ev.dataTransfer.dropEffect = "move"; } catch {}
+    // Quyết định above/below dựa vào vị trí chuột trong tr
+    const rect = tr.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    tr.classList.toggle("drop-above", ev.clientY < mid);
+    tr.classList.toggle("drop-below", ev.clientY >= mid);
+  }
+  function _cartDragLeave(tr) {
+    tr.classList.remove("drop-above", "drop-below");
+  }
+  function _cartDrop(ev, targetIdx, tr) {
+    ev.preventDefault();
+    tr.classList.remove("drop-above", "drop-below");
+    if (_dragFromIdx < 0 || _dragFromIdx === targetIdx) { _dragFromIdx = -1; return; }
+    const above = ev.clientY < tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+    let insertAt = above ? targetIdx : targetIdx + 1;
+    // Xoá source khỏi cart trước rồi insert (phải adjust insertAt nếu source ở trước target)
+    const src = cart[_dragFromIdx];
+    cart.splice(_dragFromIdx, 1);
+    if (_dragFromIdx < insertAt) insertAt--;
+    cart.splice(insertAt, 0, src);
+    _dragFromIdx = -1;
+    // Nếu toggle ON → re-sort luôn (Q6: drop sang nhóm khác sẽ bị kéo về)
+    _maybeReGroupCart();
+    saveCart();
+    render();
+  }
+  function _cartDragEnd(tr) {
+    _dragFromIdx = -1;
+    tr.classList.remove("dragging");
+    // Cleanup tất cả drop-above/below trên tbody phòng khi miss
+    const tbody = document.getElementById("tbody");
+    if (tbody) tbody.querySelectorAll("tr").forEach(r => r.classList.remove("drop-above", "drop-below", "dragging"));
+  }
+
   function render() {
+    // v10.6: Sync UI toggle gộp phân loại (mỗi lần render đảm bảo trạng thái đúng)
+    const tgInp = document.getElementById("groupToggleInput");
+    const tgLbl = document.getElementById("groupToggleLabel");
+    if (tgInp && tgLbl) {
+      const v = _getGroupToggle();
+      tgInp.checked = v;
+      tgLbl.classList.toggle("active", v);
+    }
     const tbody = $("tbody");
     tbody.innerHTML = "";
     cart.forEach((item, idx) => {
       const rowNum = idx + 2; // bắt đầu từ 2 như google sheet
       const p = parseLineForDisplay(item.line);
       const tr = document.createElement("tr");
+      tr.dataset.idx = String(idx);
+
+      // v10.6: Cột drag handle (đầu tiên) — kéo để thay đổi thứ tự
+      const tdDrag = document.createElement("td");
+      tdDrag.className = "td-drag";
+      tdDrag.innerHTML = "⋮⋮";
+      tdDrag.title = "Kéo để thay đổi thứ tự";
+      tdDrag.draggable = true;
+      tdDrag.addEventListener("dragstart", (ev) => _cartDragStart(ev, idx, tr));
+      tr.addEventListener("dragover", (ev) => _cartDragOver(ev, tr));
+      tr.addEventListener("dragleave", () => _cartDragLeave(tr));
+      tr.addEventListener("drop", (ev) => _cartDrop(ev, idx, tr));
+      tr.addEventListener("dragend", () => _cartDragEnd(tr));
 
       const tdNo = document.createElement("td");
       tdNo.className = "td-no";
@@ -1475,7 +1629,12 @@ const App = (() => {
       tdName.className = "td-pkg";
       const nameDiv = document.createElement("div");
       nameDiv.className = "pkg-text";
-      nameDiv.textContent = p.name || item.line;
+      // v10.6: tên gói + icon copy ngay sau (cùng dòng inline)
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = p.name || item.line;
+      nameDiv.appendChild(nameSpan);
+      const copyBtn = makeCopyIconBtn(p.name || item.line, "Copy tên gói");
+      nameDiv.appendChild(copyBtn);
       tdName.appendChild(nameDiv);
       if (p.note) {
         const noteDiv = document.createElement("div");
@@ -1588,7 +1747,7 @@ const App = (() => {
       del.onclick = () => { cart.splice(idx, 1); saveCart(); render(); };
       tdDel.appendChild(del);
 
-      tr.append(tdNo, tdName, tdType, tdDays, tdPrice, tdQty, tdActions, tdDel);
+      tr.append(tdDrag, tdNo, tdName, tdType, tdDays, tdPrice, tdQty, tdActions, tdDel);
       tbody.appendChild(tr);
     });
     $("cartCount").textContent = cart.length + " dòng";
@@ -1699,6 +1858,42 @@ const App = (() => {
       ta.remove();
       return ok;
     }
+  }
+
+  // v10.6: SVG icon copy (FontAwesome Free 7.2.0 - copy regular).
+  // Dùng currentColor để inherit màu từ parent — chỗ nào set color thì icon đổi theo.
+  const COPY_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor"><path d="M480 400L288 400C279.2 400 272 392.8 272 384L272 128C272 119.2 279.2 112 288 112L421.5 112C425.7 112 429.8 113.7 432.8 116.7L491.3 175.2C494.3 178.2 496 182.3 496 186.5L496 384C496 392.8 488.8 400 480 400zM288 448L480 448C515.3 448 544 419.3 544 384L544 186.5C544 169.5 537.3 153.2 525.3 141.2L466.7 82.7C454.7 70.7 438.5 64 421.5 64L288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L368 496L368 512C368 520.8 360.8 528 352 528L160 528C151.2 528 144 520.8 144 512L144 256C144 247.2 151.2 240 160 240L176 240L176 192L160 192z"/></svg>';
+
+  // v10.6: Helper cho icon copy inline trong draft view modal — dùng HTML attribute onclick
+  async function _copyPkgNameInline(btnEl, pkgName) {
+    const ok = await copyText(pkgName);
+    if (ok && btnEl) {
+      btnEl.classList.add("copied");
+      const oldTitle = btnEl.title;
+      btnEl.title = "✅ Đã copy!";
+      setTimeout(() => { btnEl.classList.remove("copied"); btnEl.title = oldTitle; }, 1200);
+    }
+  }
+
+  // Tạo nút copy inline cho 1 chuỗi text (vd tên gói).
+  // Bấm → copy + flash màu xanh + tooltip "Đã copy".
+  function makeCopyIconBtn(text, title) {
+    const btn = document.createElement("button");
+    btn.className = "copy-icon-btn";
+    btn.type = "button";
+    btn.title = title || "Copy tên gói";
+    btn.innerHTML = COPY_ICON_SVG;
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const ok = await copyText(text);
+      if (ok) {
+        btn.classList.add("copied");
+        btn.title = "✅ Đã copy!";
+        setTimeout(() => { btn.classList.remove("copied"); btn.title = title || "Copy tên gói"; }, 1200);
+      }
+    };
+    return btn;
   }
 
   function calcOnly() {
@@ -3081,11 +3276,14 @@ const App = (() => {
       const days = t.days || "";
       const price = t.price || "?";
       const qty = it.qty != null ? it.qty : 1;
+      const pkgName = t.name || it.line || "";
       const note = it.note ? `<div style="color:#0ea5e9;font-size:11px;font-style:italic;">↳ ${escapeHtml(it.note)}</div>` : "";
+      // v10.6: Icon copy inline sau tên gói
+      const copyBtn = `<button class="copy-icon-btn" type="button" onclick="App._copyPkgNameInline(this, ${JSON.stringify(pkgName).replace(/"/g, "&quot;")})" title="Copy tên gói">${COPY_ICON_SVG}</button>`;
       return `
         <tr>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${i+1}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(t.name || it.line || "")}${note}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(pkgName)}${copyBtn}${note}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${escapeHtml(type)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${escapeHtml(days)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${escapeHtml(price)}</td>
@@ -5689,6 +5887,8 @@ const App = (() => {
     toggleRowNote,
     toggleNotesExpand,
     toggleSection1,
+    toggleGroupByType,
+    _copyPkgNameInline,
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
