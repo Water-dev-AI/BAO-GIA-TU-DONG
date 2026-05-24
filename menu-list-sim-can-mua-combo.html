@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.7.2 · 24/05/2026 · 01:51
+    Version 10.7.4 · 24/05/2026 · 02:17
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1911,6 +1911,7 @@ const App = (() => {
 
   // v10.7: Lưu mã eSIM / mã SIM VL của draft (autosave on blur).
   // Multi-line: mỗi dòng = 1 mã. Tối đa 5 mã. Auto trim + bỏ dòng rỗng.
+  // v10.7.3: Khi user vừa điền mã (trước đó rỗng) → auto-tick "Nhập sổ bằng mã".
   async function _draftSaveCode(draftId, which, value) {
     const d = DraftStore.getById(draftId);
     if (!d) return;
@@ -1921,13 +1922,34 @@ const App = (() => {
     if (lines.length > 5) { lines = lines.slice(0, 5); truncated = true; }
     const newVal = lines.join("\n");
     if (d.codes[which] === newVal) return; // không đổi
+    // Track: trước khi save có code nào không
+    const hadAnyCodeBefore = !!((d.codes.esim && d.codes.esim.trim()) || (d.codes.physical && d.codes.physical.trim()));
     d.codes[which] = newVal;
+    // v10.7.3: Nếu user vừa thêm mã (chuyển từ rỗng → có) → auto-tick useCode
+    const hasAnyCodeAfter = !!((d.codes.esim && d.codes.esim.trim()) || (d.codes.physical && d.codes.physical.trim()));
+    let autoTicked = false;
+    if (!hadAnyCodeBefore && hasAnyCodeAfter && d.useCode !== true) {
+      d.useCode = true;
+      autoTicked = true;
+    }
     await DraftStore.upsert(d);
+    // Sync UI checkbox useCode (nếu đang mở modal Xem cùng draft)
+    if (autoTicked) {
+      // Tìm checkbox đang render trong modal Xem và tick lại
+      const modalBody = document.getElementById("draftViewBody");
+      if (modalBody) {
+        modalBody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          if (cb.getAttribute("onchange") && cb.getAttribute("onchange").indexOf("_draftToggleUseCode") !== -1) {
+            cb.checked = true;
+          }
+        });
+      }
+    }
     const label = which === "esim" ? "eSIM" : "SIM VL";
     if (truncated) {
-      _draftViewStatus(`⚠️ Đã lưu ${lines.length} mã ${label} (giới hạn 5 mã/ô, các dòng dư đã bị cắt).`, "info");
+      _draftViewStatus(`⚠️ Đã lưu ${lines.length} mã ${label} (giới hạn 5 mã/ô, các dòng dư đã bị cắt)${autoTicked ? ' · ✅ Tự bật "Nhập sổ bằng mã"' : ''}.`, "info");
     } else if (lines.length) {
-      _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label}.`, "success");
+      _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label}${autoTicked ? ' · ✅ Tự bật "Nhập sổ bằng mã"' : ''}.`, "success");
     } else {
       _draftViewStatus(`✅ Đã xoá mã ${label}.`, "success");
     }
@@ -3403,6 +3425,8 @@ const App = (() => {
     const tagBadge = draftTagBadge(d.tag, d.customTag);
     const vat = d.vat || {};
     const hasVat = vat.mst || vat.name || vat.addr || vat.email;
+    // v10.7.4: Nếu tên đơn có chữ "vat" / "VAT" → cảnh báo (case-insensitive, word boundary để không match "vata...")
+    const nameHasVatWord = /\bvat\b/i.test(d.name || "");
     const vatBlock = hasVat ? `
       <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;">
         <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🧾 Thông tin xuất VAT</div>
@@ -3411,7 +3435,12 @@ const App = (() => {
         ${vat.addr ? `<div><span style="color:var(--muted);">Địa chỉ:</span> ${escapeHtml(vat.addr)}</div>` : ""}
         ${vat.email ? `<div><span style="color:var(--muted);">Email:</span> ${escapeHtml(vat.email)}</div>` : ""}
       </div>
-    ` : `<div style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--muted);">Đơn lẻ — không có thông tin VAT.</div>`;
+    ` : `
+      <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:13.5px;font-weight:700;color:#6b21a8;">🛒 Đơn lẻ — không có thông tin VAT.</div>
+        ${nameHasVatWord ? `<div style="margin-top:6px;font-size:13.5px;font-weight:700;color:#b91c1c;">⚠️ Quên nhập VAT phạt 20k</div>` : ""}
+      </div>
+    `;
 
     const customerInfo = `
       <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;">
