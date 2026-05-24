@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.7 · 24/05/2026 · 01:32
+    Version 10.7.2 · 24/05/2026 · 01:51
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -745,7 +745,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="blue" onclick="App.draftViewCopyBill()" style="margin:0;padding:8px 11px;font-size:12px;">📋 Bill</button>
       <button onclick="App.draftViewCopyQR()" style="margin:0;padding:8px 11px;font-size:12px;background:var(--green);color:white;border:none;border-radius:7px;cursor:pointer;">🎨 QR TT</button>
       <button onclick="App.draftViewCopyFullImage()" style="margin:0;padding:8px 11px;font-size:12px;background:#2563eb;color:white;border:none;border-radius:7px;cursor:pointer;">🖼️ Báo giá</button>
-      <button onclick="App.draftViewCopyPayload()" style="margin:0;padding:8px 11px;font-size:12px;background:#0e7c3a;color:white;border:none;border-radius:7px;cursor:pointer;">📤 Copy mã nhập</button>
+      <button onclick="App.draftViewCopyPayload()" style="margin:0;padding:8px 11px;font-size:12px;background:#0e7c3a;color:white;border:none;border-radius:7px;cursor:pointer;">📤 Nhập sổ</button>
       <!-- Spacer + nút chính -->
       <span style="flex:1;min-width:8px;"></span>
       <button class="green" onclick="App.draftViewImport()" style="margin:0;padding:8px 14px;font-size:12.5px;font-weight:700;">📥 Import để chỉnh sửa</button>
@@ -1909,18 +1909,29 @@ const App = (() => {
     }
   }
 
-  // v10.7: Lưu mã eSIM / mã SIM VL của draft (autosave on blur)
+  // v10.7: Lưu mã eSIM / mã SIM VL của draft (autosave on blur).
+  // Multi-line: mỗi dòng = 1 mã. Tối đa 5 mã. Auto trim + bỏ dòng rỗng.
   async function _draftSaveCode(draftId, which, value) {
     const d = DraftStore.getById(draftId);
     if (!d) return;
     if (!d.codes) d.codes = { esim: "", physical: "" };
-    const newVal = String(value || "").trim();
+    // Parse multi-line: split \n, trim từng dòng, bỏ rỗng, max 5
+    let lines = String(value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    let truncated = false;
+    if (lines.length > 5) { lines = lines.slice(0, 5); truncated = true; }
+    const newVal = lines.join("\n");
     if (d.codes[which] === newVal) return; // không đổi
     d.codes[which] = newVal;
     await DraftStore.upsert(d);
-    // Update inline status modal Xem (không refresh modal vì user đang gõ)
-    _draftViewStatus(`✅ Đã lưu mã ${which === "esim" ? "eSIM" : "SIM VL"}.`, "success");
-    draftRender(); // update list nháp dưới
+    const label = which === "esim" ? "eSIM" : "SIM VL";
+    if (truncated) {
+      _draftViewStatus(`⚠️ Đã lưu ${lines.length} mã ${label} (giới hạn 5 mã/ô, các dòng dư đã bị cắt).`, "info");
+    } else if (lines.length) {
+      _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label}.`, "success");
+    } else {
+      _draftViewStatus(`✅ Đã xoá mã ${label}.`, "success");
+    }
+    draftRender();
   }
 
   // v10.7: Toggle "Import bằng mã" cho 1 draft
@@ -3165,8 +3176,14 @@ const App = (() => {
       // v10.7: badge code + useCode (Q3)
       const codes = d.codes || {};
       const hasAnyCode = (codes.esim && codes.esim.trim()) || (codes.physical && codes.physical.trim());
+      // Đếm số mã (mỗi line là 1 mã)
+      function _countCodes(s) {
+        return String(s || "").split(/\n+/).map(x => x.trim()).filter(Boolean).length;
+      }
+      const esimCount = _countCodes(codes.esim);
+      const physicalCount = _countCodes(codes.physical);
       const codeBadge = hasAnyCode
-        ? `<span style="background:#fef9e7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #fde68a;" title="${[codes.esim ? 'eSIM: ' + codes.esim : '', codes.physical ? 'SIM VL: ' + codes.physical : ''].filter(Boolean).join(' · ')}">🔖 CODE</span>`
+        ? `<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #86efac;" title="${[esimCount ? 'eSIM: ' + esimCount + ' mã' : '', physicalCount ? 'SIM VL: ' + physicalCount + ' mã' : ''].filter(Boolean).join(' · ')}">✅ Đã lấy</span>`
         : "";
       const useCodeBadge = d.useCode === true
         ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Nhập sổ sẽ dùng mã làm anchor (thay tên đơn)">📥 BẰNG MÃ</span>`
@@ -3410,16 +3427,22 @@ const App = (() => {
     const grp = _analyzeDraftGroups(d);
     const codes = d.codes || { esim: "", physical: "" };
     const useCode = d.useCode === true;
+    // Style chung cho textarea code (resize:none, monospace, max 5 dòng)
+    const codeTaStyle = "padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:280px;min-height:34px;line-height:1.5;resize:vertical;";
+    const codeHint = `<div style="font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.4;">Tối đa 5 mã, mỗi mã 1 dòng (Enter để xuống dòng).</div>`;
     let codesBlock = "";
     if (grp.mode === "esim_only") {
       codesBlock = `
         <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
           <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (sẽ điền vào ô anchor khi nhập sổ)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <span style="color:var(--muted);">Mã eSIM:</span>
-            <input type="text" value="${escapeHtml(codes.esim || '')}" placeholder="vd: b0000262605220047" maxlength="32"
-              onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
-              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:200px;" />
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
+            <span style="color:var(--muted);padding-top:6px;">Mã eSIM:</span>
+            <div>
+              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
+                onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
+                style="${codeTaStyle}">${escapeHtml(codes.esim || '')}</textarea>
+              ${codeHint}
+            </div>
           </div>
           <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
             <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
@@ -3431,11 +3454,14 @@ const App = (() => {
       codesBlock = `
         <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
           <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <span style="color:var(--muted);">Mã SIM VL:</span>
-            <input type="text" value="${escapeHtml(codes.physical || '')}" placeholder="vd: b0000262605220047" maxlength="32"
-              onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
-              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:200px;" />
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
+            <span style="color:var(--muted);padding-top:6px;">Mã SIM VL:</span>
+            <div>
+              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
+                onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
+                style="${codeTaStyle}">${escapeHtml(codes.physical || '')}</textarea>
+              ${codeHint}
+            </div>
           </div>
           <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
             <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
@@ -3447,15 +3473,21 @@ const App = (() => {
       codesBlock = `
         <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
           <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (mỗi nhóm 1 ô anchor riêng)</div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;">
-            <span style="color:var(--muted);">Mã eSIM:</span>
-            <input type="text" value="${escapeHtml(codes.esim || '')}" placeholder="vd: b0000262605220047" maxlength="32"
-              onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
-              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:220px;" />
-            <span style="color:var(--muted);">Mã SIM VL:</span>
-            <input type="text" value="${escapeHtml(codes.physical || '')}" placeholder="vd: b0000262605220048" maxlength="32"
-              onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
-              style="padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:220px;" />
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:flex-start;">
+            <span style="color:var(--muted);padding-top:6px;">Mã eSIM:</span>
+            <div>
+              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
+                onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
+                style="${codeTaStyle}">${escapeHtml(codes.esim || '')}</textarea>
+              ${codeHint}
+            </div>
+            <span style="color:var(--muted);padding-top:6px;">Mã SIM VL:</span>
+            <div>
+              <textarea rows="2" placeholder="vd: b0000262605220048&#10;Mỗi mã 1 dòng (tối đa 5)"
+                onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
+                style="${codeTaStyle}">${escapeHtml(codes.physical || '')}</textarea>
+              ${codeHint}
+            </div>
           </div>
           <label style="display:flex;align-items:center;gap:5px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none;">
             <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
