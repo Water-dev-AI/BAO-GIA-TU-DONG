@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.7.4 · 24/05/2026 · 02:17
+    Version 10.8 · 24/05/2026 · 03:29
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -416,7 +416,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
             <input id="cust2bVatToggle" type="checkbox" onchange="App.cust2bToggleVat(this.checked)" style="margin:0;cursor:pointer;" />
             <span>🧾 Xuất VAT</span>
           </label>
+          <button onclick="App.vatImageOpen()" style="margin:0;padding:7px 10px;font-size:12.5px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:8px;cursor:pointer;font-family:inherit;" title="Upload ảnh chứa thông tin VAT → OCR tự fill 4 ô MST/Tên/Địa chỉ/Email">📷 VAT Ảnh</button>
+          <input id="vatImageInput" type="file" accept="image/*" style="display:none;" onchange="App.vatImageProcess(event)" />
         </div>
+
+        <!-- VAT OCR status (ẩn mặc định) -->
+        <div id="vatOcrStatus" style="display:none;margin-top:8px;padding:8px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:7px;font-size:12px;color:#1e40af;"></div>
 
         <!-- Custom tag (chỉ hiện khi tag = KHAC) -->
         <div id="cust2bCustomTagWrap" style="display:none;margin-top:8px;">
@@ -507,7 +512,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#bfdbfe;color:#1e40af;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị ảnh báo giá full">🖼️ Xem Báo giá</button>
         <button class="amber" onclick="App.qrCustomOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Copy thông tin chuyển khoản text">📋 Thông tin CK</button>
-        <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadOpen()" title="Tạo payload để paste vào Google Sheet xuất hoá đơn">📤 Nhập sổ</button>
+        <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadCopyDirect()" title="Copy mã nhập sổ vào clipboard ngay (không mở popup)">📤 Nhập sổ</button>
       </div>
 
       <div id="qrResultWrap" style="display:none;margin-top:10px;">
@@ -531,8 +536,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
               <div style="font-size:12px;color:var(--muted);font-weight:600;">Ảnh báo giá full</div>
               <button onclick="App.qrCloseFull()" style="margin:0;padding:3px 8px;font-size:11px;background:#eef2f7;color:#444;border:none;border-radius:5px;cursor:pointer;" title="Đóng">✕ Đóng</button>
             </div>
-            <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow-y:auto;">
-              <canvas id="qrFullCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
+            <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:400px;overflow-y:auto;">
+              <canvas id="qrFullCanvas" style="max-width:50%;height:auto;display:block;margin:0 auto;"></canvas>
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="green" onclick="App.qrDownloadAndClose('full')" style="margin:0;">💾 Tải ảnh</button>
@@ -1434,21 +1439,295 @@ const App = (() => {
     return s;
   }
 
-  function addFromText() {
+  // ─── v10.7.5: Smart Bill Parser ────────────────────────
+  // Parse text từ "Bill khách (live)" → tách thành:
+  //   {
+  //     packages: [{ line, qty }],   // lines chuẩn để feed vào addItems
+  //     vat: { mst, name, addr, email } | null,
+  //     orderCode: "DH..." | "",
+  //     hasBillStructure: bool,      // text có structure bill thật không (có Tạm tính / Tổng / VAT)
+  //   }
+  //
+  // Detect type: nếu text chứa "Tạm tính:", "Tổng thanh toán:", "Thông tin hóa đơn:", "Mã đơn hàng:"
+  //   → coi là bill, parse phức tạp + skip summary lines.
+  // Còn lại: parse theo line gói (như buildCartFromText cũ).
+  function parseBillText(rawText) {
+    const text = String(rawText || "").trim();
+    const lines = text.split(/\r?\n/);
+
+    // Detect summary/section keywords (case-insensitive, không dấu)
+    const summaryRe = /^(tạm tính|tam tinh|giảm|giam|ship|tổng thanh toán|tong thanh toan|tổng|tong)\s*:/i;
+    const vatHeaderRe = /^(thông tin (hóa|hoá) đơn|thong tin hoa don|thông tin xuất vat|thong tin xuat vat)\s*:?/i;
+    const orderCodeRe = /^(mã đơn hàng|ma don hang|mã đơn|ma don)\s*:\s*(\S+)/i;
+    const noteContinuationRe = /^\s*(?:↳|ⓘ|ⓘ|►|▶|>|\*\*\*|---)/; // dòng note/separator
+
+    // VAT field patterns (cho phép nhiều label đồng nghĩa)
+    const vatFieldRe = {
+      mst: /^(mst|mã số thuế|ma so thue|tax|tax\s*id)\s*:?\s*(.+)$/i,
+      name: /^(tên|ten|tên công ty|ten cong ty|công ty|cong ty|buyer|customer)\s*:?\s*(.+)$/i,
+      addr: /^(đ\/c|d\/c|địa chỉ|dia chi|address)\s*:?\s*(.+)$/i,
+      email: /^(email|mail|email nhận hoá đơn|email nhan hoa don|email nhan vat|email nhận vat)\s*:?\s*(.+)$/i,
+    };
+
+    // Check có structure bill không (có summary hoặc VAT hoặc orderCode)
+    let hasBillStructure = false;
+    for (const ln of lines) {
+      const t = ln.trim();
+      if (summaryRe.test(t) || vatHeaderRe.test(t) || orderCodeRe.test(t)) {
+        hasBillStructure = true; break;
+      }
+    }
+
+    const packages = [];
+    const vat = { mst: "", name: "", addr: "", email: "" };
+    let orderCode = "";
+    let inVatBlock = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const t = raw.trim();
+      if (!t) { inVatBlock = false; continue; } // dòng trống reset block VAT
+
+      // Order code
+      const ocMatch = t.match(orderCodeRe);
+      if (ocMatch) { orderCode = ocMatch[2].trim(); inVatBlock = false; continue; }
+
+      // VAT header → bật mode VAT cho các dòng sau
+      if (vatHeaderRe.test(t)) { inVatBlock = true; continue; }
+
+      // Trong block VAT → parse các field
+      if (inVatBlock || hasBillStructure) {
+        let matched = false;
+        for (const k of Object.keys(vatFieldRe)) {
+          const m = t.match(vatFieldRe[k]);
+          if (m) {
+            const val = m[2].trim();
+            if (val && !vat[k]) vat[k] = val;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) continue;
+      }
+
+      // Summary line → skip
+      if (summaryRe.test(t)) continue;
+
+      // Note continuation → skip (note của gói trước)
+      if (noteContinuationRe.test(t)) continue;
+
+      // Còn lại → parse như line gói. Cần extract tên + loại + giá + qty.
+      const pkg = _parsePackageLine(t);
+      if (pkg) packages.push(pkg);
+    }
+
+    return { packages, vat, orderCode, hasBillStructure };
+  }
+
+  // Parse 1 dòng thành line chuẩn (tên\tloại\tngày\tgiá) + qty.
+  // Trả về { line, qty } hoặc null.
+  function _parsePackageLine(raw) {
+    if (!raw) return null;
+    // Loại bỏ trailing whitespace, đè " x N", "*N", "× N", "× N cái", "N cái", "N SIM"... → tách qty
+    let s = raw;
+
+    // Detect qty patterns. Ưu tiên các pattern explicit (*N, xN, ×N) trước.
+    let qty = 1;
+    let isRecharge = false;
+    let qtyMatched = false;
+
+    // Recharge prefix: N3 / Nạp / nap
+    // Vd "Tên\tLoại\tGiá\tN3" hoặc "Tên\tLoại\tGiá\tnạp 3"
+    // Em detect ở cuối line trước rồi mới detect Qty thường
+    // Pattern: " N<digits>$" hoặc "Nạp <digits>$"
+    const rechargeMatch = s.match(/(?:^|[\s\t])N\s*(\d{1,3})\s*$/i);
+    if (rechargeMatch) {
+      qty = parseInt(rechargeMatch[1], 10);
+      isRecharge = true;
+      qtyMatched = true;
+      s = s.slice(0, rechargeMatch.index).trim();
+    } else {
+      const napMatch = s.match(/(?:^|[\s\t])(?:nạp|nap)\s*(\d{1,3})(?:\s*cái|\s*c[âa]y|\s*sim)?\s*$/i);
+      if (napMatch) {
+        qty = parseInt(napMatch[1], 10);
+        isRecharge = true;
+        qtyMatched = true;
+        s = s.slice(0, napMatch.index).trim();
+      }
+    }
+
+    if (!qtyMatched) {
+      // Qty thường: *N, xN, ×N, X N
+      const mulMatch = s.match(/(?:[*xX×])\s*(\d{1,3})(?:\s*cái|\s*c[âa]y|\s*sim)?\s*$/);
+      if (mulMatch) {
+        qty = parseInt(mulMatch[1], 10);
+        qtyMatched = true;
+        // Cắt đoạn từ ký tự * trở đi (KHÔNG cắt nguyên số đứng trước * vì đó là giá)
+        s = s.slice(0, mulMatch.index).trim();
+      }
+    }
+
+    if (!qtyMatched) {
+      // Qty trailing space: "146k 2 cái" / "146 2"
+      // CHỈ match nếu có space giữa giá và số qty + qty là số nhỏ (1-99 = SL hợp lý).
+      // Tránh confuse với số trong tên ("3 Days" — nhưng "Days" suffix sẽ block).
+      const trailMatch = s.match(/\s+(\d{1,2})(?:\s*cái|\s*c[âa]y|\s*sim)?\s*$/);
+      if (trailMatch) {
+        const num = parseInt(trailMatch[1], 10);
+        // Chỉ accept nếu trước số này có "k" (đã có giá) hoặc nếu line không chứa "Days/Ngày" ở cuối
+        const before = s.slice(0, trailMatch.index).trim();
+        if (/k\s*$/i.test(before) || (num >= 1 && num <= 50 && !/days?\s*\d+\s*$/i.test(before))) {
+          qty = num;
+          qtyMatched = true;
+          s = before;
+        }
+      }
+    }
+
+    // Bây giờ s = phần còn lại (tên\tloại\tgiá). Detect giá.
+    // Pattern giá: cuối line là số (optional k). Vd "321k", "146", "146000".
+    // Nếu không có "k" và số < 1000 → assume k. Nếu >= 1000 → assume VND, chia 1000.
+    const priceRe = /(\d[\d.,]*)\s*(k)?\s*$/i;
+    const pm = s.match(priceRe);
+    if (!pm) return null; // không có giá → không phải line gói
+
+    let priceNum = parseInt(pm[1].replace(/[.,]/g, ""), 10);
+    if (isNaN(priceNum) || priceNum <= 0) return null;
+    const hasK = !!pm[2];
+    let priceK;
+    if (hasK) {
+      priceK = priceNum;
+    } else if (priceNum >= 1000) {
+      // Số lớn không có k → assume VND
+      priceK = Math.round(priceNum / 1000);
+    } else {
+      // Số nhỏ không có k → assume k (vd "146")
+      priceK = priceNum;
+    }
+
+    // Cắt phần giá khỏi s → còn lại là "tên\tloại"
+    const beforePrice = s.slice(0, pm.index).trim().replace(/[\t\s]+$/, "");
+    if (!beforePrice) return null;
+
+    // Tách tên + loại. Ưu tiên tab; nếu không có tab → regex tìm loại.
+    const cells = beforePrice.split("\t").map(x => x.trim()).filter(Boolean);
+    let name = "", type = "", days = "";
+    if (cells.length >= 2) {
+      name = cells[0];
+      type = cells[1] || "";
+      // cells[2] có thể là ngày (vd "30 NGÀY" cho SIM VL)
+      if (cells.length >= 3) days = cells[2] || "";
+    } else {
+      // Không có tab → regex tìm loại trong text
+      const norm = beforePrice.toLowerCase();
+      const typeMatch = beforePrice.match(/\b(ESIM|SIM\s+VẬT\s+LÝ|SIM\s+VAT\s+LY|NẠP\s+GÓI|NAP\s+GOI)\b/i);
+      if (typeMatch) {
+        type = typeMatch[0].toUpperCase().replace(/\s+/g, " ");
+        // Normalize
+        if (type.includes("VAT")) type = "SIM VẬT LÝ";
+        if (type.includes("NAP")) { type = "NẠP GÓI"; isRecharge = true; }
+        name = beforePrice.replace(typeMatch[0], "").trim();
+      } else {
+        name = beforePrice;
+      }
+    }
+
+    // Build line chuẩn: tên\tloại\tgiá (skip ngày nếu rỗng để tránh tab thừa)
+    const priceStr = priceK + "k";
+    const parts = [name, type];
+    if (days) parts.push(days);
+    parts.push(priceStr);
+    const line = parts.join("\t");
+
+    // Build qty expression
+    const qtyExpr = isRecharge ? ("N" + qty) : String(qty);
+
+    return { line, qty: qtyExpr };
+  }
+
+
+  // v10.7.5: addFromText giờ dùng smart parser. Nếu detect Bill structure
+  // (có Tạm tính / VAT / Mã đơn) → restore cả Cust2B + orderCode.
+  async function addFromText() {
     const text = $("pasteBox").value;
-    const { good, bad } = ComboLogic.buildCartFromText(text);
-    if (!good.length && !bad.length) {
-      showStatus("❌ Chưa có dòng gói để thêm.");
+    if (!text || !text.trim()) {
+      showStatus("❌ Chưa có text để thêm.");
       return;
     }
-    const added = addItems(good);
-    $("pasteBox").value = "";
-    if (bad.length) {
-      showStatus(`⚠️ Đã thêm ${added} dòng. Có ${bad.length} dòng lỗi.`);
-      alert("Dòng lỗi không kết thúc bằng giá k:\n\n" + bad.join("\n"));
-    } else {
-      showStatus(`✅ Đã thêm ${added} dòng vào giỏ.`);
+    const parsed = parseBillText(text);
+    if (!parsed.packages.length) {
+      showStatus("❌ Không tìm thấy dòng gói hợp lệ.");
+      return;
     }
+
+    // Nếu giỏ có gói → hỏi Xoá+mới / Cộng / Huỷ
+    let mode = "add";
+    if (cart.length > 0) {
+      const choice = await _askPasteMode(parsed.packages.length, parsed.hasBillStructure);
+      if (choice === "cancel") {
+        showStatus("⏸ Đã huỷ.");
+        return;
+      }
+      mode = choice;
+    } else {
+      // Giỏ rỗng → tự replace
+      mode = "replace";
+    }
+
+    if (mode === "replace") {
+      // Xoá hết: cart + Cust2B + orderCode + draftEditingId
+      cart = [];
+      Cust2B.clear();
+      draftEditingId = null;
+      currentOrderCode = "";
+      const oc = document.getElementById("orderCode");
+      if (oc) oc.value = "";
+      pendingVatFromImport = null;
+      pendingTagFromImport = "";
+      pendingImportPayload = null;
+    }
+
+    // Add packages
+    const added = addItems(parsed.packages);
+
+    // Nếu replace + có Bill structure → restore Cust2B + orderCode
+    let extras = [];
+    if (mode === "replace" && parsed.hasBillStructure) {
+      const hasVatField = parsed.vat.mst || parsed.vat.name || parsed.vat.addr || parsed.vat.email;
+      if (hasVatField) {
+        Cust2B.state.type = "company";
+        Cust2B.state.vat = {
+          mst: parsed.vat.mst || "",
+          name: parsed.vat.name || "",
+          addr: parsed.vat.addr || "",
+          email: parsed.vat.email || "",
+        };
+        Cust2B.syncToDOM();
+        extras.push("VAT");
+      }
+      if (parsed.orderCode) {
+        setOrderCode(parsed.orderCode);
+        extras.push("mã đơn " + parsed.orderCode);
+      }
+    }
+
+    $("pasteBox").value = "";
+    liveRecalc();
+    _updateSaveBarUI();
+    const extraMsg = extras.length ? " (đã restore: " + extras.join(" + ") + ")" : "";
+    showStatus(`✅ Đã ${mode === "replace" ? "tạo đơn mới với" : "thêm"} ${added} dòng${extraMsg}.`);
+  }
+
+  // Hỏi user mode khi paste có giỏ hiện tại không rỗng
+  function _askPasteMode(numNewPackages, hasBillStructure) {
+    return new Promise(resolve => {
+      const billHint = hasBillStructure ? "\n\n(Text có chứa thông tin VAT / Mã đơn — chọn 'Tạo đơn mới' sẽ restore cả thông tin đó.)" : "";
+      const msg = `Giỏ hiện đang có ${cart.length} dòng.\nText paste có ${numNewPackages} gói mới.${billHint}\n\nNhấn OK = Tạo đơn mới (xoá giỏ + VAT cũ).\nNhấn Cancel sẽ hỏi tiếp.`;
+      if (confirm(msg)) { resolve("replace"); return; }
+      const msg2 = `Cộng ${numNewPackages} gói vào giỏ hiện tại?\n(Giữ nguyên VAT + tên + mã đơn cũ)\n\nNhấn OK = Cộng vào giỏ.\nNhấn Cancel = Huỷ paste.`;
+      if (confirm(msg2)) { resolve("add"); return; }
+      resolve("cancel");
+    });
   }
 
   async function pasteClipboardAndAdd() {
@@ -2981,6 +3260,162 @@ const App = (() => {
     Cust2B.syncToDOM();
     liveRecalc();
   }
+
+  // ─── v10.7.5: VAT OCR từ ảnh ──────────────────────────
+  // Dùng Tesseract.js (load lazy từ CDN) để OCR ảnh hoá đơn VAT.
+  // Parse text → extract MST / Tên CTY / Địa chỉ / Email → fill vào Cust2B.
+  let _tesseractLib = null;
+
+  function _showVatOcrStatus(msg, kind) {
+    const el = document.getElementById("vatOcrStatus");
+    if (!el) return;
+    const colors = {
+      info: { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af" },
+      success: { bg: "#f0fdf4", border: "#86efac", text: "#166534" },
+      error: { bg: "#fef2f2", border: "#fca5a5", text: "#b91c1c" },
+    };
+    const c = colors[kind || "info"];
+    el.style.background = c.bg;
+    el.style.borderColor = c.border;
+    el.style.color = c.text;
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function _hideVatOcrStatus() {
+    const el = document.getElementById("vatOcrStatus");
+    if (el) el.style.display = "none";
+  }
+
+  // Lazy load Tesseract.js từ CDN. ~2MB. Chỉ load 1 lần.
+  async function _loadTesseract() {
+    if (_tesseractLib) return _tesseractLib;
+    _showVatOcrStatus("⏳ Đang tải thư viện OCR (Tesseract.js ~2MB)... Lần đầu mất 5-15 giây.", "info");
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      script.onload = () => {
+        if (typeof Tesseract === "undefined") { reject(new Error("Tesseract not loaded")); return; }
+        _tesseractLib = Tesseract;
+        resolve(Tesseract);
+      };
+      script.onerror = () => reject(new Error("Không tải được Tesseract từ CDN"));
+      document.head.appendChild(script);
+    });
+  }
+
+  // Trigger file picker
+  function vatImageOpen() {
+    const inp = document.getElementById("vatImageInput");
+    if (inp) { inp.value = ""; inp.click(); }
+  }
+
+  // Sau khi user chọn ảnh → OCR + parse + fill
+  async function vatImageProcess(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      _showVatOcrStatus("❌ Vui lòng chọn 1 file ảnh.", "error");
+      return;
+    }
+
+    try {
+      const Tess = await _loadTesseract();
+      _showVatOcrStatus("📖 Đang đọc ảnh (vie + eng)... Có thể mất 10-30 giây.", "info");
+      // Recognize với cả tiếng Việt + Anh (tăng accuracy cho tên có dấu)
+      const { data: { text } } = await Tess.recognize(file, "vie+eng", {
+        // Logger để debug nếu cần
+        // logger: m => console.log("[OCR]", m.status, m.progress),
+      });
+      if (!text || !text.trim()) {
+        _showVatOcrStatus("⚠️ OCR không đọc được text. Thử ảnh rõ hơn.", "error");
+        return;
+      }
+      console.log("[VAT OCR] Raw text:\n", text);
+
+      // Parse text → extract 4 field
+      const extracted = _parseVatTextFromOcr(text);
+      const foundFields = [];
+      if (extracted.mst) foundFields.push("MST");
+      if (extracted.name) foundFields.push("Tên CTY");
+      if (extracted.addr) foundFields.push("Địa chỉ");
+      if (extracted.email) foundFields.push("Email");
+
+      if (!foundFields.length) {
+        _showVatOcrStatus("⚠️ Đã OCR xong nhưng không tìm thấy field VAT nào (MST/Tên/Địa chỉ/Email). Thử ảnh khác hoặc điền tay.", "error");
+        return;
+      }
+
+      // Tự bật "Xuất VAT" nếu chưa
+      Cust2B.state.type = "company";
+      // Merge: chỉ ghi đè field nào OCR có giá trị, giữ field cũ nếu OCR không có
+      if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "" };
+      if (extracted.mst) Cust2B.state.vat.mst = extracted.mst;
+      if (extracted.name) Cust2B.state.vat.name = extracted.name;
+      if (extracted.addr) Cust2B.state.vat.addr = extracted.addr;
+      if (extracted.email) Cust2B.state.vat.email = extracted.email;
+      Cust2B.syncToDOM();
+      liveRecalc();
+
+      _showVatOcrStatus(`✅ Đã fill ${foundFields.length} field: ${foundFields.join(", ")}. Kiểm tra lại trước khi lưu.`, "success");
+      // Auto hide sau 8s
+      setTimeout(_hideVatOcrStatus, 8000);
+    } catch (e) {
+      console.error("[VAT OCR] Error:", e);
+      _showVatOcrStatus("❌ Lỗi OCR: " + e.message, "error");
+    }
+  }
+
+  // Parse OCR text → trả về { mst, name, addr, email }
+  function _parseVatTextFromOcr(text) {
+    const out = { mst: "", name: "", addr: "", email: "" };
+    // Normalize: dấu : có thể bị OCR thành ; hoặc bỏ qua. Em làm tolerant.
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    // Email: regex chuẩn
+    const emailRe = /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/;
+
+    // MST: 10 hoặc 13 chữ số (có thể có dấu - giữa). Pattern Việt Nam.
+    const mstRe = /\b(\d{10}(?:[-\s]?\d{3})?)\b/;
+
+    for (const ln of lines) {
+      // Email
+      if (!out.email) {
+        const em = ln.match(emailRe);
+        if (em) out.email = em[1];
+      }
+      // MST: ưu tiên label "MST" / "Mã số thuế" / "Tax"
+      if (!out.mst && /(mst|mã số thuế|ma so thue|tax\s*id|tax\s*code)/i.test(ln)) {
+        const m = ln.match(mstRe);
+        if (m) out.mst = m[1].replace(/[-\s]/g, "");
+      }
+      // Tên CTY: label "Tên", "Tên công ty", "Buyer", "Customer"
+      if (!out.name && /^(tên(\s*(công\s*ty|cong\s*ty))?|ten(\s*(cong\s*ty))?|buyer|customer|đơn vị|don vi)\s*[:;]/i.test(ln)) {
+        const idx = ln.search(/[:;]/);
+        if (idx >= 0) {
+          const v = ln.slice(idx + 1).trim();
+          if (v) out.name = v;
+        }
+      }
+      // Địa chỉ: label "Đ/c", "Địa chỉ", "Address"
+      if (!out.addr && /^(đ\/?c|d\/?c|địa chỉ|dia chi|address)\s*[:;]/i.test(ln)) {
+        const idx = ln.search(/[:;]/);
+        if (idx >= 0) {
+          const v = ln.slice(idx + 1).trim();
+          if (v) out.addr = v;
+        }
+      }
+    }
+
+    // Fallback MST: nếu chưa có MST từ label → tìm số 10 chữ số bất kỳ trong text
+    if (!out.mst) {
+      const allText = text.replace(/\s+/g, " ");
+      const m = allText.match(/\b(\d{10})\b/);
+      if (m) out.mst = m[1];
+    }
+
+    return out;
+  }
+
   // v10.1: tag chuyển sang dropdown <select>
   function cust2bSelectTagFromDropdown(value) {
     Cust2B.state.tag = value;
@@ -4599,21 +5034,25 @@ const App = (() => {
   }
 
   // Bấm 🎨 QR TT: chỉ hiện cột QR simple (ẩn cột báo giá nếu đang mở)
+  // v10.7.5: Bấm Xem QR TT → đóng cột báo giá full (nếu đang mở) → chỉ hiện QR.
   async function qrGenerate() {
     const s = qrGetState();
     if (!s) return;
+    // Đóng cột báo giá full nếu đang mở
+    document.getElementById("qrFullCol").style.display = "none";
     document.getElementById("qrResultWrap").style.display = "block";
     document.getElementById("qrSimpleCol").style.display = "";
     document.getElementById("qrSimpleImg").src = s.qrUrl;
-    // KHÔNG render full ở đây — user phải bấm nút "🖼️ Báo giá" riêng
     _qrUpdateGridLayout();
     qrShowStatus(`✅ QR ${ComboLogic.fmtK(s.finalPayK)} — Mã ĐH: ${currentOrderCode}`);
   }
 
-  // Bấm 🖼️ Báo giá: chỉ hiện cột báo giá full
+  // v10.7.5: Bấm Xem Báo giá → đóng cột QR (nếu đang mở) → chỉ hiện báo giá.
   async function qrGenerateFull() {
     const s = qrGetState();
     if (!s) return;
+    // Đóng cột QR simple nếu đang mở
+    document.getElementById("qrSimpleCol").style.display = "none";
     document.getElementById("qrResultWrap").style.display = "block";
     document.getElementById("qrFullCol").style.display = "";
     await qrRenderFull(s);
@@ -5600,6 +6039,73 @@ const App = (() => {
     sheetPayloadRegenerate();
   }
 
+  // v10.7.5: Build payload + copy thẳng vào clipboard (không mở modal).
+  // Behavior giống nút "📤 Nhập sổ" trong modal Xem đơn nháp.
+  async function sheetPayloadCopyDirect() {
+    if (!cart.length) {
+      showStatus("⚠️ Giỏ rỗng, không tạo payload được.");
+      return;
+    }
+    try {
+      Cust2B.syncFromDOM();
+      const items = buildSheetPayloadItems();
+      if (!items.length) {
+        showStatus("⚠️ Không có gói hợp lệ trong giỏ.");
+        return;
+      }
+      const cust = Cust2B.getDraftPayload();
+      const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag || "ZALO", cust.customTag || "", cart, {
+        orderCode: currentOrderCode || "",
+        vat: cust.vat || null,
+      });
+      const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
+      const tagPrefix = cust.name && cust.tag ? (mapTagPrefix[cust.tag] || "") : "";
+      const payload = {
+        v: 1,
+        kind: "simglobe_sheet_v1",
+        name: cust.name,
+        tag: cust.tag || "",
+        tagPrefix,
+        orderCode: currentOrderCode,
+        link: draftLink,
+        items: items.map(it => ({
+          p: it.packageRaw, t: it.type, d: it.days, q: it.qty,
+          u: it.unitPriceK, g: it.discountAllocK,
+          r: it.isRecharge ? 1 : 0,
+          n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
+        })),
+      };
+      if (cust.vat) payload.vat = cust.vat;
+      // codes + useCode + groupByType từ draft đang edit
+      if (draftEditingId) {
+        const d = DraftStore.getById(draftEditingId);
+        if (d) {
+          if (d.codes && (d.codes.esim || d.codes.physical)) {
+            payload.codes = { esim: d.codes.esim || "", physical: d.codes.physical || "" };
+          }
+          if (d.useCode === true) payload.useCode = true;
+          if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
+        }
+      }
+      if (typeof payload.groupByType !== "boolean") {
+        payload.groupByType = _getGroupToggle();
+      }
+      const json = JSON.stringify(payload);
+      const encoded = urlSafeEncode(json);
+      const out = "SIMGLOBE-SHEET:" + encoded;
+      const ok = await copyText(out);
+      const totalK = items.reduce((s, it) => s + it.amountK, 0);
+      const discK = items.reduce((s, it) => s + it.discountAllocK, 0);
+      if (ok) {
+        qrShowStatus(`✅ Đã copy mã nhập sổ (${items.length} gói, ${ComboLogic.fmtK(totalK - discK)}). Paste vào Google Sheet hoá đơn.`);
+      } else {
+        qrShowStatus("❌ Copy thất bại — browser có thể chặn clipboard.");
+      }
+    } catch (e) {
+      qrShowStatus("❌ Lỗi: " + e.message);
+    }
+  }
+
   function sheetPayloadClose() {
     document.getElementById("sheetPayloadOverlay").classList.remove("open");
   }
@@ -6199,6 +6705,8 @@ const App = (() => {
     draftViewImport,
     cust2bToggleVat,
     cust2bSelectTagFromDropdown,
+    vatImageOpen,
+    vatImageProcess,
     cust2bOnChange,
     cust2bClear,
     cust2bOnVatInput,
@@ -6214,6 +6722,7 @@ const App = (() => {
     draftImportClose,
     draftImportConfirm,
     sheetPayloadOpen,
+    sheetPayloadCopyDirect,
     sheetPayloadClose,
     sheetPayloadSetType,
     sheetPayloadSetTag,
