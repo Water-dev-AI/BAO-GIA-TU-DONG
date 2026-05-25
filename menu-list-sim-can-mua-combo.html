@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.9 · 25/05/2026 · 14:41
+    Version 10.8.10 · 25/05/2026 · 14:55
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1626,18 +1626,18 @@ const App = (() => {
     }
 
     // ─── v10.8.9: Detect cú pháp "PRICE*QTY=TOTAL" ─────────────
-    // Vd "1320*2=2640k" → đơn giá 1320k, qty 2 (bỏ qua tổng)
+    // Vd "1320*2=2640k" hoặc "285k*10 = 2.850k" → đơn giá 285k (giữ 'k' optional ở unit), qty 10 (bỏ qua tổng)
     // CHỈ check nếu chưa match paren recharge ở trên
     if (!priceMatchedViaParen) {
-      // Match "<số>*<số>=<số>[k]" ở cuối line
-      const eqTotalRe = /(\d[\d.,]*)\s*[*xX×]\s*(\d{1,3})\s*=\s*\d[\d.,]*\s*k?\s*$/i;
+      // Match "<số>[k]<*><số>=<số>[k]" ở cuối line (cho phép 'k' ở cả unit và total)
+      const eqTotalRe = /(\d[\d.,]*)\s*k?\s*[*xX×]\s*(\d{1,3})\s*=\s*\d[\d.,]*\s*k?\s*$/i;
       const eqM = s.match(eqTotalRe);
       if (eqM) {
         const unitRaw = eqM[1].replace(/[\s,.]/g, "");
         const unitNum = parseInt(unitRaw, 10);
         const qtyNum = parseInt(eqM[2], 10);
         if (Number.isFinite(unitNum) && unitNum > 0 && qtyNum > 0 && qtyNum <= 999) {
-          // unitNum có thể là "1320" (k implicit) hoặc "1320000" (VND)
+          // unitNum có thể là "285" (k implicit hoặc đã có k suffix) hoặc "1320000" (VND nguyên)
           priceK = unitNum >= 10000 ? Math.round(unitNum / 1000) : unitNum;
           qty = qtyNum;
           qtyMatched = true;
@@ -1731,13 +1731,27 @@ const App = (() => {
     if (!beforePrice) return null;
 
     // Tách tên + loại + ngày. Ưu tiên tab; nếu không có tab → regex tìm loại + ngày trong text.
-    const cells = beforePrice.split("\t").map(x => x.trim()).filter(Boolean);
+    // v10.8.10: KHÔNG filter(Boolean) khi split tab — phải giữ đúng vị trí cell (cell rỗng giữa
+    // các tab có ý nghĩa: vd ESIM có cột NGÀY rỗng → "name\tESIM\t\t299k").
+    const cellsRaw = beforePrice.split("\t").map(x => x.trim());
+    // Đếm số cell có nội dung để biết là tab-format hay không
+    const nonEmptyCount = cellsRaw.filter(Boolean).length;
     let name = "", type = "", days = "";
-    if (cells.length >= 2) {
-      name = cells[0];
-      type = cells[1] || "";
-      // cells[2] có thể là ngày (vd "30 NGÀY" cho SIM VL)
-      if (cells.length >= 3) days = cells[2] || "";
+
+    // Tab-format: có ≥ 2 tab (cells.length ≥ 3) HOẶC có ≥ 2 cell không rỗng và có tab
+    const hasTab = beforePrice.includes("\t");
+
+    if (hasTab && nonEmptyCount >= 2) {
+      // v10.8.10: Path tab-format. Layout chuẩn từ Google Sheet picker / bill có TAB:
+      //   [tên]\t[loại]\t[ngày-OPTIONAL]\t[giá]
+      // Nếu cells.length = 3 → có thể là [tên\tloại\tgiá] (không có ngày)
+      //                        hoặc [tên\tloại\tngày] (giá đã cắt rồi nên cells này là phần trước giá)
+      // Vì giá đã được cắt khỏi `s` ở trên, cellsRaw lúc này là [tên, loại, ngày?].
+      name = cellsRaw[0] || "";
+      type = cellsRaw[1] || "";
+      // cells[2] có thể là ngày (vd "30 NGÀY" cho SIM VL data/ngày), hoặc rỗng (cho ESIM / SIM data tổng)
+      if (cellsRaw.length >= 3) days = cellsRaw[2] || "";
+      // Nếu cells.length = 2 (chỉ [tên, loại]) → days = ""
     } else {
       // Không có tab → regex tìm loại trong text.
       // Lưu ý: KHÔNG dùng \b word boundary vì JS \b chỉ work với ASCII (Ý, Ó là Unicode → fail).
@@ -1754,24 +1768,33 @@ const App = (() => {
         remaining = beforePrice.replace(typeMatch[1], " ").replace(/\s{2,}/g, " ").trim();
       }
       // v10.8.9: Detect NGÀY ngay SAU loại (vd "SIM VẬT LÝ 8 NGÀY" → days="8 NGÀY")
-      // Pattern bắt số + "NGÀY" / "Ngày" / "Days" / "Day", giữ NGUYÊN chữ tiếng Việt nếu có.
-      // Bias: ưu tiên match gần đầu chuỗi remaining nếu typeMatch đã có (vì days hay đi liền sau type),
-      //       nhưng cũng accept ở giữa câu (vd "USA, 19 Days, ...").
-      const daysRe = /(\d{1,3})\s*(NGÀY|Ngày|ngày|NGAY|Ngay|ngay|Days|days|DAYS|Day|day|DAY)\b/;
-      const daysMatch = remaining.match(daysRe);
-      if (daysMatch) {
-        const dnum = daysMatch[1];
-        const dunit = daysMatch[2];
-        // Giữ nguyên chữ tiếng Việt "NGÀY" nếu match là NGÀY/Ngày/ngày, ngược lại giữ tiếng Anh
-        let unitOut = dunit;
-        if (/^ng[aà]y$/i.test(dunit)) unitOut = "NGÀY";
-        days = `${dnum} ${unitOut}`;
-        // Bỏ phần "X NGÀY" khỏi name, kèm dấu phẩy thừa
-        remaining = remaining.replace(daysMatch[0], " ").replace(/\s*,\s*,/g, ",").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
-        // Bỏ comma ở đầu/cuối + comma cô đơn
-        remaining = remaining.replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").trim();
+      // v10.8.10: CHỈ trích NGÀY nếu type = SIM VẬT LÝ (vì SIM VL có cột NGÀY riêng).
+      // ESIM thì NGÀY luôn nằm trong tên (vd "Mainland China A, 5 Days, 20GB") → giữ nguyên trong name.
+      // Khi không xác định được type → để empty (an toàn hơn).
+      if (type === "SIM VẬT LÝ") {
+        const daysRe = /(\d{1,3})\s*(NGÀY|Ngày|ngày|NGAY|Ngay|ngay|Days|days|DAYS|Day|day|DAY)\b/;
+        const daysMatch = remaining.match(daysRe);
+        if (daysMatch) {
+          const dnum = daysMatch[1];
+          const dunit = daysMatch[2];
+          // Giữ nguyên chữ tiếng Việt "NGÀY" nếu match là NGÀY/Ngày/ngày, ngược lại giữ tiếng Anh
+          let unitOut = dunit;
+          if (/^ng[aà]y$/i.test(dunit)) unitOut = "NGÀY";
+          days = `${dnum} ${unitOut}`;
+          // Bỏ phần "X NGÀY" khỏi name, kèm dấu phẩy thừa
+          remaining = remaining.replace(daysMatch[0], " ").replace(/\s*,\s*,/g, ",").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
+          // Bỏ comma ở đầu/cuối + comma cô đơn
+          remaining = remaining.replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").trim();
+        }
       }
       name = remaining.trim();
+    }
+
+    // v10.8.10: Enforce rule: ESIM → days luôn rỗng (ngày nằm trong tên).
+    // Áp dụng cho CẢ tab-path và no-tab-path, vì bill có thể có format không chuẩn
+    // (vd vô tình điền "5 Days" vào cell ngày của ESIM thay vì để trống).
+    if (/esim/i.test(type)) {
+      days = "";
     }
 
     // v10.8.9: Nếu line có cú pháp "(GIA-20k)*N" → đây là NẠP GÓI của SIM VẬT LÝ.
