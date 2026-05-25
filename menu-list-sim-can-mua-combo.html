@@ -367,7 +367,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.24 · 25/05/2026 · 22:50
+    Version 10.8.25 · 25/05/2026 · 23:10
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7882,6 +7882,18 @@ const App = (() => {
   _updateSaveBarUI(); // init UI hàng nút Lưu (State 1)
   // Khi render lần đầu, gắn share param vào Cust2B nếu có pendingImportPayload đã được decode trước đó
 
+  // v10.8.25: Init StockOverflow + PackageGuides — phải đặt TRƯỚC `return` của IIFE
+  // (code sau return không bao giờ chạy → SimGlobePkgGuides undefined ở phiên bản trước).
+  window.SimGlobePkgGuides = PackageGuides;
+  (async () => {
+    await new Promise(r => setTimeout(r, 800));
+    StockOverflow.init();
+  })();
+  (async () => {
+    await new Promise(r => setTimeout(r, 1000));
+    PackageGuides.init();
+  })();
+
   return {
     addFromText,
     pasteClipboardAndAdd,
@@ -8011,18 +8023,6 @@ const App = (() => {
     vatPickItem,
     vatDeleteItem,
   };
-
-  // v10.8.23: Init StockOverflow + PackageGuides ở CUỐI scope sau khi tất cả định nghĩa
-  // (tránh TDZ "Cannot access ... before initialization" của const trong IIFE).
-  window.SimGlobePkgGuides = PackageGuides;
-  (async () => {
-    await new Promise(r => setTimeout(r, 800));
-    StockOverflow.init();
-  })();
-  (async () => {
-    await new Promise(r => setTimeout(r, 1000));
-    PackageGuides.init();
-  })();
 })();
 </script>
 </body>
