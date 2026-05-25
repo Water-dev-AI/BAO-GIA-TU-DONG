@@ -179,6 +179,71 @@
   }
   .pkg-overflow-tip .pot-btn:hover { background: #6d28d9; }
 
+  /* v10.8.21: Gói có hướng dẫn — background xanh nhạt + border trái */
+  .pkg-has-guide {
+    background: #eff6ff;
+    border-left: 2px solid #3b82f6;
+    padding-left: 5px;
+    border-radius: 2px;
+  }
+  /* Khi đồng thời cả overflow + has-guide: overflow (tím) thắng style chính,
+     vẫn giữ border xanh trái để biết có guide */
+  .pkg-overflow.pkg-has-guide {
+    background: linear-gradient(180deg, transparent 70%, #ede9fe 70%);
+    border-left: 2px solid #3b82f6;
+  }
+  .pkg-guide-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: 4px; padding: 2px 5px; font-size: 13px; line-height: 1;
+    background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;
+    border-radius: 5px; cursor: pointer; vertical-align: middle;
+    font-family: inherit;
+  }
+  .pkg-guide-btn:hover { background: #bfdbfe; }
+
+  /* Modal Xem ảnh hướng dẫn */
+  .pkg-guide-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 10000; display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .pkg-guide-overlay.open { display: flex; }
+  .pkg-guide-modal {
+    background: white; border-radius: 12px; max-width: min(90vw, 800px);
+    max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .pkg-guide-header {
+    padding: 12px 16px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pkg-guide-header h4 { margin: 0; flex: 1; font-size: 14px; color: #1e293b; word-break: break-word; }
+  .pkg-guide-header button {
+    margin: 0; padding: 4px 9px; background: #eef2f7; color: #444;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .pkg-guide-body {
+    padding: 12px 16px; overflow: auto; display: flex; align-items: center;
+    justify-content: center; background: #fafafa; min-height: 200px;
+  }
+  .pkg-guide-body img {
+    max-width: 100%; max-height: 65vh; display: block;
+    border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .pkg-guide-footer {
+    padding: 10px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .pkg-guide-footer .pgf-fname { flex: 1; font-size: 11.5px; color: #64748b; font-family: 'Roboto Mono', monospace; }
+  .pkg-guide-footer button {
+    margin: 0; padding: 7px 14px; font-size: 12.5px; font-weight: 600;
+    border: none; border-radius: 7px; cursor: pointer; font-family: inherit;
+  }
+  .pkg-guide-footer .pgf-download { background: #10b981; color: white; }
+  .pkg-guide-footer .pgf-download:hover { background: #059669; }
+  .pkg-guide-footer .pgf-copy { background: #3b82f6; color: white; }
+  .pkg-guide-footer .pgf-copy:hover { background: #2563eb; }
+
   /* Ô SL max 3 ký tự — width tối thiểu để chứa 3 số + cho phép "N99" */
   input.qty  { width: 64px;  padding: 5px 6px; font-size: 12.5px; border: 1px solid #cfd5df; border-radius: 6px; font-family: inherit; text-align: center; }
   input.qty.invalid { border-color: var(--red); background: #fef2f2; }
@@ -302,7 +367,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.20 · 25/05/2026 · 20:30
+    Version 10.8.22 · 25/05/2026 · 21:45
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -782,6 +847,25 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 <!-- v10.8.16: Modal VAT tự điền — paste text bất kỳ → parse 4 field VAT -->
 <!-- v10.8.20: Tooltip popup cho gói thừa tồn kho (single global element, reuse cho mọi .pkg-overflow) -->
 <div id="pkgOverflowTip" class="pkg-overflow-tip"></div>
+
+<!-- v10.8.21: Modal xem ảnh hướng dẫn gói -->
+<div id="pkgGuideOverlay" class="pkg-guide-overlay" onclick="if(event.target===this)App.pkgGuideClose()">
+  <div class="pkg-guide-modal">
+    <div class="pkg-guide-header">
+      <h4 id="pkgGuideTitle">Hướng dẫn gói</h4>
+      <button onclick="App.pkgGuideClose()" title="Đóng">✕</button>
+    </div>
+    <div class="pkg-guide-body">
+      <img id="pkgGuideImg" src="" alt="Hướng dẫn" />
+      <div id="pkgGuideError" style="display:none;color:#dc2626;font-size:13px;line-height:1.6;text-align:center;"></div>
+    </div>
+    <div class="pkg-guide-footer">
+      <div class="pgf-fname" id="pkgGuideFileName">—</div>
+      <button class="pgf-copy" onclick="App.pkgGuideCopy()">📋 Copy ảnh</button>
+      <button class="pgf-download" onclick="App.pkgGuideDownload()">⬇️ Tải ảnh</button>
+    </div>
+  </div>
+</div>
 
 <div class="picker-overlay" id="vatAutoFillOverlay" onclick="if(event.target===this)App.vatAutoFillClose()">
   <div class="picker-modal" style="width:min(96vw, 600px);">
@@ -2223,11 +2307,29 @@ const App = (() => {
       const nameSpan = document.createElement("span");
       nameSpan.textContent = p.name || item.line;
       // v10.8.20: Check gói thừa tồn kho → tô tím + tooltip hover
+      let classes = [];
       if (p.name && StockOverflow.check(p.name, p.type, p.days)) {
-        nameSpan.className = "pkg-overflow";
+        classes.push("pkg-overflow");
         nameSpan.title = ""; // dùng custom tooltip qua mouseenter, không native title
       }
+      // v10.8.21: Check có hướng dẫn → background xanh nhạt + icon 📘
+      const guide = p.name ? PackageGuides.lookup(p.name, p.type) : null;
+      if (guide) {
+        classes.push("pkg-has-guide");
+      }
+      if (classes.length) nameSpan.className = classes.join(" ");
       nameDiv.appendChild(nameSpan);
+      if (guide) {
+        const guideBtn = document.createElement("button");
+        guideBtn.type = "button";
+        guideBtn.className = "pkg-guide-btn";
+        guideBtn.title = "Xem hướng dẫn gói: " + guide.file;
+        guideBtn.textContent = "📘";
+        const nameForOpen = p.name || item.line;
+        const typeForOpen = p.type || "";
+        guideBtn.onclick = (ev) => { ev.stopPropagation(); pkgGuideOpen(nameForOpen, typeForOpen); };
+        nameDiv.appendChild(guideBtn);
+      }
       const copyBtn = makeCopyIconBtn(p.name || item.line, "Copy tên gói");
       nameDiv.appendChild(copyBtn);
       tdName.appendChild(nameDiv);
@@ -3216,8 +3318,28 @@ const App = (() => {
 
       const tdName = document.createElement("td"); tdName.className = "col-name";
       const nameDiv = document.createElement("div");
-      nameDiv.textContent = p.name || item.line;
+      // v10.8.21: Check overflow + có hướng dẫn
+      const isOverflow = p.name && StockOverflow.check(p.name, p.type, p.days);
+      const guide = p.name ? PackageGuides.lookup(p.name, p.type) : null;
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = p.name || item.line;
+      let pkgCls = [];
+      if (isOverflow) pkgCls.push("pkg-overflow");
+      if (guide) pkgCls.push("pkg-has-guide");
+      if (pkgCls.length) nameSpan.className = pkgCls.join(" ");
+      nameDiv.appendChild(nameSpan);
       nameDiv.style.fontWeight = "500";
+      if (guide) {
+        const gBtn = document.createElement("button");
+        gBtn.type = "button";
+        gBtn.className = "pkg-guide-btn";
+        gBtn.title = "Xem hướng dẫn gói";
+        gBtn.textContent = "📘";
+        const nameForOpen = p.name || item.line;
+        const typeForOpen = p.type || "";
+        gBtn.onclick = (ev) => { ev.stopPropagation(); pkgGuideOpen(nameForOpen, typeForOpen); };
+        nameDiv.appendChild(gBtn);
+      }
       tdName.appendChild(nameDiv);
       if (p.note) {
         const noteDiv = document.createElement("div");
@@ -4472,13 +4594,21 @@ const App = (() => {
       const copyBtn = `<button class="copy-icon-btn" type="button" onclick="App._copyPkgNameInline(this, ${JSON.stringify(pkgName).replace(/"/g, "&quot;")})" title="Copy tên gói">${COPY_ICON_SVG}</button>`;
       // v10.8.20: check tồn kho → tô tím tên gói
       const isOverflow = pkgName && StockOverflow.check(pkgName, type, days);
-      const pkgNameHtml = isOverflow
-        ? `<span class="pkg-overflow">${escapeHtml(pkgName)}</span>`
+      // v10.8.21: check có hướng dẫn → background xanh nhạt + nút 📘
+      const guide = pkgName ? PackageGuides.lookup(pkgName, type) : null;
+      let pkgClasses = [];
+      if (isOverflow) pkgClasses.push("pkg-overflow");
+      if (guide) pkgClasses.push("pkg-has-guide");
+      const pkgNameHtml = pkgClasses.length
+        ? `<span class="${pkgClasses.join(" ")}">${escapeHtml(pkgName)}</span>`
         : escapeHtml(pkgName);
+      const guideBtnHtml = guide
+        ? `<button class="pkg-guide-btn" type="button" onclick="App.pkgGuideOpen(${JSON.stringify(pkgName).replace(/"/g, "&quot;")}, ${JSON.stringify(type).replace(/"/g, "&quot;")})" title="Xem hướng dẫn gói">📘</button>`
+        : "";
       return `
         <tr>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${i+1}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${pkgNameHtml}${copyBtn}${note}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${pkgNameHtml}${copyBtn}${guideBtnHtml}${note}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${escapeHtml(type)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${escapeHtml(days)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${escapeHtml(price)}</td>
@@ -5542,6 +5672,17 @@ const App = (() => {
   (async () => {
     await new Promise(r => setTimeout(r, 800));
     StockOverflow.init();
+  })();
+
+  // v10.8.21: Expose globally để user có thể set sheet URL qua console:
+  //   SimGlobePkgGuides.setSheetUrl("https://docs.google.com/...")
+  window.SimGlobePkgGuides = PackageGuides;
+
+  // v10.8.21: Init Package Guides (hướng dẫn gói) — background.
+  // Nếu SHEET_URL trống → chỉ load cache (nếu có). User cấu hình URL qua console hoặc settings.
+  (async () => {
+    await new Promise(r => setTimeout(r, 1000));
+    PackageGuides.init();
   })();
 
   async function draftsManualRefresh() {
@@ -6729,6 +6870,235 @@ const App = (() => {
     return { init, check, getSheetUrl, getCount };
   })();
 
+  // ─── v10.8.21: PackageGuides — hướng dẫn gói (modal ảnh) ─────────────
+  // Sheet 3 cột: TÊN GÓI | LOẠI SIM | FILE ẢNH
+  //   - Match prefix: gói trong giỏ phải startsWith(tên trong sheet) (đã norm).
+  //   - LOẠI SIM rỗng → apply mọi loại. Có giá trị → chỉ apply đúng loại.
+  //   - Chọn match cụ thể nhất (prefix dài nhất thắng).
+  // Ảnh: lưu trong folder `./guides/` của repo (relative URL).
+  const PackageGuides = (() => {
+    // v10.8.22: Google Sheet hướng dẫn gói (đã publish CSV).
+    let SHEET_URL = "https://docs.google.com/spreadsheets/d/1OG7WZxFTYRYq6WeOzjgRuI3K91DvxDDrygHej78KtpY/edit?gid=0#gid=0";
+    const IMG_BASE = "./guides/"; // folder ảnh trong cùng repo
+    const CACHE_KEY = "simglobe_pkg_guides_cache";
+    const CACHE_TTL_MS = 5 * 60 * 1000;
+
+    // Mảng entries: [{ prefix, type, file, prefixLen }]
+    // prefix + type đã norm. prefixLen dùng để pick match dài nhất.
+    let entries = [];
+    let lastFetchAt = 0;
+
+    function norm(s) {
+      return String(s || "")
+        .trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/\s+/g, " ");
+    }
+
+    // Tìm hướng dẫn cho 1 gói (name, type) — trả về { file, prefix } hoặc null
+    function lookup(name, type) {
+      if (!entries.length || !name) return null;
+      const nameNorm = norm(name);
+      const typeNorm = norm(type);
+      let best = null;
+      for (const e of entries) {
+        // Prefix match (lưu ý: chỉ match nếu cuối prefix là word boundary để
+        //   "Mainland China A" không match "Mainland China AB"; check ký tự kế tiếp)
+        if (!nameNorm.startsWith(e.prefix)) continue;
+        // Word-boundary: ký tự sau prefix phải là end-of-string hoặc whitespace/comma
+        const nextCh = nameNorm.charAt(e.prefix.length);
+        if (nextCh && !/[\s,.\-/]/.test(nextCh)) continue;
+        // Loại filter: nếu sheet entry có type, phải khớp
+        if (e.type && e.type !== typeNorm) continue;
+        // Match dài nhất thắng
+        if (!best || e.prefixLen > best.prefixLen) best = e;
+      }
+      return best ? { file: best.file, prefix: best.prefix } : null;
+    }
+
+    function _saveCache(rows) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows })); }
+      catch (e) { /* ignore */ }
+    }
+    function _loadCache() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || !Array.isArray(obj.rows)) return null;
+        if (Date.now() - obj.at > CACHE_TTL_MS) return null;
+        return obj.rows;
+      } catch (e) { return null; }
+    }
+
+    function _buildFromRows(rows) {
+      if (!rows.length) { entries = []; return 0; }
+      const header = rows[0].map(h => norm(h));
+      const colName = header.findIndex(h => h.includes("ten goi"));
+      const colType = header.findIndex(h => h.includes("loai sim"));
+      const colFile = header.findIndex(h => h.includes("file") || h.includes("anh") || h.includes("hinh") || h.includes("image"));
+      if (colName < 0 || colFile < 0) {
+        console.warn("[PackageGuides] Header thiếu cột 'TÊN GÓI' hoặc 'FILE ẢNH'. Headers:", rows[0]);
+        entries = [];
+        return 0;
+      }
+      const newEntries = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || !r[colName] || !r[colFile]) continue;
+        const prefix = norm(r[colName]);
+        const type = colType >= 0 ? norm(r[colType]) : "";
+        const file = String(r[colFile]).trim();
+        if (!prefix || !file) continue;
+        newEntries.push({ prefix, type, file, prefixLen: prefix.length });
+      }
+      entries = newEntries;
+      return newEntries.length;
+    }
+
+    function setSheetUrl(url) {
+      SHEET_URL = url || "";
+      // Clear cache + re-fetch
+      try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+      lastFetchAt = 0;
+      init();
+    }
+
+    async function init() {
+      const cached = _loadCache();
+      if (cached) {
+        _buildFromRows(cached);
+        lastFetchAt = Date.now();
+        try { render(); } catch (e) {}
+      }
+      if (!SHEET_URL) {
+        // Chưa cấu hình URL → skip fetch, chỉ dùng cache (nếu có)
+        return;
+      }
+      if (!cached || Date.now() - lastFetchAt > CACHE_TTL_MS) {
+        try {
+          const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
+          if (!csvUrl) return;
+          const csvText = await gsFetch(csvUrl);
+          const rows = gsParseCsv(csvText);
+          const count = _buildFromRows(rows);
+          lastFetchAt = Date.now();
+          _saveCache(rows);
+          console.log(`[PackageGuides] Loaded ${count} guides.`);
+          try { render(); } catch (e) {}
+          try { draftRender(); } catch (e) {}
+        } catch (e) {
+          console.warn("[PackageGuides] Fetch failed:", e.message);
+        }
+      }
+    }
+
+    function getImageUrl(file) {
+      if (!file) return "";
+      // Nếu file đã là URL đầy đủ → trả về như vậy. Ngược lại ghép base.
+      if (/^https?:\/\//i.test(file)) return file;
+      return IMG_BASE + file;
+    }
+
+    function getCount() { return entries.length; }
+
+    return { init, lookup, setSheetUrl, getImageUrl, getCount };
+  })();
+
+  // ─── Modal Xem hướng dẫn ─────────────
+  let _currentGuideFile = "";
+  let _currentGuidePkgName = "";
+  function pkgGuideOpen(pkgName, type) {
+    const found = PackageGuides.lookup(pkgName, type);
+    if (!found) {
+      showStatus("⚠️ Không tìm thấy hướng dẫn cho gói này.");
+      return;
+    }
+    _currentGuideFile = found.file;
+    _currentGuidePkgName = pkgName;
+    const url = PackageGuides.getImageUrl(found.file);
+    const ov = document.getElementById("pkgGuideOverlay");
+    const img = document.getElementById("pkgGuideImg");
+    const title = document.getElementById("pkgGuideTitle");
+    const fname = document.getElementById("pkgGuideFileName");
+    const errEl = document.getElementById("pkgGuideError");
+    if (title) title.textContent = pkgName;
+    if (fname) fname.textContent = found.file;
+    if (errEl) errEl.style.display = "none";
+    if (img) {
+      img.style.display = "block";
+      img.src = url;
+      img.onerror = () => {
+        img.style.display = "none";
+        if (errEl) {
+          errEl.style.display = "block";
+          errEl.innerHTML = `❌ Không tải được ảnh:<br><code style="font-size:11px;">${escapeHtml(url)}</code><br>Kiểm tra file đã upload vào folder <code>./guides/</code> chưa.`;
+        }
+      };
+    }
+    if (ov) ov.classList.add("open");
+  }
+  function pkgGuideClose() {
+    const ov = document.getElementById("pkgGuideOverlay");
+    if (ov) ov.classList.remove("open");
+  }
+  async function pkgGuideDownload() {
+    if (!_currentGuideFile) return;
+    const url = PackageGuides.getImageUrl(_currentGuideFile);
+    try {
+      // Fetch ảnh thành blob rồi tạo download link (đảm bảo tên file đúng)
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = _currentGuideFile;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      showStatus(`✅ Đã tải ảnh: ${_currentGuideFile}`);
+    } catch (e) {
+      // Fallback: mở ảnh trong tab mới để user save thủ công
+      window.open(url, "_blank", "noopener");
+      showStatus(`⚠️ Tải tự động fail. Đã mở ảnh tab mới: ${e.message}`);
+    }
+    pkgGuideClose();
+  }
+  async function pkgGuideCopy() {
+    if (!_currentGuideFile) return;
+    const url = PackageGuides.getImageUrl(_currentGuideFile);
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      let blob = await resp.blob();
+      // ClipboardItem chỉ hỗ trợ một số MIME type. Convert sang PNG nếu cần.
+      if (!blob.type.startsWith("image/png")) {
+        // Convert qua canvas
+        const img = await new Promise((resolve, reject) => {
+          const im = new Image();
+          im.crossOrigin = "anonymous";
+          im.onload = () => resolve(im);
+          im.onerror = reject;
+          im.src = URL.createObjectURL(blob);
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showStatus(`✅ Đã copy ảnh vào clipboard.`);
+    } catch (e) {
+      showStatus(`⚠️ Trình duyệt không hỗ trợ copy ảnh hoặc gặp lỗi: ${e.message}. Dùng nút Tải.`);
+    }
+    pkgGuideClose();
+  }
+
+
   // Open link tồn kho trong tab mới (gọi từ onclick popup)
   function stockOpenSheet() {
     window.open(StockOverflow.getSheetUrl(), "_blank", "noopener");
@@ -7612,6 +7982,10 @@ const App = (() => {
     vatAutoFillPreview,
     vatAutoFillSubmit,
     stockOpenSheet,
+    pkgGuideOpen,
+    pkgGuideClose,
+    pkgGuideDownload,
+    pkgGuideCopy,
     cust2bOnChange,
     cust2bClear,
     cust2bOnVatInput,
