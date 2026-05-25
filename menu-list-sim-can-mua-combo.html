@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.14 · 25/05/2026 · 16:20
+    Version 10.8.15 · 25/05/2026 · 16:45
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -609,6 +609,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="picker-footer">
       <div class="picker-sel-count" id="pickerSelCount">Chưa chọn gói nào</div>
       <button class="blue" onclick="App.pickerCopyText()" style="margin:0;" title="Copy text các gói đã tick (hoặc tất cả nếu chưa tick), không kèm cột #">📋 Copy text</button>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;cursor:pointer;user-select:none;" title="Khi tick: copy kèm note (nếu gói có note). Khi bỏ tick: chỉ copy Tên/Loại/Ngày/Giá."><input type="checkbox" id="pickerCopyNoteChk" checked onchange="App.pickerToggleCopyNote()" style="margin:0;cursor:pointer;"> Copy note</label>
       <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
       <button class="light" onclick="App.pickerClose()">Huỷ</button>
     </div>
@@ -2958,6 +2959,7 @@ const App = (() => {
     pickerRenderTabs();
     pickerRenderFilterButtons();
     pickerRender();
+    pickerRestoreCopyNote(); // v10.8.15: load saved state cho checkbox "Copy note"
     slHideLoading();
     document.getElementById("pickerOverlay").classList.add("open");
   }
@@ -3227,7 +3229,8 @@ const App = (() => {
   }
 
   // v10.5: Copy text các gói đã tick (hoặc toàn bộ gói đang hiển thị nếu chưa tick).
-  // Format: Tên\tLoại\tNgày\tGiá\n — không kèm cột # và buttons.
+  // Format: Tên\tLoại\tNgày\tGiá[\tNote]\n — không kèm cột # và buttons.
+  // v10.8.15: Có checkbox "Copy note" — nếu tick (default ON) + gói có note → append note vào cell 5.
   async function pickerCopyText() {
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) { document.getElementById("slStatus").textContent = "⚠️ Picker rỗng."; return; }
@@ -3249,15 +3252,24 @@ const App = (() => {
       document.getElementById("slStatus").textContent = "⚠️ Không có gói nào để copy.";
       return;
     }
-    // Format: Tên\tLoại\tNgày\tGiá
+    // Kiểm tra checkbox "Copy note"
+    const chk = document.getElementById("pickerCopyNoteChk");
+    const includeNote = chk ? chk.checked : true;
+    let withNoteCount = 0;
+    // Format: Tên\tLoại\tNgày\tGiá[\tNote]
     const text = rows.map(item => {
       const p = item.parsed || {};
       const cells = [p.name || item.line || "", p.type || "", p.days || "", p.price || ""];
+      if (includeNote && p.note) {
+        cells.push(p.note);
+        withNoteCount++;
+      }
       return cells.join("\t");
     }).join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói vào clipboard.`;
+      const noteMsg = includeNote && withNoteCount ? ` (kèm ${withNoteCount} note)` : "";
+      document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói${noteMsg} vào clipboard.`;
     } catch (e) {
       // Fallback: textarea
       const ta = document.createElement("textarea");
@@ -3268,6 +3280,23 @@ const App = (() => {
       ta.remove();
       document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói (fallback).`;
     }
+  }
+
+  // v10.8.15: Persist state checkbox Copy note (default ON)
+  const _PICKER_COPYNOTE_KEY = "simglobe_picker_copy_note";
+  function pickerToggleCopyNote() {
+    const chk = document.getElementById("pickerCopyNoteChk");
+    if (!chk) return;
+    try { localStorage.setItem(_PICKER_COPYNOTE_KEY, chk.checked ? "1" : "0"); } catch (e) { /* ignore */ }
+  }
+  function pickerRestoreCopyNote() {
+    const chk = document.getElementById("pickerCopyNoteChk");
+    if (!chk) return;
+    try {
+      const v = localStorage.getItem(_PICKER_COPYNOTE_KEY);
+      if (v === "0") chk.checked = false;
+      else chk.checked = true; // default ON kể cả lần đầu (chưa lưu)
+    } catch (e) { chk.checked = true; }
   }
 
   async function slImport(idx)  { await slOpen(idx); }
@@ -6959,6 +6988,7 @@ const App = (() => {
     pickerClose,
     pickerConfirm,
     pickerCopyText,
+    pickerToggleCopyNote,
     pickerSwitchTab,
     pickerRefresh,
     pickerSetTypeFilter,
