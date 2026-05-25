@@ -367,7 +367,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.22 · 25/05/2026 · 21:45
+    Version 10.8.23 · 25/05/2026 · 22:30
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7140,18 +7140,31 @@ const App = (() => {
       _tipHideTimer = null;
     }, 200);
   }
-  // Đăng ký event delegation 1 lần
+  // Đăng ký event delegation 1 lần.
+  // v10.8.23 fix: guard non-Element targets (e.target có thể là Text node khi hover text →
+  // không có method .closest() → TypeError → mỗi mousemove throw → crash app.
   document.addEventListener("mouseover", (e) => {
-    const t = e.target.closest(".pkg-overflow");
-    if (t) _showStockTip(t);
-    const tipEl = e.target.closest("#pkgOverflowTip");
-    if (tipEl && _tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+    try {
+      const target = e.target;
+      if (!target || target.nodeType !== 1 || typeof target.closest !== "function") return;
+      const t = target.closest(".pkg-overflow");
+      if (t) _showStockTip(t);
+      const tipEl = target.closest("#pkgOverflowTip");
+      if (tipEl && _tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+    } catch (err) { /* swallow */ }
   });
   document.addEventListener("mouseout", (e) => {
-    const t = e.target.closest(".pkg-overflow");
-    if (t && !e.relatedTarget?.closest?.("#pkgOverflowTip")) _hideStockTip(false);
-    const tipEl = e.target.closest("#pkgOverflowTip");
-    if (tipEl && !e.relatedTarget?.closest?.(".pkg-overflow, #pkgOverflowTip")) _hideStockTip(false);
+    try {
+      const target = e.target;
+      if (!target || target.nodeType !== 1 || typeof target.closest !== "function") return;
+      const t = target.closest(".pkg-overflow");
+      const rel = e.relatedTarget;
+      const relIsTip = rel && rel.nodeType === 1 && typeof rel.closest === "function" && rel.closest("#pkgOverflowTip");
+      if (t && !relIsTip) _hideStockTip(false);
+      const tipEl = target.closest("#pkgOverflowTip");
+      const relIsAny = rel && rel.nodeType === 1 && typeof rel.closest === "function" && rel.closest(".pkg-overflow, #pkgOverflowTip");
+      if (tipEl && !relIsAny) _hideStockTip(false);
+    } catch (err) { /* swallow */ }
   });
 
   const GS_PROXY = "https://script.google.com/macros/s/AKfycbxWDH8yZrFEk5w9XH1mOwR2JqdAIAixLmBPnhLyhA3n___dLiGqRajfV75NLKIQX7Rp1A/exec";
