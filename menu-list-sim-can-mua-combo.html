@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.15 · 25/05/2026 · 16:45
+    Version 10.8.16 · 25/05/2026 · 17:30
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -418,6 +418,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
           </label>
           <button onclick="App.vatImageOpen()" style="margin:0;padding:7px 10px;font-size:12.5px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:8px;cursor:pointer;font-family:inherit;" title="Upload ảnh chứa thông tin VAT → OCR tự fill 4 ô MST/Tên/Địa chỉ/Email">📷 VAT Ảnh</button>
           <input id="vatImageInput" type="file" accept="image/*" style="display:none;" onchange="App.vatImageProcess(event)" />
+          <button onclick="App.vatAutoFillOpen()" style="margin:0;padding:7px 10px;font-size:12.5px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:8px;cursor:pointer;font-family:inherit;" title="Paste text bất kỳ chứa thông tin VAT → tự điền vào 4 ô MST/Tên/Địa chỉ/Email">📝 VAT tự điền</button>
         </div>
 
         <!-- VAT OCR status (ẩn mặc định) -->
@@ -734,6 +735,35 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="green" onclick="App.draftImportConfirm(true)">✅ Import + Lưu thành đơn nháp</button>
       <button class="blue" onclick="App.draftImportConfirm(false)">⬇️ Chỉ Import vào giỏ</button>
       <button class="light" onclick="App.draftImportClose()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- v10.8.16: Modal VAT tự điền — paste text bất kỳ → parse 4 field VAT -->
+<div class="picker-overlay" id="vatAutoFillOverlay" onclick="if(event.target===this)App.vatAutoFillClose()">
+  <div class="picker-modal" style="width:min(96vw, 600px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">📝 VAT tự điền từ text</h3>
+      <button onclick="App.vatAutoFillClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:12.5px;color:#475569;line-height:1.55;">
+        Paste text chứa thông tin VAT (định dạng tự do — không cần label). App sẽ tự nhận diện:
+        <ul style="margin:4px 0 0 18px;padding:0;font-size:12px;color:#64748b;">
+          <li><b>MST</b>: chuỗi 10 chữ số liên tiếp (có thể kèm <code>-001</code> chi nhánh)</li>
+          <li><b>Tên CTY</b>: dòng có "CÔNG TY / TNHH / CỔ PHẦN / JSC..."</li>
+          <li><b>Email</b>: dòng có "@"</li>
+          <li><b>Địa chỉ</b>: dòng có "Phường / Quận / Tỉnh / Thành phố / Số / Đường..."</li>
+        </ul>
+      </div>
+      <textarea id="vatAutoFillInput" placeholder="Dán text vào đây, ví dụ:&#10;&#10;CÔNG TY CỔ PHẦN VTI&#10;0107951470&#10;Tầng 11, tòa nhà HANDICO TOWER, ..., Thành phố Hà Nội&#10;Email: contact@vti.com.vn"
+        style="width:100%;min-height:170px;padding:10px;border:1px solid #cfd5df;border-radius:8px;font-size:12.5px;font-family:'Roboto Mono',monospace;line-height:1.5;resize:vertical;"></textarea>
+      <div id="vatAutoFillPreview" style="display:none;background:#f0f9ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="blue" onclick="App.vatAutoFillPreview()" style="margin:0;">🔍 Phân tích thử</button>
+      <button class="green" onclick="App.vatAutoFillSubmit()">✅ Điền vào VAT</button>
+      <button class="light" onclick="App.vatAutoFillClose()">Huỷ</button>
     </div>
   </div>
 </div>
@@ -3594,55 +3624,285 @@ const App = (() => {
     }
   }
 
-  // Parse OCR text → trả về { mst, name, addr, email }
+  // Parse OCR text / paste text → trả về { mst, name, addr, email }
+  // v10.8.16: Rewrite — hỗ trợ 3 chiến lược:
+  //   1) Label-based: dòng có "Tên/Cty/Địa chỉ/MST/Email" + ":" → parse trực tiếp
+  //   2) Heuristic: line không label → đoán theo content (CÔNG TY/TNHH ở name, Phường/Quận ở addr, ...)
+  //   3) Multi-line address: line không match label/name/email/mst, có Phường/Quận/...
+  //      → gắn vào addr trước đó (continuation)
   function _parseVatTextFromOcr(text) {
     const out = { mst: "", name: "", addr: "", email: "" };
-    // Normalize: dấu : có thể bị OCR thành ; hoặc bỏ qua. Em làm tolerant.
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-    // Email: regex chuẩn
+    // ─── Regex chuẩn ───
     const emailRe = /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/;
+    // MST: 10 chữ số liên tiếp, optional "-001" (13-digit chi nhánh) hoặc "-3 chữ số"
+    // Pattern Việt Nam: 10 hoặc 10-3 digits. Có thể có ký tự khác ở giữa do OCR (dấu cách, dấu -).
+    const mstRe = /(\d{10})\s*[-\s]?\s*(\d{3})?/;
 
-    // MST: 10 hoặc 13 chữ số (có thể có dấu - giữa). Pattern Việt Nam.
-    const mstRe = /\b(\d{10}(?:[-\s]?\d{3})?)\b/;
+    // Label patterns (dài hơn trước!)
+    const labelName = /^(t[êe]n\s+(?:c[ôo]ng\s*ty|cty|c\.?ty|doanh\s*nghi[êệ]p|đ[ơo]n\s*v[ịi]|kh[áa]ch\s*h[àa]ng|đv|kh|đv\s*tnvt)|t[êe]n|c[ôo]ng\s*ty|cty|c\.?ty|company\s*name|name|buyer|customer)\s*[:;]/i;
+    const labelAddr = /^(địa\s*ch[ỉi]|dia\s*chi|address|đ[\/\.]?c|d[\/\.]?c)\s*[:;]/i;
+    const labelEmail = /^(email|e\-?mail|mail|email\s*nh[ậa]n\s*(?:ho[áa]\s*đ[ơo]n|vat))\s*[:;]/i;
+    const labelMst = /^(m[ãa]\s*s[ốo]\s*thu[êế]|m\.?s\.?t|mst|tax\s*(?:id|code|number)?)(?:\s*\/\s*[a-z\s]+)?\s*[:;]/i;
 
-    for (const ln of lines) {
-      // Email
+    // Address keywords (heuristic — tiếng Việt + Anh)
+    // QUAN TRỌNG: bao quanh bằng (^|[\s,.;:|/(]) và (?=$|[\s,.;:|/)]) để tránh match substring
+    // (vd "quan" trong "truongquang" KHÔNG được match).
+    const ADDR_KW_RE = /(?:^|[\s,.;:|/(])(ph[ưu][ơo]ng|qu[ậa]n|huy[êệ]n|th[àa]nh\s*ph[ốo]|t[ỉi]nh|đ[ưu][ơo]ng|s[ốo]\s+\d|t[òo]a\s*nh[àa]|t[ầa]ng\s+\d|street|district|ward|province|city|building|floor|hcmc|hcm|hn|kcn|khu\s*c[ôo]ng\s*nghi[êệ]p)(?=$|[\s,.;:|/)])/i;
+    // Company name keywords
+    const NAME_KW_RE = /(?:^|[\s,.;:|/(])(c[ôo]ng\s*ty|cty|c[ổo]\s*ph[ầa]n|tnhh|jsc|joint\s*stock|co\.?\s*ltd|corp|corporation|enterprise)(?=$|[\s,.;:|/)])/i;
+    // Skip line lúc heuristic — header English bilingual (chỉ chữ thường + dấu hai chấm)
+    const SKIP_HEURISTIC_RE = /^(name|address|tax\s*code|tax\s*id|company\s*name)\s*[:;]?$/i;
+
+    // ─── Pass 1: Label-based parsing ───
+    // Track index của line đã match cho address để gắn continuation ở Pass 2.
+    // v10.8.16: KHÔNG reset addrLastIdx khi gặp label addr trùng — để continuation VN address vẫn work.
+    // Continuation chỉ chạy cho lines NGAY sau addrLastIdx, không jump qua label khác.
+    let addrLastIdx = -1;
+    let addrFirstIdx = -1; // line index của lần Pass-1 match đầu tiên cho addr
+    const matched = new Set(); // index của line đã được consume bởi label match
+
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+
+      // Email — tìm @ trong line
       if (!out.email) {
         const em = ln.match(emailRe);
-        if (em) out.email = em[1];
-      }
-      // MST: ưu tiên label "MST" / "Mã số thuế" / "Tax"
-      if (!out.mst && /(mst|mã số thuế|ma so thue|tax\s*id|tax\s*code)/i.test(ln)) {
-        const m = ln.match(mstRe);
-        if (m) out.mst = m[1].replace(/[-\s]/g, "");
-      }
-      // Tên CTY: label "Tên", "Tên công ty", "Buyer", "Customer"
-      if (!out.name && /^(tên(\s*(công\s*ty|cong\s*ty))?|ten(\s*(cong\s*ty))?|buyer|customer|đơn vị|don vi)\s*[:;]/i.test(ln)) {
-        const idx = ln.search(/[:;]/);
-        if (idx >= 0) {
-          const v = ln.slice(idx + 1).trim();
-          if (v) out.name = v;
+        if (em) {
+          // Loại bỏ trailing comma/period
+          out.email = em[1].replace(/[.,;]+$/, "");
+          // Có thể có nhiều email cách nhau bằng dấu phẩy
+          const multiEm = ln.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g);
+          if (multiEm && multiEm.length > 1) {
+            out.email = multiEm.join(", ");
+          }
+          // KHÔNG mark matched cho email vì email có thể nằm cùng line với label khác
         }
       }
-      // Địa chỉ: label "Đ/c", "Địa chỉ", "Address"
-      if (!out.addr && /^(đ\/?c|d\/?c|địa chỉ|dia chi|address)\s*[:;]/i.test(ln)) {
-        const idx = ln.search(/[:;]/);
-        if (idx >= 0) {
-          const v = ln.slice(idx + 1).trim();
-          if (v) out.addr = v;
+
+      // MST — ưu tiên label MST/Mã số thuế/Tax
+      if (labelMst.test(ln)) {
+        matched.add(i); // v10.8.16: luôn mark dù MST đã có (chống Pass 2 misuse)
+        if (!out.mst) {
+          const afterLabel = ln.replace(labelMst, "").trim();
+          const m = afterLabel.match(mstRe);
+          if (m) {
+            out.mst = m[2] ? `${m[1]}-${m[2]}` : m[1];
+          } else {
+            const m2 = afterLabel.match(/\d{10}/);
+            if (m2) out.mst = m2[0];
+          }
+        }
+        continue;
+      }
+
+      // Tên CTY — label
+      if (labelName.test(ln)) {
+        matched.add(i);
+        if (!out.name) {
+          const idx = ln.search(/[:;]/);
+          if (idx >= 0) {
+            const v = ln.slice(idx + 1).trim();
+            if (v) out.name = v;
+          }
+        }
+        continue;
+      }
+
+      // Địa chỉ — label
+      if (labelAddr.test(ln)) {
+        matched.add(i);
+        if (!out.addr) {
+          const idx = ln.search(/[:;]/);
+          if (idx >= 0) {
+            const v = ln.slice(idx + 1).trim();
+            if (v) {
+              out.addr = v;
+              addrLastIdx = i;
+              addrFirstIdx = i;
+            }
+          }
+        }
+        // Note: KHÔNG reset addrLastIdx ở đây. Reset đã skip để continuation từ addr VN vẫn work.
+        // Đoạn EN ("Address: No 14...") sẽ bị skip ở Pass 2 vì line đó được matched.
+        continue;
+      }
+
+      // Email label
+      if (labelEmail.test(ln)) {
+        matched.add(i);
+        if (!out.email) {
+          const idx = ln.search(/[:;]/);
+          if (idx >= 0) {
+            const v = ln.slice(idx + 1).trim();
+            const multiEm = v.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g);
+            if (multiEm) out.email = multiEm.join(", ");
+            else if (v) out.email = v.replace(/[.,;]+$/, "");
+          }
+        }
+        continue;
+      }
+    }
+
+    // ─── Pass 2a: Address continuation (CONTIGUOUS sau addrFirstIdx) ───
+    // Sau dòng label "Địa chỉ:", lines liền kề KHÔNG matched + có ADDR_KW → gắn nối.
+    // Gặp line matched (vd "Address:" tiếng Anh, "MST:") → STOP — không nối nữa.
+    if (addrFirstIdx >= 0) {
+      for (let i = addrFirstIdx + 1; i < lines.length; i++) {
+        if (matched.has(i)) break; // STOP khi gặp label khác
+        const ln = lines[i];
+        if (/@/.test(ln)) break; // STOP khi gặp email line
+        // Phải có addr keyword + không có name keyword
+        if (ADDR_KW_RE.test(ln) && !NAME_KW_RE.test(ln)) {
+          const sep = out.addr.endsWith(",") || out.addr.endsWith(".") ? " " : ", ";
+          out.addr = (out.addr + sep + ln).replace(/\s{2,}/g, " ").trim();
+          matched.add(i);
+          addrLastIdx = i;
+        } else {
+          break; // STOP khi line không phải addr-like
         }
       }
     }
 
-    // Fallback MST: nếu chưa có MST từ label → tìm số 10 chữ số bất kỳ trong text
-    if (!out.mst) {
-      const allText = text.replace(/\s+/g, " ");
-      const m = allText.match(/\b(\d{10})\b/);
-      if (m) out.mst = m[1];
+    // ─── Pass 2b: Heuristic cho lines chưa matched ───
+    for (let i = 0; i < lines.length; i++) {
+      if (matched.has(i)) continue;
+      const ln = lines[i];
+      if (SKIP_HEURISTIC_RE.test(ln)) continue;
+      // Skip line có @ — đây là email line, không phải addr/name
+      if (/@/.test(ln)) { matched.add(i); continue; }
+
+      // MST: số 10 chữ số liên tiếp (optional -3-digit)
+      if (!out.mst) {
+        const m = ln.match(/\b(\d{10})\s*-?\s*(\d{3})?\b/);
+        if (m) {
+          out.mst = m[2] ? `${m[1]}-${m[2]}` : m[1];
+          matched.add(i);
+          continue;
+        }
+      }
+
+      // Tên CTY: line có keyword CÔNG TY/TNHH/JSC/...
+      if (!out.name && NAME_KW_RE.test(ln)) {
+        // Filter ra phần "ENG translation" nếu line bilingual (vd "CÔNG TY ABC / ABC Co., Ltd")
+        // Lấy đoạn đầu (trước "/" đầu tiên nếu có "/" sau >5 ký tự)
+        let nameVal = ln;
+        const slashIdx = nameVal.indexOf("/");
+        if (slashIdx > 5 && slashIdx < nameVal.length - 5) {
+          // Có thể là "VN / EN" → giữ VN
+          const before = nameVal.slice(0, slashIdx).trim();
+          const after = nameVal.slice(slashIdx + 1).trim();
+          // Nếu before có dấu tiếng Việt mà after không → before là VN
+          const hasVi = /[ÀÁÂÃÈÉÊẾÌÍÒÓÔÕÙÚỦŨỴĐăâêôơưđàáâãèéêếìíòóôõùúủũỳđ]/i.test(before);
+          const afterHasVi = /[ÀÁÂÃÈÉÊẾÌÍÒÓÔÕÙÚỦŨỴĐăâêôơưđàáâãèéêếìíòóôõùúủũỳđ]/i.test(after);
+          if (hasVi && !afterHasVi) nameVal = before;
+        }
+        out.name = nameVal.replace(/^[\-:;\s]+/, "").trim();
+        matched.add(i);
+        addrLastIdx = -1; // tên cty mới → reset addr-continuation
+        continue;
+      }
+
+      // Địa chỉ heuristic: line có Phường/Quận/Thành phố/Tỉnh/Số
+      // Hoặc continuation: line LIỀN KỀ (i === addrLastIdx + 1) sau line addr trước đó
+      const isAddrLike = ADDR_KW_RE.test(ln);
+      if (isAddrLike && !NAME_KW_RE.test(ln)) {
+        if (!out.addr) {
+          out.addr = ln.replace(/^[\-:;\s]+/, "").trim();
+          addrLastIdx = i;
+          addrFirstIdx = i;
+          matched.add(i);
+          continue;
+        }
+        // Continuation CHỈ khi line liền kề (i === addrLastIdx + 1) — không jump qua matched lines.
+        // v10.8.16: trước đây cho phép gap ≤3 → sai trong case bilingual (jump qua line "Address:" EN).
+        if (addrLastIdx >= 0 && i === addrLastIdx + 1) {
+          const sep = out.addr.endsWith(",") || out.addr.endsWith(".") ? " " : ", ";
+          out.addr = (out.addr + sep + ln).replace(/\s{2,}/g, " ").trim();
+          addrLastIdx = i;
+          matched.add(i);
+          continue;
+        }
+      }
     }
+
+    // ─── Cleanup ───
+    // MST: chỉ giữ digits + dấu -
+    if (out.mst) out.mst = out.mst.replace(/[^\d\-]/g, "");
+    // Name: bỏ trailing punctuation
+    if (out.name) out.name = out.name.replace(/[.,;:\-]+$/, "").trim();
+    // Address: bỏ trailing period
+    if (out.addr) out.addr = out.addr.replace(/[;:]+$/, "").trim();
+    // Email: lowercase + trim
+    if (out.email) out.email = out.email.toLowerCase().trim();
 
     return out;
+  }
+
+  // v10.8.16: VAT tự điền — modal paste text → parse → fill 4 ô VAT.
+  // Dùng chung _parseVatTextFromOcr (đã handle label-based + heuristic).
+  function vatAutoFillOpen() {
+    const ov = document.getElementById("vatAutoFillOverlay");
+    const inp = document.getElementById("vatAutoFillInput");
+    const prev = document.getElementById("vatAutoFillPreview");
+    if (inp) inp.value = "";
+    if (prev) { prev.style.display = "none"; prev.innerHTML = ""; }
+    if (ov) ov.classList.add("open");
+    setTimeout(() => { if (inp) inp.focus(); }, 100);
+  }
+  function vatAutoFillClose() {
+    const ov = document.getElementById("vatAutoFillOverlay");
+    if (ov) ov.classList.remove("open");
+  }
+  function vatAutoFillPreview() {
+    const inp = document.getElementById("vatAutoFillInput");
+    const prev = document.getElementById("vatAutoFillPreview");
+    if (!inp || !prev) return;
+    const text = (inp.value || "").trim();
+    if (!text) {
+      prev.style.display = "block";
+      prev.innerHTML = `<span style="color:#dc2626;">⚠️ Vui lòng paste text trước.</span>`;
+      return;
+    }
+    const r = _parseVatTextFromOcr(text);
+    const row = (label, val) => val
+      ? `<div><b>${label}:</b> <span style="color:#0e7c3a;">${escapeHtml(val)}</span></div>`
+      : `<div><b>${label}:</b> <span style="color:#9ca3af;">(không nhận diện được)</span></div>`;
+    prev.style.display = "block";
+    prev.innerHTML = [
+      row("MST", r.mst),
+      row("Tên CTY", r.name),
+      row("Địa chỉ", r.addr),
+      row("Email", r.email),
+    ].join("");
+  }
+  function vatAutoFillSubmit() {
+    const inp = document.getElementById("vatAutoFillInput");
+    if (!inp) return;
+    const text = (inp.value || "").trim();
+    if (!text) { alert("Vui lòng paste text trước."); return; }
+    const r = _parseVatTextFromOcr(text);
+    const found = [];
+    if (r.mst) found.push("MST");
+    if (r.name) found.push("Tên CTY");
+    if (r.addr) found.push("Địa chỉ");
+    if (r.email) found.push("Email");
+    if (!found.length) {
+      alert("Không nhận diện được field VAT nào trong text. Vui lòng check lại.");
+      return;
+    }
+    // Bật mode company + fill (chỉ ghi đè field nào parser có giá trị)
+    Cust2B.state.type = "company";
+    if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "" };
+    if (r.mst) Cust2B.state.vat.mst = r.mst;
+    if (r.name) Cust2B.state.vat.name = r.name;
+    if (r.addr) Cust2B.state.vat.addr = r.addr;
+    if (r.email) Cust2B.state.vat.email = r.email;
+    Cust2B.syncToDOM();
+    liveRecalc();
+    vatAutoFillClose();
+    showStatus(`✅ Đã điền ${found.length} field: ${found.join(", ")}. Kiểm tra lại trước khi lưu.`);
   }
 
   // v10.1: tag chuyển sang dropdown <select>
@@ -7023,6 +7283,10 @@ const App = (() => {
     cust2bSelectTagFromDropdown,
     vatImageOpen,
     vatImageProcess,
+    vatAutoFillOpen,
+    vatAutoFillClose,
+    vatAutoFillPreview,
+    vatAutoFillSubmit,
     cust2bOnChange,
     cust2bClear,
     cust2bOnVatInput,
