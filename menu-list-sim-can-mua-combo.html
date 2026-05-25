@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.10 · 25/05/2026 · 14:55
+    Version 10.8.12 · 25/05/2026 · 15:45
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1495,6 +1495,12 @@ const App = (() => {
     const vat = { mst: "", name: "", addr: "", email: "" };
     let orderCode = "";
     let inVatBlock = false;
+    // v10.8.12: Sau khi gặp dòng "Còn: ..." (= dòng kết bill chuẩn), mọi text phía sau
+    // không còn là gói nữa — đó là note user gõ thêm (vd "chị bù giúp e 587-476=111k").
+    // → Tắt parse package, NHƯNG vẫn cho VAT/orderCode chạy (VAT block có thể nằm sau "Còn:").
+    let afterConcludingLine = false;
+    // Regex bắt dòng kết thúc bill chuẩn: "Còn: ..." / "Tổng thanh toán: ..." / "Total: ..."
+    const concludingRe = /^(còn|con|tổng thanh toán|tong thanh toan|total)\s*[:\s]/i;
 
     for (let i = 0; i < lines.length; i++) {
       const raw = lines[i];
@@ -1535,8 +1541,11 @@ const App = (() => {
         if (matched) continue;
       }
 
-      // Summary line → skip
-      if (summaryRe.test(t)) continue;
+      // Summary line → skip. v10.8.12: Đánh dấu afterConcludingLine khi gặp "Còn:" để bỏ hết text sau.
+      if (summaryRe.test(t)) {
+        if (concludingRe.test(t)) afterConcludingLine = true;
+        continue;
+      }
 
       // v10.8.7: Dòng separator (------ / ****** / =====) → skip hoàn toàn (không phải note, không phải gói)
       if (separatorRe.test(t)) continue;
@@ -1552,6 +1561,10 @@ const App = (() => {
         }
         continue;
       }
+
+      // v10.8.12: Đã qua dòng "Còn:" → các dòng còn lại là note user gõ thêm (bù giá, ghi chú ...).
+      // Skip parse như package (VAT/orderCode vẫn được handle ở các check phía trên).
+      if (afterConcludingLine) continue;
 
       // Còn lại → parse như line gói. Cần extract tên + loại + giá + qty.
       const pkg = _parsePackageLine(t);
@@ -5324,7 +5337,65 @@ const App = (() => {
     if (vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email)) {
       billText = billText.trimEnd() + "\n-------------\n" + _renderVatBlock(vatInfo);
     }
-    const billLines = billText.split("\n");
+    let billLines = billText.split("\n");
+
+    // v10.8.11: Pre-process billLines — tách `[note]` inline (xuất hiện sau giá) thành
+    // dòng `   ↳ ...` riêng ngay phía dưới. Có 2 nguồn note inline:
+    //   (a) Note nằm trong CELL GIÁ: "126k  [QUÉT ESIM SẼ TÍNH NGÀY]"  ← bill paste-back, hoặc rowNote append "[..]"
+    //   (b) Note nằm ở cells SAU GIÁ (cells[4+]): "...\t126k\tQUÉT ESIM SẼ TÍNH NGÀY"  ← format cũ
+    // Cả 2 case đều convert về:
+    //   line gói (giá sạch không note)
+    //   "   ↳ {note}"
+    // → render dùng lại branch `line.startsWith("   ↳")` có sẵn, KHÔNG cần vẽ overlap.
+    const _bracketReAtEnd = /\s*\[([^\]]+)\]\s*$/; // " [QUÉT ESIM ...]" ở cuối
+    const _expandedLines = [];
+    for (const ln of billLines) {
+      // Skip line không có tab (header / Tổng / ↳ riêng / ngăn cách)
+      if (!ln.includes("\t")) { _expandedLines.push(ln); continue; }
+      const cells = ln.split("\t");
+      const lastIdx = cells.length - 1;
+      // (a) Tách [note] khỏi cell giá (cell cuối nếu chỉ có 4 cells)
+      //     hoặc khỏi cell cuối cùng (vì có thể line có >4 cell, cell giá ko phải cuối)
+      // Strategy: tìm cell ĐẦU TIÊN match price-shape (xxx k hoặc (xx-yy)) → đó là cell giá.
+      //           Tách [note] khỏi cell giá đó.
+      //           Phần sau cell giá (cells[priceIdx+1..]) cũng có thể là note (legacy).
+      const priceCellRe = /^(\(?\d[\d.,]*\s*k(?:\s*-\s*\d[\d.,]*\s*k)?\)?)(?:\s*\*\s*(?:N?\d+)(?:\+N?\d+)*)?(\s+\[[^\]]+\])?\s*$/i;
+      let priceIdx = -1;
+      let extractedNote = "";
+      for (let i = 0; i < cells.length; i++) {
+        const c = cells[i].trim();
+        const pm = c.match(priceCellRe);
+        if (pm) {
+          priceIdx = i;
+          if (pm[2]) {
+            // Cell giá có "[note]" kèm — tách ra
+            const bm = c.match(_bracketReAtEnd);
+            if (bm) {
+              extractedNote = bm[1].trim();
+              cells[i] = c.slice(0, bm.index).trim();
+            }
+          }
+          break;
+        }
+      }
+      // (b) Note nằm ở cells SAU GIÁ (legacy)
+      if (priceIdx >= 0 && priceIdx < cells.length - 1) {
+        const tailNote = cells.slice(priceIdx + 1).join(" ").trim();
+        // Strip leading "[" / trailing "]" nếu có
+        const cleanTail = tailNote.replace(/^\[\s*/, "").replace(/\s*\]$/, "").trim();
+        if (cleanTail) {
+          if (extractedNote) extractedNote = extractedNote + " · " + cleanTail;
+          else extractedNote = cleanTail;
+        }
+        // Cắt phần sau giá
+        cells.length = priceIdx + 1;
+      }
+      // Push line gói (đã sạch note)
+      _expandedLines.push(cells.join("\t"));
+      // Push dòng note riêng nếu có
+      if (extractedNote) _expandedLines.push("   ↳ " + extractedNote);
+    }
+    billLines = _expandedLines;
 
     // Pre-load logo + QR để biết tỉ lệ
     let logoImg = null, qrImg = null;
@@ -5342,7 +5413,17 @@ const App = (() => {
     // Min H = 1200 (vuông) khi bill ít dòng. Nhiều dòng → H tăng tuyến tính theo billNeedH.
     const lineH = 34;
     const fontPx = 22;
-    const billNeedH = billLines.length * lineH + 16; // 16 = padding nội bộ
+    // v10.8.11: Note dài (   ↳ ...) có thể wrap thành nhiều dòng — ước lượng thêm extra lineH:
+    //   Note > 70 chars: +1 line, > 140 chars: +2 lines
+    let extraNoteLines = 0;
+    for (const ln of billLines) {
+      if (ln.startsWith("   ↳")) {
+        const cleanLen = ln.replace(/^\s*↳\s*/, "").length;
+        if (cleanLen > 140) extraNoteLines += 2;
+        else if (cleanLen > 70) extraNoteLines += 1;
+      }
+    }
+    const billNeedH = (billLines.length + extraNoteLines) * lineH + 16; // 16 = padding nội bộ
     // H tối thiểu = layout cũ (1200) để ảnh ít dòng vẫn vuông
     const MIN_H = 1200;
     const requiredH = padding + headerH + sepGap + billNeedH + sepGap2 + bottomH + padding;
@@ -5435,7 +5516,8 @@ const App = (() => {
       const type = cells[1] || "";
       const days = cells[2] || "";
       const price = cells[3] || "";
-      const extra = cells.slice(4).join(" ");
+      // v10.8.11: Cells[4+] đã được pre-process tách thành dòng `   ↳ ...` riêng ở trên,
+      // KHÔNG vẽ overlap ở đây nữa (trước đây vẽ ở y+lineH*0.7 → đè lên dòng kế).
       let drawName = name;
       const maxNameW = colTypeX - padding - 12;
       if (ctx.measureText(drawName).width > maxNameW) {
@@ -5453,14 +5535,6 @@ const App = (() => {
       ctx.fillText(price, colPriceR, y);
       ctx.fillStyle = color;
       ctx.textAlign = "left";
-      if (extra) {
-        const prevFont = ctx.font;
-        ctx.font = fontNote;
-        ctx.fillStyle = "#64748b";
-        ctx.fillText(extra, padding, y + lineH * 0.7);
-        ctx.font = prevFont;
-        ctx.fillStyle = color;
-      }
     }
 
     billLines.forEach(line => {
@@ -5485,10 +5559,24 @@ const App = (() => {
         ctx.lineTo(W - padding, y + lineH/2);
         ctx.stroke();
       } else if (line.startsWith("   ↳")) {
+        // v10.8.11: Wrap note dài → tự xuống dòng, tính thêm lineH cho mỗi dòng wrap.
+        // Indent prefix "  ⓘ " ở dòng đầu, dòng wrap tiếp theo indent thêm cho thẳng hàng.
         ctx.font = fontNote;
         ctx.fillStyle = "#0ea5e9";
         ctx.textAlign = "left";
-        ctx.fillText(line.replace(/^\s+/, "  ⓘ "), padding, y);
+        const noteText = line.replace(/^\s*↳\s*/, "").replace(/^\s+/, "");
+        const prefix = "  ⓘ ";
+        const indentX = padding;
+        const maxW = W - padding * 2 - 8; // chừa lề phải
+        const prefixW = ctx.measureText(prefix).width;
+        // Wrap: dòng đầu có prefix, các dòng sau indent bằng prefixW
+        const wrapped = wrapText(ctx, noteText, maxW - prefixW);
+        const noteLineH = Math.max(20, lineH - 8); // dòng note compact hơn line gói
+        for (let i = 0; i < wrapped.length; i++) {
+          if (i === 0) ctx.fillText(prefix + wrapped[i], indentX, y);
+          else ctx.fillText(wrapped[i], indentX + prefixW, y);
+          if (i < wrapped.length - 1) y += noteLineH;
+        }
       } else {
         ctx.textAlign = "left";
         drawTabbedLine(line, fontBody, "#1f2937");
