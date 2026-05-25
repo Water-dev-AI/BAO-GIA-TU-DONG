@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.18 · 25/05/2026 · 18:20
+    Version 10.8.19 · 25/05/2026 · 18:50
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -748,13 +748,16 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
     <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div style="font-size:12.5px;color:#475569;line-height:1.55;">
-        Paste text chứa thông tin VAT (định dạng tự do — không cần label). App sẽ tự nhận diện:
-        <ul style="margin:4px 0 0 18px;padding:0;font-size:12px;color:#64748b;">
-          <li><b>MST</b>: chuỗi 10 chữ số liên tiếp (có thể kèm <code>-001</code> chi nhánh)</li>
-          <li><b>Tên CTY</b>: dòng có "CÔNG TY / TNHH / CỔ PHẦN / JSC..."</li>
-          <li><b>Email</b>: dòng có "@"</li>
-          <li><b>Địa chỉ</b>: dòng có "Phường / Quận / Tỉnh / Thành phố / Số / Đường..."</li>
-        </ul>
+        Paste text chứa thông tin VAT, hoặc edit text OCR vừa quét. App tự nhận diện 4 field. Bấm "Phân tích thử" để xem kết quả trước khi điền.
+        <details style="margin-top:6px;font-size:11.5px;color:#64748b;">
+          <summary style="cursor:pointer;">Cách app nhận diện</summary>
+          <ul style="margin:4px 0 0 18px;padding:0;">
+            <li><b>MST</b>: chuỗi 10 chữ số liên tiếp (có thể kèm <code>-001</code> chi nhánh)</li>
+            <li><b>Tên CTY</b>: dòng có "CÔNG TY / TNHH / CỔ PHẦN / VPĐD / CTCP / JSC / PTE LTD..."</li>
+            <li><b>Email</b>: dòng có "@"</li>
+            <li><b>Địa chỉ</b>: dòng có "Phường / Quận / Tỉnh / Thành phố / TP. / Tầng / Lầu / Tòa nhà / Đường / Số..."</li>
+          </ul>
+        </details>
       </div>
       <textarea id="vatAutoFillInput" placeholder="Dán text vào đây, ví dụ:&#10;&#10;CÔNG TY CỔ PHẦN VTI&#10;0107951470&#10;Tầng 11, tòa nhà HANDICO TOWER, ..., Thành phố Hà Nội&#10;Email: contact@vti.com.vn"
         style="width:100%;min-height:170px;padding:10px;border:1px solid #cfd5df;border-radius:8px;font-size:12.5px;font-family:'Roboto Mono',monospace;line-height:1.5;resize:vertical;"></textarea>
@@ -3568,7 +3571,9 @@ const App = (() => {
     if (inp) { inp.value = ""; inp.click(); }
   }
 
-  // Sau khi user chọn ảnh → OCR + parse + fill
+  // Sau khi user chọn ảnh → OCR → mở modal VAT tự điền với text raw đã pre-fill.
+  // v10.8.19: KHÔNG fill thẳng nữa — vì OCR table có thể có format khó (visual rows ngang),
+  // user cần review/edit text trước khi parse. Modal cũng có nút "Phân tích thử" để preview.
   async function vatImageProcess(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -3580,44 +3585,25 @@ const App = (() => {
     try {
       const Tess = await _loadTesseract();
       _showVatOcrStatus("📖 Đang đọc ảnh (vie + eng)... Có thể mất 10-30 giây.", "info");
-      // Recognize với cả tiếng Việt + Anh (tăng accuracy cho tên có dấu)
-      const { data: { text } } = await Tess.recognize(file, "vie+eng", {
-        // Logger để debug nếu cần
-        // logger: m => console.log("[OCR]", m.status, m.progress),
-      });
+      const { data: { text } } = await Tess.recognize(file, "vie+eng", {});
       if (!text || !text.trim()) {
         _showVatOcrStatus("⚠️ OCR không đọc được text. Thử ảnh rõ hơn.", "error");
         return;
       }
       console.log("[VAT OCR] Raw text:\n", text);
+      _hideVatOcrStatus();
 
-      // Parse text → extract 4 field
-      const extracted = _parseVatTextFromOcr(text);
-      const foundFields = [];
-      if (extracted.mst) foundFields.push("MST");
-      if (extracted.name) foundFields.push("Tên CTY");
-      if (extracted.addr) foundFields.push("Địa chỉ");
-      if (extracted.email) foundFields.push("Email");
-
-      if (!foundFields.length) {
-        _showVatOcrStatus("⚠️ Đã OCR xong nhưng không tìm thấy field VAT nào (MST/Tên/Địa chỉ/Email). Thử ảnh khác hoặc điền tay.", "error");
-        return;
+      // Mở modal VAT tự điền với text OCR pre-fill + auto-preview ngay
+      vatAutoFillOpen();
+      const inp = document.getElementById("vatAutoFillInput");
+      if (inp) {
+        inp.value = text.trim();
+        // Auto-run preview để user thấy parser detect được gì
+        vatAutoFillPreview();
+        // Scroll preview vào view
+        const prev = document.getElementById("vatAutoFillPreview");
+        if (prev) prev.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
-
-      // Tự bật "Xuất VAT" nếu chưa
-      Cust2B.state.type = "company";
-      // Merge: chỉ ghi đè field nào OCR có giá trị, giữ field cũ nếu OCR không có
-      if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "" };
-      if (extracted.mst) Cust2B.state.vat.mst = extracted.mst;
-      if (extracted.name) Cust2B.state.vat.name = extracted.name;
-      if (extracted.addr) Cust2B.state.vat.addr = extracted.addr;
-      if (extracted.email) Cust2B.state.vat.email = extracted.email;
-      Cust2B.syncToDOM();
-      liveRecalc();
-
-      _showVatOcrStatus(`✅ Đã fill ${foundFields.length} field: ${foundFields.join(", ")}. Kiểm tra lại trước khi lưu.`, "success");
-      // Auto hide sau 8s
-      setTimeout(_hideVatOcrStatus, 8000);
     } catch (e) {
       console.error("[VAT OCR] Error:", e);
       _showVatOcrStatus("❌ Lỗi OCR: " + e.message, "error");
@@ -3633,10 +3619,44 @@ const App = (() => {
   function _parseVatTextFromOcr(text) {
     const out = { mst: "", name: "", addr: "", email: "" };
     // v10.8.18: Strip leading bullet/marker chars để label match work với "- Địa chỉ:" / "* MST:".
-    // (Pass 1 label regex bắt đầu bằng ^ — không cho phép prefix.)
-    const lines = text.split(/\r?\n/)
-      .map(l => l.replace(/^\s*[\-*•►▶→·]+\s+/, "").trim())
-      .filter(Boolean);
+    // v10.8.19: Split lines:
+    //   - Bằng \t (tab cell separator phổ biến trong OCR table / paste từ Google Sheet).
+    //   - Bằng "  " (2+ spaces — OCR table thường output cell phân cách bằng nhiều space).
+    //   Chỉ split khi line có >= 2 cell-like (vd MST + tên CTY + addr trên 1 line) để tránh phá vỡ
+    //   line đơn có space dài (như "Email:    diemhtt@hyphensvn.com").
+    const rawLines = text.split(/\r?\n/);
+    const lines = [];
+    for (let raw of rawLines) {
+      raw = raw.replace(/^\s*[\-*•►▶→·]+\s+/, "").trim();
+      if (!raw) continue;
+      // Tab split — nếu line có tab và sau split có >= 2 cell không rỗng → tách thành line riêng
+      if (raw.includes("\t")) {
+        const cells = raw.split("\t").map(c => c.trim()).filter(Boolean);
+        if (cells.length >= 2) {
+          for (const c of cells) lines.push(c);
+          continue;
+        }
+      }
+      // Multi-space split: nếu line có ">=3 spaces giữa" 2 vùng VÀ trên 1 line có ≥2 cell-like
+      //   (vd "MST 123  TÊN CTY  ĐỊA CHỈ"). Threshold 3+ space để không phá Email: text.
+      const multiSpaceCells = raw.split(/\s{3,}/).map(c => c.trim()).filter(Boolean);
+      if (multiSpaceCells.length >= 2) {
+        // Validate: phải có signal khác nhau (vd 1 cell có MST số, 1 cell có CÔNG TY, 1 cell có Phường)
+        // → đây là OCR table row, chứ không phải text dài đơn thuần.
+        let signalCount = 0;
+        for (const c of multiSpaceCells) {
+          if (/\b\d{10}\b/.test(c)) signalCount++;
+          else if (/@/.test(c)) signalCount++;
+          else if (/(CÔNG TY|TNHH|CỔ PHẦN|VPĐD|CTCP)/i.test(c)) signalCount++;
+          else if (/(Phường|Quận|Thành phố|TP\.|Tầng |Lầu )/i.test(c)) signalCount++;
+        }
+        if (signalCount >= 2) {
+          for (const c of multiSpaceCells) lines.push(c);
+          continue;
+        }
+      }
+      lines.push(raw);
+    }
 
     // ─── Regex chuẩn ───
     const emailRe = /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/;
@@ -3900,6 +3920,15 @@ const App = (() => {
           continue;
         }
       }
+    }
+
+    // ─── Pass 3: MST fallback ───
+    // Nếu sau Pass 1+2 vẫn chưa có MST → scan toàn text tìm \d{10}(-\d{3})? bất kỳ.
+    // v10.8.19: Cần thiết cho OCR table không có label, vd cell MST đứng riêng "3603119522-001".
+    if (!out.mst) {
+      const allText = text.replace(/\s+/g, " ");
+      const m = allText.match(/\b(\d{10})\s*-?\s*(\d{3})?\b/);
+      if (m) out.mst = m[2] ? `${m[1]}-${m[2]}` : m[1];
     }
 
     // ─── Cleanup ───
