@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.13 · 25/05/2026 · 16:00
+    Version 10.8.14 · 25/05/2026 · 16:20
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -648,12 +648,16 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 .vat-suggest-item {
   padding:8px 10px; cursor:pointer; border-bottom:1px solid #f3f4f6;
   font-size:12px; line-height:1.4;
+  display:flex; align-items:flex-start; gap:6px;
 }
 .vat-suggest-item:last-child { border-bottom:none; }
 .vat-suggest-item:hover { background:#f0f7ff; }
+.vat-suggest-item .vs-main { flex:1; min-width:0; }
 .vat-suggest-item .vs-mst { font-family:'Roboto Mono',monospace; color:#0e7c3a; font-weight:600; }
 .vat-suggest-item .vs-name { font-weight:600; color:#1f2937; }
 .vat-suggest-item .vs-sub { font-size:10.5px; color:#6b7280; }
+.vat-suggest-item .vs-del { padding:3px 7px; background:#fee2e2; color:#dc2626; border:none; border-radius:4px; font-size:11px; cursor:pointer; flex-shrink:0; align-self:center; }
+.vat-suggest-item .vs-del:hover { background:#fecaca; }
 .vat-suggest-empty { padding:10px; color:#9ca3af; font-size:11.5px; font-style:italic; text-align:center; }
 </style>
 
@@ -3666,10 +3670,16 @@ const App = (() => {
     }
     el.innerHTML = filtered.map(v => {
       const payload = encodeURIComponent(JSON.stringify(v));
-      return `<div class="vat-suggest-item" onmousedown="App.cust2bPickVat('${payload}')">
-        ${v.mst ? `<div><span class="vs-mst">${escapeHtml(v.mst)}</span> · <span class="vs-name">${escapeHtml(v.ten)}</span></div>` : `<div class="vs-name">${escapeHtml(v.ten)}</div>`}
-        ${v.diaChi ? `<div class="vs-sub">${escapeHtml(v.diaChi)}</div>` : ""}
-        ${v.email ? `<div class="vs-sub">${escapeHtml(v.email)}</div>` : ""}
+      // v10.8.14: Restore nút xoá. Click "✕" → confirm + xoá khỏi Google Sheet VAT DB qua vatDeleteItem.
+      // Dùng cùng encoding btoa(unescape(encodeURIComponent(...))) như vatRenderDropdown để chia sẻ handler.
+      const encBtoa = btoa(unescape(encodeURIComponent(JSON.stringify(v))));
+      return `<div class="vat-suggest-item">
+        <div class="vs-main" onmousedown="App.cust2bPickVat('${payload}')">
+          ${v.mst ? `<div><span class="vs-mst">${escapeHtml(v.mst)}</span> · <span class="vs-name">${escapeHtml(v.ten)}</span></div>` : `<div class="vs-name">${escapeHtml(v.ten)}</div>`}
+          ${v.diaChi ? `<div class="vs-sub">${escapeHtml(v.diaChi)}</div>` : ""}
+          ${v.email ? `<div class="vs-sub">${escapeHtml(v.email)}</div>` : ""}
+        </div>
+        <button class="vs-del" title="Xoá khỏi Google Sheet VAT DB" onmousedown="event.preventDefault(); event.stopPropagation(); App.vatDeleteItem('${encBtoa}')">✕</button>
       </div>`;
     }).join("");
     el.style.display = "block";
@@ -6814,6 +6824,8 @@ const App = (() => {
       ["mst", "name", "email"].forEach(f => {
         const dd = document.getElementById("vatDropdown_" + f);
         if (dd && dd.classList.contains("open")) vatRenderDropdown(f);
+        // v10.8.14: Cũng re-render dropdown chính ở section 2 (Cust2B) — đó mới là dropdown user dùng hàng ngày
+        try { cust2bRenderVatSuggest(f); } catch (e) { /* ignore */ }
       });
       vatSetStatus(`✅ Đã xoá.`);
     } catch (e) {
