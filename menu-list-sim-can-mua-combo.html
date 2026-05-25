@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.17 · 25/05/2026 · 18:00
+    Version 10.8.18 · 25/05/2026 · 18:20
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3632,7 +3632,11 @@ const App = (() => {
   //      → gắn vào addr trước đó (continuation)
   function _parseVatTextFromOcr(text) {
     const out = { mst: "", name: "", addr: "", email: "" };
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    // v10.8.18: Strip leading bullet/marker chars để label match work với "- Địa chỉ:" / "* MST:".
+    // (Pass 1 label regex bắt đầu bằng ^ — không cho phép prefix.)
+    const lines = text.split(/\r?\n/)
+      .map(l => l.replace(/^\s*[\-*•►▶→·]+\s+/, "").trim())
+      .filter(Boolean);
 
     // ─── Regex chuẩn ───
     const emailRe = /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/;
@@ -3661,9 +3665,11 @@ const App = (() => {
     };
 
     // Address keywords (chạy trên text BỎ DẤU)
-    const ADDR_KW_RE_NORM = /(?:^|[\s,.;:|/(])(phuong|quan|huyen|thanh\s*pho|tinh|duong|so\s+\d|toa\s*nha|tang\s+\d|street|district|ward|province|city|building|floor|hcmc|hcm|hn|tphcm|tphn|kcn|khu\s*cong\s*nghiep)(?=$|[\s,.;:|/)])/i;
+    // v10.8.18: Thêm các viết tắt VN: tp (TP. Hồ Chí Minh), p (P. An Khánh), q (Q.1), lau (Lầu 16), cao oc (Cao ốc)
+    const ADDR_KW_RE_NORM = /(?:^|[\s,.;:|/(])(phuong|quan|huyen|thanh\s*pho|tinh|duong|so\s+\d|toa\s*nha|toa\s*van\s*phong|tang\s+\d|lau\s+\d|cao\s*oc|street|district|ward|province|city|building|floor|hcmc|hcm|hn|tphcm|tphn|tp|q\.\s*\d|p\.\s+[A-Za-z]|kcn|khu\s*cong\s*nghiep|khu\s*do\s*thi)(?=$|[\s,.;:|/)])/i;
     // Company name keywords (chạy trên text BỎ DẤU)
-    const NAME_KW_RE_NORM = /(?:^|[\s,.;:|/(])(cong\s*ty|cty|co\s*phan|tnhh|jsc|joint\s*stock|co\.?\s*ltd|corp|corporation|enterprise|chi\s*nhanh)(?=$|[\s,.;:|/)])/i;
+    // v10.8.18: Thêm vpdd (VPĐD - VP Đại Diện), ctcp (CTCP - CT Cổ Phần), van phong, pte ltd, ltd., hang hang khong, ngan hang
+    const NAME_KW_RE_NORM = /(?:^|[\s,.;:|/(])(cong\s*ty|cty|co\s*phan|tnhh|jsc|joint\s*stock|co\.?\s*,?\s*ltd|corp|corporation|enterprise|chi\s*nhanh|vpdd|vp\s*dai\s*dien|ctcp|van\s*phong|pte\.?\s*ltd|ltd\.|hang\s*hang\s*khong|ngan\s*hang|hop\s*tac\s*xa|doanh\s*nghiep|don\s*vi)(?=$|[\s,.;:|/)])/i;
     // Skip line lúc heuristic — header English bilingual
     const SKIP_HEURISTIC_RE = /^(name|address|tax\s*code|tax\s*id|company\s*name)\s*[:;]?$/i;
     // Wrapper: check keyword bằng cách normalize line trước
