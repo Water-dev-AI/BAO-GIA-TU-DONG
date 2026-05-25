@@ -139,6 +139,46 @@
   /* Font giữ như cũ — tên gói word-break bình thường, không condensed */
   .pkg-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
 
+  /* v10.8.20: Gói thừa tồn kho — tô tím tên + tooltip popup */
+  .pkg-overflow {
+    color: #7c3aed;
+    font-weight: 600;
+    background: linear-gradient(180deg, transparent 70%, #ede9fe 70%);
+    cursor: help;
+    position: relative;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+  .pkg-overflow::before {
+    content: "📦";
+    margin-right: 3px;
+    font-size: 11px;
+  }
+  /* Tooltip hover */
+  .pkg-overflow-tip {
+    position: absolute;
+    z-index: 9999;
+    background: #1f2937;
+    color: white;
+    padding: 8px 11px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
+    max-width: 280px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    pointer-events: auto; /* cho phép click nút trong tooltip */
+    display: none;
+  }
+  .pkg-overflow-tip.open { display: block; }
+  .pkg-overflow-tip .pot-msg { color: #fde68a; margin-bottom: 6px; }
+  .pkg-overflow-tip .pot-btn {
+    background: #7c3aed; color: white; border: none; padding: 5px 10px;
+    border-radius: 5px; font-size: 11.5px; cursor: pointer; font-family: inherit;
+    font-weight: 600;
+  }
+  .pkg-overflow-tip .pot-btn:hover { background: #6d28d9; }
+
   /* Ô SL max 3 ký tự — width tối thiểu để chứa 3 số + cho phép "N99" */
   input.qty  { width: 64px;  padding: 5px 6px; font-size: 12.5px; border: 1px solid #cfd5df; border-radius: 6px; font-family: inherit; text-align: center; }
   input.qty.invalid { border-color: var(--red); background: #fef2f2; }
@@ -262,7 +302,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.19 · 25/05/2026 · 18:50
+    Version 10.8.20 · 25/05/2026 · 20:30
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -740,6 +780,9 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 
 <!-- v10.8.16: Modal VAT tự điền — paste text bất kỳ → parse 4 field VAT -->
+<!-- v10.8.20: Tooltip popup cho gói thừa tồn kho (single global element, reuse cho mọi .pkg-overflow) -->
+<div id="pkgOverflowTip" class="pkg-overflow-tip"></div>
+
 <div class="picker-overlay" id="vatAutoFillOverlay" onclick="if(event.target===this)App.vatAutoFillClose()">
   <div class="picker-modal" style="width:min(96vw, 600px);">
     <div class="picker-header">
@@ -2179,6 +2222,11 @@ const App = (() => {
       // v10.6: tên gói + icon copy ngay sau (cùng dòng inline)
       const nameSpan = document.createElement("span");
       nameSpan.textContent = p.name || item.line;
+      // v10.8.20: Check gói thừa tồn kho → tô tím + tooltip hover
+      if (p.name && StockOverflow.check(p.name, p.type, p.days)) {
+        nameSpan.className = "pkg-overflow";
+        nameSpan.title = ""; // dùng custom tooltip qua mouseenter, không native title
+      }
       nameDiv.appendChild(nameSpan);
       const copyBtn = makeCopyIconBtn(p.name || item.line, "Copy tên gói");
       nameDiv.appendChild(copyBtn);
@@ -4422,10 +4470,15 @@ const App = (() => {
       const note = it.note ? `<div style="color:#0ea5e9;font-size:11px;font-style:italic;">↳ ${escapeHtml(it.note)}</div>` : "";
       // v10.6: Icon copy inline sau tên gói
       const copyBtn = `<button class="copy-icon-btn" type="button" onclick="App._copyPkgNameInline(this, ${JSON.stringify(pkgName).replace(/"/g, "&quot;")})" title="Copy tên gói">${COPY_ICON_SVG}</button>`;
+      // v10.8.20: check tồn kho → tô tím tên gói
+      const isOverflow = pkgName && StockOverflow.check(pkgName, type, days);
+      const pkgNameHtml = isOverflow
+        ? `<span class="pkg-overflow">${escapeHtml(pkgName)}</span>`
+        : escapeHtml(pkgName);
       return `
         <tr>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${i+1}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${escapeHtml(pkgName)}${copyBtn}${note}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12.5px;">${pkgNameHtml}${copyBtn}${note}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555;">${escapeHtml(type)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${escapeHtml(days)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:600;color:var(--green);text-align:right;">${escapeHtml(price)}</td>
@@ -5360,12 +5413,10 @@ const App = (() => {
   async function draftImportConfirm(saveAsDraft) {
     if (!pendingImportPayload) { draftImportClose(); return; }
     const p = pendingImportPayload;
-    // Đóng modal Import ngay + bật spinner (modal Import che spinner → đóng trước)
+    // v10.8.20: Đóng modal Import. Bỏ slShowLoading vì draft giờ chạy local
+    // (DraftStore.upsert hoàn thành tức thì, không cần spinner) — trước đây spinner
+    // ko hide ở branch "không trùng" + branch "new name" gây treo vĩnh viễn.
     draftImportClose();
-    slShowLoading(
-      saveAsDraft ? "📥 Đang import + lưu đơn nháp…" : "📥 Đang import vào giỏ…",
-      "Vui lòng đợi vài giây."
-    );
 
     _loadingDraft = true; // chặn auto-regen mã đơn (sẽ dùng mã của link)
     cart = p.cart;
@@ -5385,7 +5436,6 @@ const App = (() => {
 
     if (!saveAsDraft || !p.name) {
       // Chỉ import vào giỏ, không lưu draft
-      slHideLoading();
       showStatus(`✅ Đã import đơn "${p.name || '(không tên)'}" vào giỏ.${p.vat && (p.vat.mst || p.vat.name) ? " (Có VAT)" : ""}`);
       return;
     }
@@ -5393,7 +5443,6 @@ const App = (() => {
     // Có yêu cầu lưu thành draft → check trùng tên trước
     const dup = DraftStore.getAll().find(x => _normName(x.name) === _normName(p.name));
     if (dup) {
-      slHideLoading(); // ẩn loading để hỏi user
       const choice = await _askDuplicateOnImport(dup, p);
       if (choice === "cancel") {
         // Vẫn giữ giỏ đã import (user có thể xem), chỉ không lưu draft
@@ -5487,6 +5536,13 @@ const App = (() => {
     draftRender();
   })();
   draftCheckUrlHash();
+
+  // v10.8.20: Init Stock Overflow (gói thừa tồn kho) — background, không block UI.
+  // Sẽ render lại cart + draft list nếu có thay đổi.
+  (async () => {
+    await new Promise(r => setTimeout(r, 800));
+    StockOverflow.init();
+  })();
 
   async function draftsManualRefresh() {
     // v10.2: local-only — chỉ reload từ localStorage để render lại
@@ -6564,6 +6620,170 @@ const App = (() => {
     return parsed[0] || [];
   }
 
+  // ─── v10.8.20: StockOverflow — gói thừa tồn kho ──────────────────────────
+  // Fetch CSV sheet tồn kho → build Set key "tên|loại|ngày" để check khớp.
+  // Render tên gói màu tím + tooltip + nút "Xem tồn kho" trong giỏ + draft view.
+  const StockOverflow = (() => {
+    const SHEET_URL = "https://docs.google.com/spreadsheets/d/1-Y9gpiFLQ43EKbgvVcDcSp722vfjJitPTea__JrJrZA/edit?gid=0#gid=0";
+    const CACHE_KEY = "simglobe_stock_overflow_cache";
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+    // Map key normalize → object { name, type, days } (giữ data gốc để hover hiển thị)
+    let stockSet = new Set();
+    let lastFetchAt = 0;
+
+    // Normalize: lowercase + bỏ dấu + collapse whitespace
+    function norm(s) {
+      return String(s || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/\s+/g, " ");
+    }
+
+    function buildKey(name, type, days) {
+      return norm(name) + "|" + norm(type) + "|" + norm(days);
+    }
+
+    // Check 1 item có trong stock không
+    function check(name, type, days) {
+      if (!stockSet.size) return false;
+      return stockSet.has(buildKey(name, type, days));
+    }
+
+    function _saveCache(rows) {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows }));
+      } catch (e) { /* localStorage full / disabled */ }
+    }
+
+    function _loadCache() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || !Array.isArray(obj.rows)) return null;
+        if (Date.now() - obj.at > CACHE_TTL_MS) return null;
+        return obj.rows;
+      } catch (e) { return null; }
+    }
+
+    function _buildFromRows(rows) {
+      // Row 0 = header. Tìm column index "TÊN GÓI" / "LOẠI SIM" / "NGÀY".
+      if (!rows.length) { stockSet = new Set(); return 0; }
+      const header = rows[0].map(h => norm(h));
+      const colName = header.findIndex(h => h.includes("ten goi"));
+      const colType = header.findIndex(h => h.includes("loai sim"));
+      const colDays = header.findIndex(h => h.includes("ngay"));
+      if (colName < 0) {
+        console.warn("[StockOverflow] Header không có cột 'TÊN GÓI'. Headers:", rows[0]);
+        stockSet = new Set();
+        return 0;
+      }
+      const newSet = new Set();
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || !r[colName]) continue;
+        const n = r[colName];
+        const t = colType >= 0 ? r[colType] : "";
+        const d = colDays >= 0 ? r[colDays] : "";
+        newSet.add(buildKey(n, t, d));
+      }
+      stockSet = newSet;
+      return newSet.size;
+    }
+
+    // Lazy load — gọi 1 lần khi app start, cache 5 phút.
+    async function init() {
+      // Load cache trước → có data ngay
+      const cached = _loadCache();
+      if (cached) {
+        _buildFromRows(cached);
+        lastFetchAt = Date.now();
+        // Trigger re-render ngầm (cart đã render xong với data cache)
+        try { render(); } catch (e) { /* render chưa sẵn sàng */ }
+      }
+      // Background fetch (luôn refresh nếu cache expired hoặc null)
+      if (!cached || Date.now() - lastFetchAt > CACHE_TTL_MS) {
+        try {
+          const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
+          if (!csvUrl) return;
+          const csvText = await gsFetch(csvUrl);
+          const rows = gsParseCsv(csvText);
+          const count = _buildFromRows(rows);
+          lastFetchAt = Date.now();
+          _saveCache(rows);
+          console.log(`[StockOverflow] Loaded ${count} gói thừa tồn kho.`);
+          // Re-render cart + draft list để show tô tím
+          try { render(); } catch (e) {}
+          try { draftRender(); } catch (e) {}
+        } catch (e) {
+          console.warn("[StockOverflow] Fetch failed:", e.message);
+        }
+      }
+    }
+
+    function getSheetUrl() { return SHEET_URL; }
+    function getCount() { return stockSet.size; }
+
+    return { init, check, getSheetUrl, getCount };
+  })();
+
+  // Open link tồn kho trong tab mới (gọi từ onclick popup)
+  function stockOpenSheet() {
+    window.open(StockOverflow.getSheetUrl(), "_blank", "noopener");
+  }
+
+  // ─── v10.8.20: Tooltip hover handler ──────────────────────────
+  // Event delegation: listen mouseenter/leave trên document, target = .pkg-overflow
+  let _tipHideTimer = null;
+  function _showStockTip(el) {
+    if (_tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+    const tip = document.getElementById("pkgOverflowTip");
+    if (!tip) return;
+    tip.innerHTML = `
+      <div class="pot-msg">📦 Đang có gói thừa, vui lòng bán trước</div>
+      <button class="pot-btn" onclick="App.stockOpenSheet()">🔗 Xem tồn kho</button>
+    `;
+    // Position dưới element + lệch trái 5px
+    const rect = el.getBoundingClientRect();
+    const tipW = 280; // ước lượng max-width
+    let left = rect.left + window.scrollX;
+    // Tránh tràn phải
+    if (left + tipW > window.innerWidth - 10) left = window.innerWidth - tipW - 10;
+    if (left < 10) left = 10;
+    tip.style.left = left + "px";
+    tip.style.top = (rect.bottom + window.scrollY + 4) + "px";
+    tip.classList.add("open");
+  }
+  function _hideStockTip(immediate) {
+    const tip = document.getElementById("pkgOverflowTip");
+    if (!tip) return;
+    if (immediate) {
+      tip.classList.remove("open");
+      return;
+    }
+    // Delay 200ms để cho user kịp move chuột vào nút "Xem tồn kho"
+    if (_tipHideTimer) clearTimeout(_tipHideTimer);
+    _tipHideTimer = setTimeout(() => {
+      tip.classList.remove("open");
+      _tipHideTimer = null;
+    }, 200);
+  }
+  // Đăng ký event delegation 1 lần
+  document.addEventListener("mouseover", (e) => {
+    const t = e.target.closest(".pkg-overflow");
+    if (t) _showStockTip(t);
+    const tipEl = e.target.closest("#pkgOverflowTip");
+    if (tipEl && _tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
+  });
+  document.addEventListener("mouseout", (e) => {
+    const t = e.target.closest(".pkg-overflow");
+    if (t && !e.relatedTarget?.closest?.("#pkgOverflowTip")) _hideStockTip(false);
+    const tipEl = e.target.closest("#pkgOverflowTip");
+    if (tipEl && !e.relatedTarget?.closest?.(".pkg-overflow, #pkgOverflowTip")) _hideStockTip(false);
+  });
+
   const GS_PROXY = "https://script.google.com/macros/s/AKfycbxWDH8yZrFEk5w9XH1mOwR2JqdAIAixLmBPnhLyhA3n___dLiGqRajfV75NLKIQX7Rp1A/exec";
 
   function gsIsValidCsv(text) {
@@ -7391,6 +7611,7 @@ const App = (() => {
     vatAutoFillClose,
     vatAutoFillPreview,
     vatAutoFillSubmit,
+    stockOpenSheet,
     cust2bOnChange,
     cust2bClear,
     cust2bOnVatInput,
