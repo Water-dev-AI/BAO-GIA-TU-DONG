@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.12 · 25/05/2026 · 15:45
+    Version 10.8.13 · 25/05/2026 · 16:00
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1475,11 +1475,15 @@ const App = (() => {
     const separatorRe = /^\s*[-*=_~]{3,}\s*$/;
 
     // VAT field patterns (cho phép nhiều label đồng nghĩa)
+    // v10.8.13: Alternation order — JS regex match left-to-right, KHÔNG ưu tiên match dài nhất.
+    // Phải đặt label DÀI HƠN/CỤ THỂ HƠN TRƯỚC, label NGẮN HƠN sau. Ngược lại sẽ bị bug:
+    //   "Tên Công ty: ABC" với regex /(tên|tên công ty)/ → match "Tên" → value = "Công ty: ABC" (THỪA).
+    // Phải dùng: /(tên công ty|tên)/ → match "Tên Công ty" → value = "ABC".
     const vatFieldRe = {
-      mst: /^(mst|mã số thuế|ma so thue|tax|tax\s*id)\s*:?\s*(.+)$/i,
-      name: /^(tên|ten|tên công ty|ten cong ty|công ty|cong ty|buyer|customer)\s*:?\s*(.+)$/i,
-      addr: /^(đ\/c|d\/c|địa chỉ|dia chi|address)\s*:?\s*(.+)$/i,
-      email: /^(email|mail|email nhận hoá đơn|email nhan hoa don|email nhan vat|email nhận vat)\s*:?\s*(.+)$/i,
+      mst: /^(mã số thuế|ma so thue|tax\s*id|mst|tax)\s*:?\s*(.+)$/i,
+      name: /^(tên công ty|ten cong ty|tên cty|ten cty|công ty|cong ty|buyer|customer|tên|ten)\s*:?\s*(.+)$/i,
+      addr: /^(địa chỉ|dia chi|address|đ\/c|d\/c)\s*:?\s*(.+)$/i,
+      email: /^(email nhận hoá đơn|email nhan hoa don|email nhận vat|email nhan vat|email|mail)\s*:?\s*(.+)$/i,
     };
 
     // Check có structure bill không (có summary hoặc VAT hoặc orderCode)
