@@ -262,7 +262,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.16 · 25/05/2026 · 17:30
+    Version 10.8.17 · 25/05/2026 · 18:00
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3646,14 +3646,29 @@ const App = (() => {
     const labelEmail = /^(email|e\-?mail|mail|email\s*nh[ậa]n\s*(?:ho[áa]\s*đ[ơo]n|vat))\s*[:;]/i;
     const labelMst = /^(m[ãa]\s*s[ốo]\s*thu[êế]|m\.?s\.?t|mst|tax\s*(?:id|code|number)?)(?:\s*\/\s*[a-z\s]+)?\s*[:;]/i;
 
-    // Address keywords (heuristic — tiếng Việt + Anh)
-    // QUAN TRỌNG: bao quanh bằng (^|[\s,.;:|/(]) và (?=$|[\s,.;:|/)]) để tránh match substring
-    // (vd "quan" trong "truongquang" KHÔNG được match).
-    const ADDR_KW_RE = /(?:^|[\s,.;:|/(])(ph[ưu][ơo]ng|qu[ậa]n|huy[êệ]n|th[àa]nh\s*ph[ốo]|t[ỉi]nh|đ[ưu][ơo]ng|s[ốo]\s+\d|t[òo]a\s*nh[àa]|t[ầa]ng\s+\d|street|district|ward|province|city|building|floor|hcmc|hcm|hn|kcn|khu\s*c[ôo]ng\s*nghi[êệ]p)(?=$|[\s,.;:|/)])/i;
-    // Company name keywords
-    const NAME_KW_RE = /(?:^|[\s,.;:|/(])(c[ôo]ng\s*ty|cty|c[ổo]\s*ph[ầa]n|tnhh|jsc|joint\s*stock|co\.?\s*ltd|corp|corporation|enterprise)(?=$|[\s,.;:|/)])/i;
-    // Skip line lúc heuristic — header English bilingual (chỉ chữ thường + dấu hai chấm)
+    // ─── Helper: bỏ dấu tiếng Việt để match heuristic. ─────────────
+    // Bỏ dấu tiện hơn list từng variant (Phường có ờ, Đường có ờ, Tỉnh có ỉ,...).
+    // KHÔNG dùng cho extract value, chỉ dùng cho TEST keyword match.
+    const _stripDiacritics = (s) => {
+      return s
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        // Đặc biệt: đ/Đ KHÔNG có combining mark nên NFD không tách → handle riêng
+        .replace(/đ/g, "d").replace(/Đ/g, "D")
+        // Một số ký tự đặc biệt
+        .replace(/ư/g, "u").replace(/Ư/g, "U")
+        .replace(/ơ/g, "o").replace(/Ơ/g, "O");
+    };
+
+    // Address keywords (chạy trên text BỎ DẤU)
+    const ADDR_KW_RE_NORM = /(?:^|[\s,.;:|/(])(phuong|quan|huyen|thanh\s*pho|tinh|duong|so\s+\d|toa\s*nha|tang\s+\d|street|district|ward|province|city|building|floor|hcmc|hcm|hn|tphcm|tphn|kcn|khu\s*cong\s*nghiep)(?=$|[\s,.;:|/)])/i;
+    // Company name keywords (chạy trên text BỎ DẤU)
+    const NAME_KW_RE_NORM = /(?:^|[\s,.;:|/(])(cong\s*ty|cty|co\s*phan|tnhh|jsc|joint\s*stock|co\.?\s*ltd|corp|corporation|enterprise|chi\s*nhanh)(?=$|[\s,.;:|/)])/i;
+    // Skip line lúc heuristic — header English bilingual
     const SKIP_HEURISTIC_RE = /^(name|address|tax\s*code|tax\s*id|company\s*name)\s*[:;]?$/i;
+    // Wrapper: check keyword bằng cách normalize line trước
+    const isAddrKw = (ln) => ADDR_KW_RE_NORM.test(_stripDiacritics(ln));
+    const isNameKw = (ln) => NAME_KW_RE_NORM.test(_stripDiacritics(ln));
 
     // ─── Pass 1: Label-based parsing ───
     // Track index của line đã match cho address để gắn continuation ở Pass 2.
@@ -3754,7 +3769,7 @@ const App = (() => {
         const ln = lines[i];
         if (/@/.test(ln)) break; // STOP khi gặp email line
         // Phải có addr keyword + không có name keyword
-        if (ADDR_KW_RE.test(ln) && !NAME_KW_RE.test(ln)) {
+        if (isAddrKw(ln) && !isNameKw(ln)) {
           const sep = out.addr.endsWith(",") || out.addr.endsWith(".") ? " " : ", ";
           out.addr = (out.addr + sep + ln).replace(/\s{2,}/g, " ").trim();
           matched.add(i);
@@ -3784,7 +3799,7 @@ const App = (() => {
       }
 
       // Tên CTY: line có keyword CÔNG TY/TNHH/JSC/...
-      if (!out.name && NAME_KW_RE.test(ln)) {
+      if (!out.name && isNameKw(ln)) {
         // Filter ra phần "ENG translation" nếu line bilingual (vd "CÔNG TY ABC / ABC Co., Ltd")
         // Lấy đoạn đầu (trước "/" đầu tiên nếu có "/" sau >5 ký tự)
         let nameVal = ln;
@@ -3801,22 +3816,76 @@ const App = (() => {
         out.name = nameVal.replace(/^[\-:;\s]+/, "").trim();
         matched.add(i);
         addrLastIdx = -1; // tên cty mới → reset addr-continuation
+        // v10.8.17: Name continuation — lines LIỀN KỀ chưa matched + ALL-CAPS-like + ko ADDR keyword
+        //   → nối vào tên CTY (vd "CHI NHÁNH CÔNG TY TNHH\nBOSCH VIỆT NAM\nTẠI THÀNH PHỐ HỒ CHÍ MINH")
+        // QUAN TRỌNG: STOP khi:
+        //   - line có ADDR keyword (vd "Tầng 8") — TRỪ KHI line là ALL-CAPS strict (vì address VN ko all-caps)
+        //   - line có @ (email)
+        //   - line là số đơn lẻ (MST)
+        //   - line đã matched
+        //   - line không đủ ALL-CAPS-like
+        let j = i + 1;
+        while (j < lines.length) {
+          const ln2 = lines[j];
+          if (matched.has(j)) break;
+          if (/@/.test(ln2)) break;
+          if (/^\d+[\d\-\s]*$/.test(ln2.trim())) break; // số đơn lẻ
+          // ALL-CAPS check: TÍNH RIÊNG chữ cái (loại bỏ số/dấu/khoảng trắng).
+          // Nếu KHÔNG có chữ thường nào → là ALL-CAPS strict → tiếp tục dù có ADDR keyword.
+          // Nếu có chữ thường (lowercase) → kiểm tra tỷ lệ caps + ADDR_KW.
+          const letters = ln2.replace(/[^A-Za-zÀ-ỹ]/g, "");
+          if (letters.length < 2) break;
+          const lowerCount = letters.replace(/[A-ZÀ-Ỹ]/g, "").length;
+          const isAllCapsStrict = lowerCount === 0; // 100% hoa
+          if (!isAllCapsStrict) {
+            // Có chữ thường → áp dụng check ADDR_KW như cũ (tránh nhét addr vào name)
+            if (isAddrKw(ln2)) break;
+            // Cần ≥50% caps
+            const upperCount = letters.length - lowerCount;
+            if (upperCount / letters.length < 0.5) break;
+          }
+          // ALL-CAPS strict → nối luôn (kể cả có ADDR keyword như "THÀNH PHỐ")
+          // Nối
+          out.name = (out.name + " " + ln2).replace(/\s{2,}/g, " ").trim();
+          matched.add(j);
+          j++;
+        }
         continue;
       }
 
       // Địa chỉ heuristic: line có Phường/Quận/Thành phố/Tỉnh/Số
       // Hoặc continuation: line LIỀN KỀ (i === addrLastIdx + 1) sau line addr trước đó
-      const isAddrLike = ADDR_KW_RE.test(ln);
-      if (isAddrLike && !NAME_KW_RE.test(ln)) {
+      const isAddrLike = isAddrKw(ln);
+      if (isAddrLike && !isNameKw(ln)) {
         if (!out.addr) {
           out.addr = ln.replace(/^[\-:;\s]+/, "").trim();
           addrLastIdx = i;
           addrFirstIdx = i;
           matched.add(i);
+          // v10.8.17: Addr continuation tương tự — lines LIỀN KỀ chưa matched, không @, không label
+          //   → nối vào addr ngay cả khi không có ADDR keyword (vd "TP HCM" cuối addr)
+          let k = i + 1;
+          while (k < lines.length) {
+            const ln2 = lines[k];
+            if (matched.has(k)) break;
+            if (/@/.test(ln2)) break;
+            if (/^\d+[\d\-\s]*$/.test(ln2.trim())) break; // số đơn lẻ (MST)
+            if (isNameKw(ln2)) break; // tên CTY khác
+            // Bắt đầu bằng chữ hoa và có >= 2 từ → có thể là dòng tiếp addr
+            // Đảm bảo line không quá dài (>200 chars = không phải địa chỉ thông thường)
+            if (ln2.length > 200) break;
+            const sep = out.addr.endsWith(",") || out.addr.endsWith(".") ? " " : ", ";
+            out.addr = (out.addr + sep + ln2).replace(/\s{2,}/g, " ").trim();
+            matched.add(k);
+            addrLastIdx = k;
+            // CHỈ nối nếu line này có addr keyword HOẶC line trước có dấu phẩy/không có dấu chấm cuối
+            // → continuation hợp lý. Nếu line này KHÔNG có addr keyword, dừng sau khi nối (tránh kéo dài quá xa).
+            if (!isAddrKw(ln2)) break;
+            k++;
+          }
           continue;
         }
         // Continuation CHỈ khi line liền kề (i === addrLastIdx + 1) — không jump qua matched lines.
-        // v10.8.16: trước đây cho phép gap ≤3 → sai trong case bilingual (jump qua line "Address:" EN).
         if (addrLastIdx >= 0 && i === addrLastIdx + 1) {
           const sep = out.addr.endsWith(",") || out.addr.endsWith(".") ? " " : ", ";
           out.addr = (out.addr + sep + ln).replace(/\s{2,}/g, " ").trim();
