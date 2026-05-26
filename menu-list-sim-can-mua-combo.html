@@ -1,4 +1,195 @@
 <!doctype html>
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+ SIMGLOBE APP — CHANGELOG & CONTEXT (giữ trong file để khôi phục context khi mất chat)
+ Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
+═══════════════════════════════════════════════════════════════════════════════
+
+ STACK & KIẾN TRÚC
+ - 1 file HTML (CSS+JS inline) chạy GitHub Pages, KHÔNG backend.
+ - Tích hợp Google Sheet qua: (a) CSV publish để đọc bảng giá + hướng dẫn gói,
+   (b) Apps Script Web App cho VAT DB + DRAFTS (online drafts, share giữa máy).
+ - File deploy: menu-list-sim-can-mua-combo.html, STK.json, sheets.json,
+   vat-config.json, logo.png. (vat-sheet.gs paste 1 lần vào Apps Script editor.)
+
+ PHÂN LOẠI SIM — QUAN TRỌNG (v10.8.10 rule)
+ - ESIM: KHÔNG có cột "Ngày" — ngày LUÔN nằm trong tên gói (vd "Maldives 7 Days 5GB").
+ - SIM VẬT LÝ:
+   • Dạng tổng data: ngày nằm trong tên (giống ESIM).
+   • Dạng data theo ngày: có giá trị ở cột "Ngày" (vd "Korea, 3GB /day, 128kbps").
+
+ CÚ PHÁP GIÁ TRONG BẢNG GIÁ
+ - "299k"        → giá đơn (1 SIM)
+ - "299k*2"      → giá *2 SL (bậc thang qty)
+ - "299k*N3"     → NẠP GÓI 3 SIM (chỉ SIM VẬT LÝ, -20k/SIM)
+ - "(GIA-20k)*N" → cú pháp nạp gói alt (v10.8.9)
+ - "PRICE*QTY=TOTAL" → total override (v10.8.9)
+ - "[note]" / "{note}" cuối line → note inline (v10.8.6)
+
+ DISCOUNT (bậc thang, override bằng manual k hoặc % cap 15)
+ - <4tr: bậc thang. ≥4tr: 200k. ≥5tr: 250k. ≥10tr: 500k. ≥20tr: 1000k.
+ - +50k mỗi 1tr thêm sau 4tr (vô hạn).
+ - Free ship ≥10 SIM vật lý.
+ - Manual k/% đè hoàn toàn công thức.
+
+ KIẾN TRÚC FEATURE LỚN
+ - 40 bảng giá Google Sheet import qua CSV (anchor-by-price auto-detect bộ giá).
+ - Picker modal đa tab, search no-diacritic, filter loại.
+ - Cart localStorage + realtime sync giỏ ↔ bill (mục 2 ↔ mục 3).
+ - Toggle "📑 Gộp phân loại" (default ON từ v10.8.26): tick → tất cả ESIM trên, SIM VL dưới.
+   Khi tắt → giữ thứ tự xen kẽ; mỗi run consecutive cùng type → 1 ô anchor merge riêng khi import.
+ - Đơn nháp ONLINE → tab DRAFTS của Google Sheet VAT DB (cache 1h, share giữa máy,
+   auto-purge >7 ngày). Draft có ✏️ rename inline, ô mã đơn edit nhanh, badge VAT.
+ - Mã từ hãng (v10.8.26): schema `d.codes.groups = [{type, code}, ...]` theo thứ tự runs.
+   Modal Xem draft render N ô input mã (mỗi run 1 ô). Không giới hạn số mã/ô.
+ - Tags draft list: "✅ Đã lấy" (có mã eSIM) / "⚡ Đã nạp" (có mã SIM VL) /
+   "📥 Đã nhập sổ" (đã copy payload, có ✕ để tắt).
+ - Share link encode VAT + orderCode → import ngược restore đầy đủ.
+ - QR thanh toán: VietQR 2 STK toggle (VPBANK Cá nhân / TECHCOMBANK Công ty).
+ - Bill format dùng tab, mã đơn DH+timestamp 8 số.
+ - Payload Sheet modal: Type (Lẻ/CTY VAT), Tag nguồn 5 nút (Không/[Z]/[OA]/[F]/[K]),
+   VAT autocomplete dropdown 3 ô (MST/Tên/Email) từ Google Sheet VAT DB.
+
+ APPS SCRIPT — ANCHOR LOGIC (v10.8.26 rewrite)
+ - Loop qua runs codeable (esim/physical consecutive), mỗi run 1 ô merge anchor.
+ - Có code (payload.codes.groups[i].code) → fill code; không có → ô trống.
+ - Tên đơn (tagPrefix + name) fill vào ô trống theo rule:
+   • 1 ô trống → fill thẳng. • ≥2 ô trống → ưu tiên SIM VL trên cùng → eSIM trên cùng.
+   • Tất cả ô đã có mã → KHÔNG fill tên.
+ - Backward-compat: legacy `codes.{esim,physical}` payload vẫn parse được.
+
+ APPS SCRIPT (xem chi tiết trong PROMPT_CHAT_MOI.md)
+ - simglobe-sheet-import.gs: menu Tools → Nhập đơn từ App / Mở MAPPING / Mở _log.
+   Header lookup theo TÊN row 2. Mapping NƯỚC + GÓI (regex RE: / exact / ASK).
+ - highlight-sheet.gs: trigger onSheetEdit/onSheetChange, highlight XUẤT LẺ.
+ - vat-sheet.gs: Web App. Actions: ping/upsert/delete/drafts_list/drafts_upsert/
+   drafts_delete. 2 tabs: VAT, DRAFTS. Auto-purge drafts >7d khi list.
+
+═══════════════════════════════════════════════════════════════════════════════
+ VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
+═══════════════════════════════════════════════════════════════════════════════
+
+ v10.8.26 · 26/05/2026 · 16:20 (GMT+7)
+ - Thêm changelog history block embedded trong HTML để khôi phục context khi mất chat
+   (block này đây — phía trên VERSION HISTORY).
+ - Toggle "📑 Gộp phân loại" default ON (key v1 → v2 force migration).
+ - Bỏ checkbox "Nhập sổ bằng mã" + tag "📥 BẰNG MÃ" + `d.useCode` field.
+ - Bỏ mode "mixed_disabled" — cart xen kẽ giờ tạo N anchor riêng (mỗi run consecutive 1 merge).
+ - Schema codes mới: `d.codes.groups = [{type, code}, ...]` theo thứ tự runs. Migrate cũ
+   `{esim, physical}` → groups khi load. Bỏ giới hạn 5 mã/ô.
+ - Modal Xem draft: render N ô input mã theo runs (label "Mã eSIM (nhóm 1)" / "Mã SIM VL (nhóm 2)").
+ - Tags draft list mới:
+   • "✅ Đã lấy" (xanh lá) — có mã ở BẤT KỲ nhóm eSIM nào.
+   • "⚡ Đã nạp" (vàng) — có mã ở BẤT KỲ nhóm SIM VL nào.
+   • "📥 Đã nhập sổ" (xanh dương) — đã copy payload 1 trong 2 nơi (QR section / modal payload /
+     draftView). Có nút ✕ để tắt (lưu vào `d.imported` + `d.importedAt`).
+ - GS `simglobe-sheet-import.gs` rewrite anchor logic:
+   • Loop qua codeableRuns, mỗi run merge cell + fill code (nếu có).
+   • Tên đơn fill vào ô trống theo rule: 1 trống → fill thẳng; ≥2 trống → ưu tiên
+     SIM VL trên cùng → eSIM trên cùng; tất cả có code → KHÔNG fill tên.
+   • Backward-compat: legacy `codes.{esim,physical}` payload vẫn parse được.
+   • Success message liệt kê từng run [row, count, count_mã].
+ Prompt: "Toggle gộp phân loại default tick + xen kẽ tạo nhiều ô merge anchor +
+ bỏ checkbox/bằng mã + bỏ giới hạn 5 mã + tag mới (Đã lấy/Đã nạp/Đã nhập sổ với ✕)."
+
+ v10.8.25 · 25/05/2026 · 23:10
+ - Init StockOverflow + PackageGuides phải đặt TRƯỚC `return` của IIFE (fix bug init).
+
+ v10.8.23 · (trước 10.8.25)
+ - StockOverflow + PackageGuides init di chuyển xuống cuối file.
+ - Guard non-Element targets trong tooltip hover (e.target có thể là Text node).
+
+ v10.8.22
+ - Google Sheet hướng dẫn gói: publish CSV để load list gói có hướng dẫn.
+
+ v10.8.21
+ - PackageGuides: gói có hướng dẫn → background xanh nhạt + border trái + icon 📘.
+ - Modal xem ảnh hướng dẫn gói (vd ảnh att-20days.jpg, maldives.jpg, nga-bee 30d).
+
+ v10.8.20
+ - StockOverflow: gói thừa tồn kho → tô tím tên + tooltip popup hover (1 global element).
+
+ v10.8.19
+ - VAT auto-parse: split lines mạnh hơn cho OCR table (cell MST đứng riêng "3603119522-001").
+ - Không fill thẳng nữa khi OCR table phức tạp.
+
+ v10.8.18
+ - VAT parse: strip leading bullet/marker chars để label match work ("- Địa chỉ:", "* MST:").
+ - Thêm viết tắt VN: tp/p/q/lau/cao oc/vpdd/ctcp/van phong/pte ltd/ltd./hang hang khong/ngan hang.
+
+ v10.8.17
+ - VAT parse: Name + Addr continuation cho dòng LIỀN KỀ chưa matched (ALL-CAPS-like).
+
+ v10.8.16
+ - Modal VAT tự điền: paste text bất kỳ → parse 4 field VAT (MST/Tên/ĐC/Email).
+ - 3 chiến lược parse: label-based / continuation / regex.
+ - KHÔNG reset addrLastIdx khi gặp label addr trùng (continuation VN address work).
+
+ v10.8.15
+ - Checkbox "Copy note" trong picker (default ON) — gói có note → append vào cell 5.
+ - Persist state checkbox vào localStorage.
+
+ v10.8.14
+ - Restore nút ✕ xoá per-entry VAT dropdown (xoá khỏi Google Sheet VAT DB).
+ - Re-render dropdown chính ở section 2 (Cust2B) khi data thay đổi.
+
+ v10.8.13
+ - Fix alternation order JS regex (left-to-right, không ưu tiên match dài nhất).
+
+ v10.8.12
+ - Sau dòng "Còn: ..." → bỏ hết text phía sau (note user gõ thêm bù giá / ghi chú).
+ - afterConcludingLine flag để skip đúng.
+
+ v10.8.11
+ - Bill render: pre-process billLines tách `[note]` inline thành dòng `   ↳ ...` riêng.
+ - Wrap note dài → tính thêm lineH cho mỗi dòng wrap.
+
+ v10.8.10 ⭐
+ - Rule: ESIM → days LUÔN rỗng (ngày nằm trong tên).
+ - CHỈ trích NGÀY nếu type = SIM VẬT LÝ.
+ - Không filter(Boolean) khi split tab — giữ đúng vị trí cell rỗng giữa.
+
+ v10.8.9
+ - Cú pháp "(GIA-20k)" / "(GIA-20k)*N" → NẠP GÓI của SIM VẬT LÝ.
+ - Cú pháp "PRICE*QTY=TOTAL" → total override.
+
+ v10.8.8
+ - Snapshot cart sig NGAY sau khi set mã đơn từ text → liveRecalc().
+
+ v10.8.7
+ - Dòng separator (---/***/===) → skip hoàn toàn (không phải note, không phải gói).
+
+ v10.8.6
+ - Strip "[note]" / "{note}" ở cuối line trước parse giá (vd "191k [CHỈ QUÉT ESIM]").
+
+ v10.8.5
+ - Flatten newline trong cell note thành ' · ' (không bị buildCartFromText split sai).
+
+ v10.8.4
+ - Pickup note từ item khi parser bill truyền note từ dòng ↳.
+ - Append note nếu pkg mới có note + found chưa có.
+
+ v10.8.3
+ - Dòng standalone chỉ có mã đơn (vd "DH11790956" đứng 1 mình) → bắt được orderCode.
+
+ v10.8.2
+ - orderCode bắt được cả 2 dạng (DH... và mã đơn dạng khác).
+ - Reject giá phi lý (> 10,000k = 10tr / 1 gói SIM).
+
+ v10.8.1
+ - Skip dòng khuyến mãi/summary ("Trên 1tr: -70k", "Còn: 1.7M", "Free ship", "SL trên 10").
+
+ v10.8.0 (baseline trước khi note version)
+ - Realtime sync mục 2 ↔ mục 3 (bill auto cập nhật khi sửa giỏ/qty/note/ship/giảm).
+ - Bỏ confirm "Xoá toàn bộ giỏ" — bấm là xoá luôn + toast.
+ - Đơn nháp có nút ✏️ đổi tên inline.
+ - STK1 (VPBANK Cá nhân) / STK2 (TECHCOMBANK Công ty) toggle.
+ - Phí ship + Giảm thủ công gộp vào mục 3.
+ - VAT autocomplete + sync Google Sheet (cache 24h, 🔄 refresh).
+ - vat-config.json: URL Google Sheet VAT (admin push, NV auto load).
+
+═══════════════════════════════════════════════════════════════════════════════
+-->
 <html lang="vi">
 <head>
 <meta charset="utf-8" />
@@ -367,7 +558,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.25 · 25/05/2026 · 23:10
+    Version 10.8.26 · 26/05/2026 · 16:20
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2148,9 +2339,14 @@ const App = (() => {
      - Drag-drop trong cùng nhóm: tự do.
      - Khi toggle ON: thêm gói mới → tự re-sort. Drag-drop sang nhóm khác → bị "kéo về" nhóm gốc khi re-sort.
   */
-  const GROUP_TOGGLE_KEY = "combo_bill_group_by_type_v1";
+  // v10.8.26: Default ON. Đổi key v1 → v2 để force reset; nếu user đã có v2 thì giữ.
+  const GROUP_TOGGLE_KEY = "combo_bill_group_by_type_v2";
   function _getGroupToggle() {
-    try { return localStorage.getItem(GROUP_TOGGLE_KEY) === "1"; } catch { return false; }
+    try {
+      const v = localStorage.getItem(GROUP_TOGGLE_KEY);
+      if (v === null) return true; // default ON
+      return v === "1";
+    } catch { return true; }
   }
   function _setGroupToggle(v) {
     try { localStorage.setItem(GROUP_TOGGLE_KEY, v ? "1" : "0"); } catch {}
@@ -2163,39 +2359,32 @@ const App = (() => {
     if (t.includes("sim vat ly") || t.includes("sim vật lý") || t.includes("sim")) return "physical";
     return "other";
   }
-  // Group order: esim (1), physical (2), other (3) — giữ thứ tự gốc trong từng nhóm.
-  // v10.7: Analyze nhóm trong cart của 1 draft để biết hiển thị bao nhiêu ô input mã.
-  // Trả về:
-  //   { mode: 'esim_only' | 'physical_only' | 'both_grouped' | 'mixed_disabled' | 'empty' }
-  // Logic:
-  //   - cart rỗng → 'empty'
-  //   - chỉ ESIM → 'esim_only' (1 ô tag ESIM)
-  //   - chỉ SIM VẬT LÝ → 'physical_only' (1 ô tag SIM VL)
-  //   - có cả 2 + groupByType true + thực sự gộp (ESIM hết rồi mới SIM VL) → 'both_grouped' (2 ô)
-  //   - có cả 2 + không gộp (xen kẽ) → 'mixed_disabled' (Q6: ẩn ô)
-  function _analyzeDraftGroups(d) {
+  // v10.8.26: Replace _analyzeDraftGroups → trả về array các runs consecutive cùng type.
+  // Mỗi run = { type: 'esim'|'physical'|'other', startIdx, count }
+  // Bỏ khái niệm "mixed_disabled" — mọi cart đều có anchor runs (mỗi run 1 merge cell).
+  function _analyzeDraftGroupRuns(d) {
     const carr = Array.isArray(d.cart) ? d.cart : [];
-    if (!carr.length) return { mode: "empty" };
+    if (!carr.length) return [];
     const types = carr.map(it => _itemType(it));
-    const hasEsim = types.includes("esim");
-    const hasPhysical = types.includes("physical");
-    if (hasEsim && !hasPhysical) return { mode: "esim_only" };
-    if (!hasEsim && hasPhysical) return { mode: "physical_only" };
-    if (!hasEsim && !hasPhysical) return { mode: "mixed_disabled" }; // chỉ có "other"
-    // Có cả 2 loại — check có gộp không
-    const groupByType = d.groupByType === true;
-    if (!groupByType) return { mode: "mixed_disabled" };
-    // Check thực sự là sorted: tất cả ESIM ở đầu hoặc tất cả ở cuối, không xen kẽ
-    // (Vì user có thể drag/drop xáo)
-    let lastNonOther = "";
-    let transitions = 0;
-    for (const t of types) {
-      if (t === "other") continue;
-      if (lastNonOther && lastNonOther !== t) transitions++;
-      lastNonOther = t;
+    const runs = [];
+    let cur = types[0];
+    let start = 0;
+    let cnt = 1;
+    for (let i = 1; i < types.length; i++) {
+      if (types[i] === cur) cnt++;
+      else {
+        runs.push({ type: cur, startIdx: start, count: cnt });
+        cur = types[i];
+        start = i;
+        cnt = 1;
+      }
     }
-    if (transitions > 1) return { mode: "mixed_disabled" }; // đã xáo lung tung
-    return { mode: "both_grouped" };
+    runs.push({ type: cur, startIdx: start, count: cnt });
+    return runs;
+  }
+  // Filter runs có type là esim/physical (cần input mã). Bỏ 'other'.
+  function _codeableRuns(d) {
+    return _analyzeDraftGroupRuns(d).filter(r => r.type === "esim" || r.type === "physical");
   }
 
   function _sortCartByGroup() {
@@ -2572,60 +2761,88 @@ const App = (() => {
     }
   }
 
-  // v10.7: Lưu mã eSIM / mã SIM VL của draft (autosave on blur).
-  // Multi-line: mỗi dòng = 1 mã. Tối đa 5 mã. Auto trim + bỏ dòng rỗng.
-  // v10.7.3: Khi user vừa điền mã (trước đó rỗng) → auto-tick "Nhập sổ bằng mã".
-  async function _draftSaveCode(draftId, which, value) {
+  // v10.8.26: Schema mới — d.codes = { groups: [{type, code}, ...] } theo thứ tự runs.
+  // Migrate cũ: d.codes = {esim, physical} → groups (best effort).
+  // _draftSaveGroupCode(draftId, runIdx, value) lưu mã cho 1 run cụ thể.
+  // Bỏ giới hạn 5 mã/ô. Bỏ checkbox useCode.
+  function _ensureCodesGroups(d) {
+    if (!d.codes) d.codes = { groups: [] };
+    if (!Array.isArray(d.codes.groups)) {
+      // Migrate cũ: {esim, physical} → groups theo thứ tự runs hiện tại
+      const oldEsim = (d.codes.esim || "").trim();
+      const oldPhysical = (d.codes.physical || "").trim();
+      const runs = _codeableRuns(d);
+      const groups = runs.map(r => ({
+        type: r.type,
+        code: r.type === "esim" ? oldEsim : oldPhysical,
+      }));
+      d.codes = { groups };
+      // clean up legacy fields
+      delete d.codes.esim;
+      delete d.codes.physical;
+    }
+    return d.codes.groups;
+  }
+  // Sync số phần tử groups với số runs codeable hiện tại (cart có thể đổi)
+  function _syncCodesGroupsToRuns(d) {
+    _ensureCodesGroups(d);
+    const runs = _codeableRuns(d);
+    const oldGroups = d.codes.groups;
+    // Build new groups theo runs hiện tại, cố gắng giữ code cũ theo position
+    const newGroups = runs.map((r, i) => {
+      // Tìm code cũ cùng type ở position gần nhất (i)
+      let code = "";
+      if (oldGroups[i] && oldGroups[i].type === r.type) {
+        code = oldGroups[i].code || "";
+      } else {
+        // Fallback: tìm bất kỳ entry cũ cùng type chưa dùng
+        const cand = oldGroups.find((g, j) => g && g.type === r.type && (g.code || "").trim());
+        if (cand) code = cand.code || "";
+      }
+      return { type: r.type, code };
+    });
+    d.codes.groups = newGroups;
+    return newGroups;
+  }
+  async function _draftSaveGroupCode(draftId, runIdx, value) {
     const d = DraftStore.getById(draftId);
     if (!d) return;
-    if (!d.codes) d.codes = { esim: "", physical: "" };
-    // Parse multi-line: split \n, trim từng dòng, bỏ rỗng, max 5
-    let lines = String(value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    let truncated = false;
-    if (lines.length > 5) { lines = lines.slice(0, 5); truncated = true; }
+    _syncCodesGroupsToRuns(d);
+    if (!d.codes.groups[runIdx]) return;
+    // Bỏ giới hạn 5: giữ nguyên multi-line, chỉ trim từng dòng + bỏ dòng rỗng
+    const lines = String(value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     const newVal = lines.join("\n");
-    if (d.codes[which] === newVal) return; // không đổi
-    // Track: trước khi save có code nào không
-    const hadAnyCodeBefore = !!((d.codes.esim && d.codes.esim.trim()) || (d.codes.physical && d.codes.physical.trim()));
-    d.codes[which] = newVal;
-    // v10.7.3: Nếu user vừa thêm mã (chuyển từ rỗng → có) → auto-tick useCode
-    const hasAnyCodeAfter = !!((d.codes.esim && d.codes.esim.trim()) || (d.codes.physical && d.codes.physical.trim()));
-    let autoTicked = false;
-    if (!hadAnyCodeBefore && hasAnyCodeAfter && d.useCode !== true) {
-      d.useCode = true;
-      autoTicked = true;
-    }
+    if (d.codes.groups[runIdx].code === newVal) return;
+    d.codes.groups[runIdx].code = newVal;
     await DraftStore.upsert(d);
-    // Sync UI checkbox useCode (nếu đang mở modal Xem cùng draft)
-    if (autoTicked) {
-      // Tìm checkbox đang render trong modal Xem và tick lại
-      const modalBody = document.getElementById("draftViewBody");
-      if (modalBody) {
-        modalBody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-          if (cb.getAttribute("onchange") && cb.getAttribute("onchange").indexOf("_draftToggleUseCode") !== -1) {
-            cb.checked = true;
-          }
-        });
-      }
-    }
-    const label = which === "esim" ? "eSIM" : "SIM VL";
-    if (truncated) {
-      _draftViewStatus(`⚠️ Đã lưu ${lines.length} mã ${label} (giới hạn 5 mã/ô, các dòng dư đã bị cắt)${autoTicked ? ' · ✅ Tự bật "Nhập sổ bằng mã"' : ''}.`, "info");
-    } else if (lines.length) {
-      _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label}${autoTicked ? ' · ✅ Tự bật "Nhập sổ bằng mã"' : ''}.`, "success");
-    } else {
-      _draftViewStatus(`✅ Đã xoá mã ${label}.`, "success");
-    }
+    const label = d.codes.groups[runIdx].type === "esim" ? "eSIM" : "SIM VL";
+    if (lines.length) _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label} (nhóm ${runIdx + 1}).`, "success");
+    else _draftViewStatus(`✅ Đã xoá mã ${label} (nhóm ${runIdx + 1}).`, "success");
     draftRender();
   }
 
-  // v10.7: Toggle "Import bằng mã" cho 1 draft
-  async function _draftToggleUseCode(draftId, checked) {
+  // v10.8.26: Tag "Đã nhập sổ" — toggle off khi bấm ✕
+  async function _draftToggleImported(draftId, val) {
     const d = DraftStore.getById(draftId);
     if (!d) return;
-    d.useCode = !!checked;
+    if (val) {
+      d.imported = true;
+      d.importedAt = Date.now();
+    } else {
+      d.imported = false;
+      delete d.importedAt;
+    }
     await DraftStore.upsert(d);
-    _draftViewStatus(checked ? "✅ Đã bật: nhập sổ sẽ dùng mã làm anchor." : "✅ Đã tắt: nhập sổ dùng tên đơn + tag (mặc định).", "success");
+    draftRender();
+  }
+  // Mark imported = true. Gọi khi user copy payload thành công ở 1 trong 2 nơi.
+  async function _draftMarkImported(draftId) {
+    if (!draftId) return;
+    const d = DraftStore.getById(draftId);
+    if (!d || d.imported === true) return;
+    d.imported = true;
+    d.importedAt = Date.now();
+    await DraftStore.upsert(d);
     draftRender();
   }
 
@@ -4399,20 +4616,30 @@ const App = (() => {
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
         : "";
-      // v10.7: badge code + useCode (Q3)
-      const codes = d.codes || {};
-      const hasAnyCode = (codes.esim && codes.esim.trim()) || (codes.physical && codes.physical.trim());
-      // Đếm số mã (mỗi line là 1 mã)
-      function _countCodes(s) {
-        return String(s || "").split(/\n+/).map(x => x.trim()).filter(Boolean).length;
+      // v10.8.26: Tag mới — "Đã lấy" (có mã eSIM), "Đã nạp" (có mã SIM VL), "Đã nhập sổ" (đã copy payload).
+      // Bỏ useCodeBadge + đổi schema codes sang groups.
+      let hasEsimCode = false, hasPhysicalCode = false;
+      let esimCount = 0, physicalCount = 0;
+      const groups = (d.codes && Array.isArray(d.codes.groups)) ? d.codes.groups : [];
+      groups.forEach(g => {
+        const lines = String(g.code || "").split(/\n+/).map(x => x.trim()).filter(Boolean);
+        if (!lines.length) return;
+        if (g.type === "esim") { hasEsimCode = true; esimCount += lines.length; }
+        else if (g.type === "physical") { hasPhysicalCode = true; physicalCount += lines.length; }
+      });
+      // Migrate cũ fallback: nếu chưa có groups nhưng có esim/physical legacy
+      if (!groups.length && d.codes) {
+        if (d.codes.esim && d.codes.esim.trim()) { hasEsimCode = true; esimCount = d.codes.esim.split(/\n+/).filter(x => x.trim()).length; }
+        if (d.codes.physical && d.codes.physical.trim()) { hasPhysicalCode = true; physicalCount = d.codes.physical.split(/\n+/).filter(x => x.trim()).length; }
       }
-      const esimCount = _countCodes(codes.esim);
-      const physicalCount = _countCodes(codes.physical);
-      const codeBadge = hasAnyCode
-        ? `<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #86efac;" title="${[esimCount ? 'eSIM: ' + esimCount + ' mã' : '', physicalCount ? 'SIM VL: ' + physicalCount + ' mã' : ''].filter(Boolean).join(' · ')}">✅ Đã lấy</span>`
+      const tookBadge = hasEsimCode
+        ? `<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #86efac;" title="eSIM: ${esimCount} mã">✅ Đã lấy</span>`
         : "";
-      const useCodeBadge = d.useCode === true
-        ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Nhập sổ sẽ dùng mã làm anchor (thay tên đơn)">📥 BẰNG MÃ</span>`
+      const chargedBadge = hasPhysicalCode
+        ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #fcd34d;" title="SIM VL: ${physicalCount} mã">⚡ Đã nạp</span>`
+        : "";
+      const importedBadge = d.imported === true
+        ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 4px 2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #93c5fd;display:inline-flex;align-items:center;gap:4px;" title="Đã copy payload để nhập sổ. Bấm ✕ nếu chưa nhập thực sự.">📥 Đã nhập sổ<button onclick="event.stopPropagation();App._draftToggleImported('${d.id}', false)" title="Tắt tag (chưa nhập thực sự)" style="background:#1e40af;color:#fff;border:none;border-radius:50%;width:14px;height:14px;font-size:9px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;">✕</button></span>`
         : "";
       const oc = d.orderCode || "";
       const ocDisplay = oc ? escapeHtml(oc) : `<span style="color:#9ca3af;">(chưa có)</span>`;
@@ -4422,8 +4649,9 @@ const App = (() => {
             <div id="draftNameRow_${d.id}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
               ${vatBadge}
-              ${codeBadge}
-              ${useCodeBadge}
+              ${tookBadge}
+              ${chargedBadge}
+              ${importedBadge}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
               <button onclick="App.draftEditName('${d.id}')" title="Đổi tên (Enter để lưu, Esc huỷ)" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
@@ -4669,82 +4897,52 @@ const App = (() => {
       </div>
     `;
 
-    // v10.7: Codes block (mã eSIM / mã SIM VL) — chỉ hiện theo mode group
-    const grp = _analyzeDraftGroups(d);
-    const codes = d.codes || { esim: "", physical: "" };
-    const useCode = d.useCode === true;
-    // Style chung cho textarea code (resize:none, monospace, max 5 dòng)
+    // v10.8.26: Codes block — render N ô input mã theo runs consecutive (codeable).
+    // Sync groups với runs hiện tại (cart có thể đã đổi từ lần lưu trước).
+    _syncCodesGroupsToRuns(d);
+    const codeableRuns = _codeableRuns(d);
+    const groupsForCodes = d.codes.groups || [];
     const codeTaStyle = "padding:6px 10px;border:1px solid #cfd5df;border-radius:6px;font-size:12px;font-family:'Roboto Mono',monospace;width:280px;min-height:34px;line-height:1.5;resize:vertical;";
-    const codeHint = `<div style="font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.4;">Tối đa 5 mã, mỗi mã 1 dòng (Enter để xuống dòng).</div>`;
     let codesBlock = "";
-    if (grp.mode === "esim_only") {
-      codesBlock = `
-        <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
-          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (sẽ điền vào ô anchor khi nhập sổ)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
-            <span style="color:var(--muted);padding-top:6px;">Mã eSIM:</span>
+    if (codeableRuns.length === 0) {
+      codesBlock = ""; // cart rỗng hoặc chỉ 'other' → không hiện
+    } else {
+      // Đếm số nhóm mỗi type để quyết định có cần "(nhóm N)" hay không
+      const esimRunCount = codeableRuns.filter(r => r.type === "esim").length;
+      const physicalRunCount = codeableRuns.filter(r => r.type === "physical").length;
+      let esimSeen = 0, physicalSeen = 0;
+      const rowsHtml = codeableRuns.map((r, idx) => {
+        let label;
+        if (r.type === "esim") {
+          esimSeen++;
+          label = esimRunCount > 1 ? `Mã eSIM (nhóm ${esimSeen})` : "Mã eSIM";
+        } else {
+          physicalSeen++;
+          label = physicalRunCount > 1 ? `Mã SIM VL (nhóm ${physicalSeen})` : "Mã SIM VL";
+        }
+        const code = (groupsForCodes[idx] && groupsForCodes[idx].code) || "";
+        const placeholder = r.type === "esim" ? "vd: b0000262605220047" : "vd: b0001fd2605220002";
+        const meta = `${r.count} dòng${r.count > 1 ? " (merge)" : ""}`;
+        return `
+          <div style="display:contents;">
+            <span style="color:var(--muted);padding-top:6px;">${label}<br><span style="font-size:10px;color:#9ca3af;">${meta}</span></span>
             <div>
-              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
-                onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
-                style="${codeTaStyle}">${escapeHtml(codes.esim || '')}</textarea>
-              ${codeHint}
+              <textarea rows="2" placeholder="${placeholder}&#10;Mỗi mã 1 dòng (Enter để xuống dòng)"
+                onblur="App._draftSaveGroupCode('${d.id}', ${idx}, this.value)"
+                style="${codeTaStyle}">${escapeHtml(code)}</textarea>
             </div>
           </div>
-          <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
-            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
-            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag)</span>
-          </label>
-        </div>
-      `;
-    } else if (grp.mode === "physical_only") {
+        `;
+      }).join("");
       codesBlock = `
         <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
-          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
-            <span style="color:var(--muted);padding-top:6px;">Mã SIM VL:</span>
-            <div>
-              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
-                onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
-                style="${codeTaStyle}">${escapeHtml(codes.physical || '')}</textarea>
-              ${codeHint}
-            </div>
+          <div style="font-weight:700;color:#92400e;margin-bottom:8px;">🔖 Mã từ hãng (mỗi nhóm 1 ô anchor riêng — không giới hạn số mã)</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:flex-start;">
+            ${rowsHtml}
           </div>
-          <label style="display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;cursor:pointer;user-select:none;">
-            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
-            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag)</span>
-          </label>
-        </div>
-      `;
-    } else if (grp.mode === "both_grouped") {
-      codesBlock = `
-        <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;">
-          <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🔖 Mã từ hãng (mỗi nhóm 1 ô anchor riêng)</div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:flex-start;">
-            <span style="color:var(--muted);padding-top:6px;">Mã eSIM:</span>
-            <div>
-              <textarea rows="2" placeholder="vd: b0000262605220047&#10;Mỗi mã 1 dòng (tối đa 5)"
-                onblur="App._draftSaveCode('${d.id}', 'esim', this.value)"
-                style="${codeTaStyle}">${escapeHtml(codes.esim || '')}</textarea>
-              ${codeHint}
-            </div>
-            <span style="color:var(--muted);padding-top:6px;">Mã SIM VL:</span>
-            <div>
-              <textarea rows="2" placeholder="vd: b0000262605220048&#10;Mỗi mã 1 dòng (tối đa 5)"
-                onblur="App._draftSaveCode('${d.id}', 'physical', this.value)"
-                style="${codeTaStyle}">${escapeHtml(codes.physical || '')}</textarea>
-              ${codeHint}
-            </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.4;">
+            ℹ️ Khi nhập sổ: nhóm có mã → mã làm anchor. Nhóm trống → tên đơn (+ tag) sẽ fill vào nhóm <b>SIM VL trên cùng</b> trước, nếu không có thì <b>eSIM trên cùng</b>.
           </div>
-          <label style="display:flex;align-items:center;gap:5px;margin-top:10px;font-size:12px;cursor:pointer;user-select:none;">
-            <input type="checkbox" ${useCode ? "checked" : ""} onchange="App._draftToggleUseCode('${d.id}', this.checked)" />
-            <span>Nhập sổ bằng <b>mã</b> (thay vì tên đơn + tag) — mỗi nhóm dùng mã tương ứng</span>
-          </label>
-        </div>
-      `;
-    } else if (grp.mode === "mixed_disabled") {
-      codesBlock = `
-        <div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:11.5px;color:#6b7280;font-style:italic;">
-          ℹ️ Đơn có nhiều loại nhưng KHÔNG gộp phân loại (esim/sim vật lý xen kẽ) → không có ô anchor riêng → không cho điền mã. Bật "📑 Gộp phân loại" rồi Import lại đơn này để gộp + điền mã.
         </div>
       `;
     }
@@ -4943,18 +5141,22 @@ const App = (() => {
         })),
       };
       if (d.vat && (d.vat.mst || d.vat.name)) payload.vat = d.vat;
-      // v10.7: codes/useCode/groupByType từ draft
-      if (d.codes && (d.codes.esim || d.codes.physical)) {
-        payload.codes = { esim: d.codes.esim || "", physical: d.codes.physical || "" };
+      // v10.8.26: Schema mới — codes.groups [{type, code}, ...] theo runs.
+      _syncCodesGroupsToRuns(d);
+      if (d.codes && Array.isArray(d.codes.groups) && d.codes.groups.length) {
+        payload.codes = { groups: d.codes.groups.map(g => ({ type: g.type, code: g.code || "" })) };
       }
-      if (d.useCode === true) payload.useCode = true;
       if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
       currentOrderCode = savedOrderCode;
       const json = JSON.stringify(payload);
       const encoded = urlSafeEncode(json);
       const out = "SIMGLOBE-SHEET:" + encoded;
       const ok = await copyText(out);
-      if (ok) _draftViewStatus(`✅ Đã copy mã nhập của "${d.name}" vào clipboard. Mở Google Sheet hoá đơn → chọn ô MÃ ORDER ID → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.`, "success");
+      if (ok) {
+        _draftViewStatus(`✅ Đã copy mã nhập của "${d.name}" vào clipboard. Mở Google Sheet hoá đơn → chọn ô MÃ ORDER ID → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.`, "success");
+        // v10.8.26: mark imported = true (user có thể bấm ✕ trên tag nếu chưa nhập thực sự)
+        _draftMarkImported(d.id);
+      }
       else _draftViewStatus("❌ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
       _draftViewStatus("❌ Lỗi: " + e.message, "error");
@@ -5141,9 +5343,8 @@ const App = (() => {
           vat: p.vat,
           // v10.7: snapshot toggle gộp hiện tại (Q5 — mỗi draft nhớ riêng)
           groupByType: _getGroupToggle(),
-          // Giữ codes + useCode nếu có sẵn (user đã điền trước)
-          codes: prev.codes || { esim: "", physical: "" },
-          useCode: prev.useCode || false,
+          // v10.8.26: codes.groups schema mới (giữ nếu có)
+          codes: prev.codes || { groups: [] },
         };
       }
     }
@@ -5158,8 +5359,7 @@ const App = (() => {
         vat: p.vat,
         // v10.7
         groupByType: _getGroupToggle(),
-        codes: { esim: "", physical: "" },
-        useCode: false,
+        codes: { groups: [] },
       };
     }
     const r = await DraftStore.upsert(draft);
@@ -7341,14 +7541,14 @@ const App = (() => {
         })),
       };
       if (cust.vat) payload.vat = cust.vat;
-      // codes + useCode + groupByType từ draft đang edit
+      // v10.8.26: codes.groups + groupByType từ draft đang edit
       if (draftEditingId) {
         const d = DraftStore.getById(draftEditingId);
         if (d) {
-          if (d.codes && (d.codes.esim || d.codes.physical)) {
-            payload.codes = { esim: d.codes.esim || "", physical: d.codes.physical || "" };
+          _syncCodesGroupsToRuns(d);
+          if (d.codes && Array.isArray(d.codes.groups) && d.codes.groups.length) {
+            payload.codes = { groups: d.codes.groups.map(g => ({ type: g.type, code: g.code || "" })) };
           }
-          if (d.useCode === true) payload.useCode = true;
           if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
         }
       }
@@ -7363,6 +7563,8 @@ const App = (() => {
       const discK = items.reduce((s, it) => s + it.discountAllocK, 0);
       if (ok) {
         qrShowStatus(`✅ Đã copy mã nhập sổ (${items.length} gói, ${ComboLogic.fmtK(totalK - discK)}). Paste vào Google Sheet hoá đơn.`);
+        // v10.8.26: mark imported = true cho draft đang edit
+        if (draftEditingId) _draftMarkImported(draftEditingId);
       } else {
         qrShowStatus("❌ Copy thất bại — browser có thể chặn clipboard.");
       }
@@ -7511,18 +7713,14 @@ const App = (() => {
     };
     if (cust.vat) payload.vat = cust.vat;
 
-    // v10.7: thêm codes + useCode + groupByType từ draft đang edit
-    // (nếu đang edit draft thì lấy; đơn mới chưa save → bỏ qua)
+    // v10.8.26: thêm codes.groups + groupByType từ draft đang edit
     if (draftEditingId) {
       const d = DraftStore.getById(draftEditingId);
       if (d) {
-        if (d.codes && (d.codes.esim || d.codes.physical)) {
-          payload.codes = {
-            esim: d.codes.esim || "",
-            physical: d.codes.physical || "",
-          };
+        _syncCodesGroupsToRuns(d);
+        if (d.codes && Array.isArray(d.codes.groups) && d.codes.groups.length) {
+          payload.codes = { groups: d.codes.groups.map(g => ({ type: g.type, code: g.code || "" })) };
         }
-        if (d.useCode === true) payload.useCode = true;
         if (typeof d.groupByType === "boolean") payload.groupByType = d.groupByType;
       }
     }
@@ -7569,6 +7767,9 @@ const App = (() => {
               name: cust.name || prev.name,
               tag: cust.tag || prev.tag,
               customTag: cust.customTag || prev.customTag,
+              // v10.8.26: mark imported
+              imported: true,
+              importedAt: Date.now(),
             };
             DraftStore.upsert(updated).then(() => draftRender());
           }
@@ -7909,8 +8110,8 @@ const App = (() => {
     toggleSection1,
     toggleGroupByType,
     _copyPkgNameInline,
-    _draftSaveCode,
-    _draftToggleUseCode,
+    _draftSaveGroupCode,
+    _draftToggleImported,
     gsImport,
     gsPreview,
     gsFetchSheetInfo,
