@@ -76,6 +76,16 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.29 · 26/05/2026 · 18:45 (GMT+7)
+ - Fix bug: Bill text preview trong modal Xem đơn nháp KHÔNG hiển thị ship/discount/shipVat
+   (lúc đó các opts hard-coded = 0, không đọc `d.extras`).
+ - Thêm helper `_draftCalcOpts(d)` đọc `d.extras` + `d.vat`, build opts đầy đủ để
+   ComboLogic.calc render bill đúng (kèm VAT block + FullVAT note + shipVat*50%).
+ - Áp dụng cho 3 chỗ: bill preview trong modal Xem, draftViewCopyBill, QR image gen.
+ - Hỗ trợ cả `manualDiscK` và `manualDiscPct` (probe total trước rồi tính % discount).
+ Prompt: "trong đơn nháp phần Bill text (preview) chưa hiển thị đúng ship và ship
+ vào vat và giảm giá riêng, nhưng import ra lại thì đúng."
+
  v10.8.28 · 26/05/2026 · 18:30 (GMT+7)
  - Mục 1 (parser bill paste): bắt thêm phí ship + shipVat (ngoài "Giảm giá riêng" v10.8.27).
    • Regex shipFeeInLineRe: "+ Xk (phí ship)" trong dòng "Còn:" hoặc "Tổng:" → set shipFeeK.
@@ -594,7 +604,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.28 · 26/05/2026 · 18:30
+    Version 10.8.29 · 26/05/2026 · 18:45
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4992,26 +5002,17 @@ const App = (() => {
     const title = document.getElementById("draftViewTitle");
     title.innerHTML = `👁 Xem đơn nháp: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
 
-    // Calc bill từ cart của draft (không đụng cart hiện tại)
-    // Lưu ý: getCalcOpts() đọc giá trị từ DOM hiện tại (manual disc, ship fee) — KHÔNG dùng được ở đây.
-    // Tự tạo opts tối thiểu (không manual disc, không ship fee) cho cart của draft.
+    // v10.8.29: Dùng _draftCalcOpts(d) để đọc đúng d.extras (ship/discount/shipVat) + d.vat.
+    // calc() đã embed VAT block khi opts.vatInfo có giá trị → không cần append thủ công.
     let billText = "(không có gói nào)";
     try {
       const dCart = d.cart || [];
       if (!dCart.length) {
         billText = "(không có gói nào trong giỏ)";
       } else {
-        const opts = {
-          shipFeeK: 0,
-          orderCode: d.orderCode || "",
-          manualDiscountK: 0,
-        };
+        const opts = _draftCalcOpts(d);
         const r = ComboLogic.calc(dCart, opts);
         billText = (r.bill || "").trim() || "(rỗng)";
-        // Nếu draft có VAT → append block "Thông tin hoá đơn"
-        if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
-          billText += "\n-------------\n" + _renderVatBlock(d.vat);
-        }
       }
     } catch (e) {
       console.error("draftView calc fail:", e);
@@ -5199,12 +5200,10 @@ const App = (() => {
     const d = DraftStore.getById(_draftViewingId);
     if (!d) return;
     try {
-      const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+      // v10.8.29: dùng _draftCalcOpts đọc d.extras + d.vat. calc() đã embed VAT block.
+      const opts = _draftCalcOpts(d);
       const r = ComboLogic.calc(d.cart || [], opts);
-      let text = r.bill || "";
-      if (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) {
-        text = text.trimEnd() + "\n-------------\n" + _renderVatBlock(d.vat);
-      }
+      const text = r.bill || "";
       const ok = await copyText(text);
       if (ok) _draftViewStatus(`✅ Đã copy Bill của "${d.name}" vào clipboard. Paste vào Zalo/FB.`, "success");
       else _draftViewStatus("⚠️ Copy thất bại — browser có thể chặn clipboard.", "error");
@@ -5219,9 +5218,33 @@ const App = (() => {
   }
 
   // ─── Quick actions trong modal Xem đơn nháp (KHÔNG đụng state hiện tại) ───
+  // v10.8.29: Helper build opts cho ComboLogic.calc khi tính 1 draft (không dùng DOM).
+  // Đọc d.extras (ship/manualDisc/shipVat) + d.vat (cho FullVAT note + VAT block).
+  function _draftCalcOpts(d) {
+    const ex = (d && d.extras && typeof d.extras === "object") ? d.extras : {};
+    // manualDiscK ưu tiên trên manualDiscPct (giống logic computeManualDiscountK ở app chính)
+    let manualDiscountK = 0;
+    const mdK = Math.max(0, parseInt(ex.manualDiscK, 10) || 0);
+    const mdPct = Math.max(0, Math.min(15, parseFloat(ex.manualDiscPct) || 0));
+    if (mdK > 0) {
+      manualDiscountK = mdK;
+    } else if (mdPct > 0) {
+      // Tính theo total cart (cần tính 1 lần trước — dùng calc nhanh không có manual)
+      const probe = ComboLogic.calc(d.cart || [], { shipFeeK: 0, manualDiscountK: 0 });
+      manualDiscountK = Math.round((probe.summary.totalK * mdPct) / 100);
+    }
+    return {
+      shipFeeK: Math.max(0, parseInt(ex.shipFeeK, 10) || 0),
+      shipVat: ex.shipVat === true,
+      orderCode: d.orderCode || "",
+      manualDiscountK,
+      vatInfo: (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) ? d.vat : null,
+    };
+  }
+
   // Tính total cuối cùng của draft (sau discount, ship) — đơn vị VND
   function _calcDraftPaymentVnd(d) {
-    const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+    const opts = _draftCalcOpts(d);
     const r = ComboLogic.calc(d.cart || [], opts);
     // finalPayK nằm trong r.summary
     const k = (r && r.summary && typeof r.summary.finalPayK === "number")
@@ -5279,7 +5302,8 @@ const App = (() => {
     try {
       const amountVnd = _calcDraftPaymentVnd(d);
       const qrUrl = buildVietQRUrl(amountVnd, d.orderCode);
-      const opts = { shipFeeK: 0, orderCode: d.orderCode || "", manualDiscountK: 0 };
+      // v10.8.29: dùng _draftCalcOpts để bill render đúng ship/disc/shipVat
+      const opts = _draftCalcOpts(d);
       const r = ComboLogic.calc(d.cart || [], opts);
       const state = {
         result: { bill: r.bill || "" },
