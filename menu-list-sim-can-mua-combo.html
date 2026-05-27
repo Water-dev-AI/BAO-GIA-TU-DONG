@@ -76,6 +76,27 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.33 · 26/05/2026 · 20:30 (GMT+7)
+ - Task 1: Tab description trong picker đậm hơn — font 13.5px, color #1e3a8a,
+   bg #eff6ff, border-left xanh 3px (trước đó nhạt 12px).
+ - Task 2: Bỏ background xanh + border-left của gói có hướng dẫn (.pkg-has-guide).
+   Giữ nguyên icon 📘 bên cạnh tên.
+ - Task 3: Date Range Calc — module `DateRangeCalc` đặt trong card mục 1 (grid 2 cột,
+   mobile stack dọc). 2 ô input dd/mm/yy + popup picker (📅), 2 mini-calendar
+   tiếng Việt tô cam range. Constraint: tháng trái < tháng phải. Auto-swap khi
+   end < start. Copy result format "Từ dd/mm/yyyy → dd/mm/yyyy là tổng: X ngày."
+   Không lưu localStorage — refresh page = reset.
+ - Task 4: CountrySearch — index nội dung 40 sheet để search theo tên nước.
+   • Storage key: `combo_bill_country_index_v1` (~2MB toàn bộ text normalized).
+   • Cảnh báo sau 30 ngày (KHÔNG auto-xoá), badge đổi ⚠️.
+   • Alias map ~80 nước: "my" = USA/America/Hoa Kỳ, UAE = Dubai/Tiểu vương quốc...
+   • Multi-keyword AND: "han quoc, nhat ban" → match cả 2.
+   • Dropdown search có badge "🌍 nội dung" cho match qua content.
+   • Nút "🔄 Refresh" đổi tên "🔄 Cập nhật giá" + thêm "🌍 Cập nhật nước" (note tải lâu).
+ Prompt: "tab desc nhỏ chưa nổi bật, gói có hướng dẫn bỏ bg giữ icon, thêm tính
+ số ngày (2 lịch tiếng Việt constraint tháng trái<phải), search bảng giá theo
+ nước (alias map, AND multi-kw, cập nhật manual, cảnh báo 30 ngày)."
+
  v10.8.32 · 26/05/2026 · 19:25 (GMT+7)
  - Fix: bấm "Nhập sổ" làm draft bị đẩy lên đầu danh sách (do upsert luôn set
    `updatedAt = now` → sort theo updatedAt desc đẩy lên top).
@@ -440,17 +461,13 @@
   .pkg-overflow-tip .pot-btn:hover { background: #6d28d9; }
 
   /* v10.8.21: Gói có hướng dẫn — background xanh nhạt + border trái */
+  /* v10.8.33: Bỏ background + border-left của gói có hướng dẫn — chỉ giữ icon 📘 */
   .pkg-has-guide {
-    background: #eff6ff;
-    border-left: 2px solid #3b82f6;
-    padding-left: 5px;
-    border-radius: 2px;
+    /* no-op: tên gói giữ style như cũ; nút 📘 vẫn hiện bên cạnh */
   }
-  /* Khi đồng thời cả overflow + has-guide: overflow (tím) thắng style chính,
-     vẫn giữ border xanh trái để biết có guide */
+  /* Khi đồng thời cả overflow + has-guide: chỉ style overflow (tím) */
   .pkg-overflow.pkg-has-guide {
-    background: linear-gradient(180deg, transparent 70%, #ede9fe 70%);
-    border-left: 2px solid #3b82f6;
+    /* fallback về style overflow gốc, không cộng thêm gì */
   }
   .pkg-guide-btn {
     display: inline-flex; align-items: center; justify-content: center;
@@ -621,13 +638,201 @@
   .picker-sel-count { font-size: 13px; color: var(--muted); flex: 1; }
 
   @media (max-width: 850px) { .cols { grid-template-columns: 1fr; } body { padding: 12px; } }
+
+  /* ── v10.8.33: Date Range Calculator ── */
+  .drc-wrap {
+    background: #fafbfc;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 13px;
+  }
+  .drc-title {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #1e3a8a;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .drc-inputs {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .drc-field {
+    flex: 1 1 130px;
+    min-width: 110px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .drc-field label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .drc-input-row {
+    display: flex;
+    gap: 4px;
+  }
+  .drc-input-row input {
+    flex: 1;
+    padding: 7px 9px;
+    border: 1px solid #cfd5df;
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: "Roboto Mono", monospace;
+    min-width: 0;
+  }
+  .drc-pick-btn {
+    background: #eef2f7;
+    border: 1px solid #cfd5df;
+    border-radius: 7px;
+    padding: 6px 9px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .drc-pick-btn:hover { background: #dbeafe; }
+  .drc-result {
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #9a3412;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .drc-result.empty {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #6b7280;
+  }
+  .drc-result-text { flex: 1; font-weight: 500; }
+  .drc-result button {
+    margin: 0;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    background: #fb923c;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .drc-result button:hover { background: #ea580c; }
+  .drc-result .drc-reset-btn {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  .drc-result .drc-reset-btn:hover { background: #d1d5db; }
+
+  .drc-calendars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .drc-cal {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+    user-select: none;
+  }
+  .drc-cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+  .drc-cal-nav {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 13px;
+    color: #6b7280;
+    border-radius: 4px;
+  }
+  .drc-cal-nav:hover:not(:disabled) { background: #eef2f7; color: #111; }
+  .drc-cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+  .drc-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    font-size: 11.5px;
+  }
+  .drc-cal-dow {
+    text-align: center;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 4px 0;
+    font-size: 10.5px;
+  }
+  .drc-cal-day {
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #1f2937;
+  }
+  .drc-cal-day.other-month { color: #d1d5db; cursor: default; }
+  .drc-cal-day.in-range { background: #fed7aa; color: #9a3412; font-weight: 500; }
+  .drc-cal-day.range-start, .drc-cal-day.range-end {
+    background: #f97316; color: white; font-weight: 600;
+  }
+  .drc-cal-day.today { outline: 1px solid #3b82f6; }
+  .drc-cal-day:hover:not(.other-month):not(.range-start):not(.range-end) {
+    background: #dbeafe;
+  }
+
+  /* Popup calendar (khi bấm nút 📅) */
+  .drc-popup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    padding: 10px;
+    z-index: 100;
+    width: 240px;
+    display: none;
+  }
+  .drc-popup.open { display: block; }
+
+  @media (max-width: 850px) {
+    .drc-calendars { grid-template-columns: 1fr; }
+  }
+  /* Card mục 1: layout 2 cột bên trong khi đủ chỗ */
+  .section1-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 1000px) {
+    .section1-layout { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.32 · 26/05/2026 · 19:25
+    Version 10.8.33 · 26/05/2026 · 20:30
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -643,26 +848,75 @@
         <button id="section1Toggle" style="margin:0;padding:5px 11px;background:#eef2f7;color:#444;border:none;border-radius:6px;font-size:12px;cursor:pointer;">▼ Mở</button>
       </div>
       <div id="section1Body" style="display:none;margin-top:12px;">
-        <textarea id="pasteBox" placeholder="Dán 1 hoặc nhiều dòng gói ở đây. Ví dụ:
+        <div class="section1-layout">
+          <div>
+            <textarea id="pasteBox" placeholder="Dán 1 hoặc nhiều dòng gói ở đây. Ví dụ:
 Mainland China A, 30 Days, 50GB, 128kbps	ESIM	299k
 Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
-        <div>
-          <button onclick="App.addFromText()">➕ Thêm vào giỏ</button>
-          <button class="blue" onclick="App.pasteClipboardAndAdd()">📋 Dán clipboard + thêm</button>
-          <button class="light" onclick="App.copyLinesOnly()">Copy dòng chuẩn</button>
-          <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
+            <div>
+              <button onclick="App.addFromText()">➕ Thêm vào giỏ</button>
+              <button class="blue" onclick="App.pasteClipboardAndAdd()">📋 Dán clipboard + thêm</button>
+              <button class="light" onclick="App.copyLinesOnly()">Copy dòng chuẩn</button>
+              <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
+            </div>
+            <div id="status" class="status"></div>
+          </div>
+          <div class="drc-wrap">
+            <div class="drc-title">📅 Tính số ngày (ngày đi → ngày về)</div>
+            <div class="drc-inputs">
+              <div class="drc-field">
+                <label>Ngày đi</label>
+                <div class="drc-input-row">
+                  <input id="drcStartInput" type="text" placeholder="dd/mm/yy" maxlength="10" oninput="App.drcOnInput('start')" onblur="App.drcOnBlur('start')" />
+                  <button class="drc-pick-btn" onclick="App.drcTogglePopup('start')" title="Chọn từ lịch">📅</button>
+                </div>
+                <div id="drcPopupStart" class="drc-popup"></div>
+              </div>
+              <div class="drc-field">
+                <label>Ngày về</label>
+                <div class="drc-input-row">
+                  <input id="drcEndInput" type="text" placeholder="dd/mm/yy" maxlength="10" oninput="App.drcOnInput('end')" onblur="App.drcOnBlur('end')" />
+                  <button class="drc-pick-btn" onclick="App.drcTogglePopup('end')" title="Chọn từ lịch">📅</button>
+                </div>
+                <div id="drcPopupEnd" class="drc-popup"></div>
+              </div>
+            </div>
+            <div id="drcResult" class="drc-result empty">
+              <span class="drc-result-text">Chưa đủ 2 ngày để tính.</span>
+              <button class="drc-reset-btn" onclick="App.drcReset()" title="Reset về tháng năm hiện tại, ngày trống">↺ Reset</button>
+            </div>
+            <div class="drc-calendars">
+              <div class="drc-cal" id="drcCalLeft"></div>
+              <div class="drc-cal" id="drcCalRight"></div>
+            </div>
+          </div>
         </div>
-        <div id="status" class="status"></div>
       </div>
     </div>
 
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <h2 style="margin:0;">📋 Danh sách bảng giá</h2>
-        <button onclick="App.slRefreshAll()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Clear cache + reload tất cả bảng giá">🔄 Refresh</button>
+        <button onclick="App.slRefreshAll()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Clear cache + reload tất cả bảng giá">🔄 Cập nhật giá</button>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
         Bấm pills (🟢 = đã preload, mở instant) hoặc tìm kiếm để mở bảng giá chọn gói.
+      </div>
+      <!-- v10.8.33: Country index — tìm bảng giá theo nội dung sheet (tên nước) -->
+      <div id="csIndexBar" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;padding:8px 10px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-size:12px;">
+        <span id="csStatusBadge" style="font-weight:600;">🌍 Tìm theo nước</span>
+        <span id="csStatusText" style="color:var(--muted);">(chưa cập nhật — nhập tên nước trên ô tìm kiếm để dùng)</span>
+        <button id="csUpdateBtn" onclick="App.csUpdate()" style="margin:0 0 0 auto;padding:5px 10px;font-size:11.5px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;cursor:pointer;font-family:inherit;" title="Tải nội dung tất cả 40 bảng giá để search theo nước. Tải lâu (~30-60s), vài ngày hãy cập nhật một lần.">🌍 Cập nhật nước</button>
+        <button id="csClearBtn" onclick="App.csClear()" style="margin:0;padding:5px 9px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;display:none;" title="Xoá data tìm theo nước">✕ Xoá data</button>
+      </div>
+      <div id="csProgress" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px;">
+          <span id="csProgressLabel">⏳ Đang tải...</span>
+          <span id="csProgressCount">0 / 0</span>
+        </div>
+        <div style="background:#eef2f7;border-radius:4px;height:6px;overflow:hidden;">
+          <div id="csProgressFill" style="background:var(--amber);height:100%;width:0%;transition:width 0.3s;"></div>
+        </div>
       </div>
 
       <!-- Progress bar pre-load (chỉ hiện khi đang load) -->
@@ -953,7 +1207,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
     <div id="pickerTabBar" style="padding:10px 14px;display:flex;flex-wrap:nowrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;"></div>
-    <div id="pickerTabDesc" style="display:none;padding:10px 18px;background:#fafbfc;border-bottom:1px solid var(--line);font-size:12px;line-height:1.55;color:#475569;white-space:pre-wrap;flex-shrink:0;max-height:150px;overflow-y:auto;"></div>
+    <div id="pickerTabDesc" style="display:none;padding:12px 18px;background:#eff6ff;border-bottom:1px solid var(--line);border-left:3px solid #3b82f6;font-size:13.5px;line-height:1.55;color:#1e3a8a;font-weight:500;white-space:pre-wrap;flex-shrink:0;max-height:150px;overflow-y:auto;"></div>
     <div id="pickerFilterBar" style="padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#fafbfc;flex-shrink:0;font-size:13px;">
       <span style="color:var(--muted);font-weight:600;">Loại:</span>
       <button id="fltAll"      class="light" onclick="App.pickerSetTypeFilter('ALL')"     style="margin:0;padding:6px 14px;font-size:12px;">Cả 2</button>
@@ -3367,9 +3621,27 @@ const App = (() => {
       return;
     }
     const list = slLoadAll();
-    const filtered = list.filter(x => ComboLogic.norm(x.name).includes(kw)).slice(0, 15);
+    // v10.8.33: Search theo TÊN (như cũ) — return Set của presetId match
+    const byNameSet = new Set();
+    const byName = list.filter(x => {
+      const hit = ComboLogic.norm(x.name).includes(kw);
+      if (hit && x.presetId) byNameSet.add(x.presetId);
+      return hit;
+    });
+    // Search theo NỘI DUNG (CountrySearch — chỉ chạy khi đã loaded + có dấu phẩy hoặc kw >= 2 chars)
+    let byCountry = [];
+    if (CountrySearch.isLoaded() && slSearchKw.trim().length >= 2) {
+      const matchIds = new Set(CountrySearch.search(slSearchKw));
+      // Lấy các item từ list theo presetId match (loại trừ byName để tránh trùng)
+      byCountry = list.filter(x => x.presetId && matchIds.has(x.presetId) && !byNameSet.has(x.presetId));
+    }
+    const filtered = [...byName.slice(0, 15), ...byCountry.slice(0, 15)];
     if (!filtered.length) {
-      dd.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12.5px;font-style:italic;text-align:center;">Không tìm thấy bảng giá khớp "${escapeHtml(slSearchKw)}".</div>`;
+      let msg = `Không tìm thấy bảng giá khớp "${escapeHtml(slSearchKw)}".`;
+      if (!CountrySearch.isLoaded()) {
+        msg += `<br><span style="font-size:11px;color:#92400e;">💡 Tìm theo tên nước? Bấm <b>🌍 Cập nhật nước</b> phía trên để tải data tìm theo nội dung sheet.</span>`;
+      }
+      dd.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12.5px;font-style:italic;text-align:center;line-height:1.5;">${msg}</div>`;
       dd.style.display = "block";
       return;
     }
@@ -3379,6 +3651,11 @@ const App = (() => {
       const dot = isCached ? "🟢" : "⚪";
       const presetBadge = item.isPreset
         ? '<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:9.5px;font-weight:700;margin-left:6px;">📌</span>'
+        : '';
+      // v10.8.33: badge phân biệt match by name vs content
+      const matchedByContent = item.presetId && byName.indexOf(item) === -1;
+      const matchBadge = matchedByContent
+        ? '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9.5px;font-weight:700;margin-left:6px;" title="Match theo nội dung sheet (tên nước trong bảng giá)">🌍 nội dung</span>'
         : '';
       // Nút Share + Mở link (KHÔNG có Import, vì bấm vào hàng = mở picker)
       const actionBtns = item.url
@@ -3394,7 +3671,7 @@ const App = (() => {
              style="display:flex;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${item.isPreset ? '#f8fbff' : '#fff'};"
              title="Bấm để mở picker chọn gói">
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:13px;line-height:1.4;">${dot} ${escapeHtml(item.name)}${presetBadge}</div>
+            <div style="font-weight:600;font-size:13px;line-height:1.4;">${dot} ${escapeHtml(item.name)}${presetBadge}${matchBadge}</div>
             ${noUrl}
           </div>
           ${actionBtns}
@@ -4029,6 +4306,281 @@ const App = (() => {
     slRenderFavorites();
     await slPreloadFavorites();
     document.getElementById("slStatus").textContent = "✅ Đã refresh tất cả bảng giá ưu tiên.";
+  }
+
+  // ─── v10.8.33: CountrySearch — index nội dung 40 sheet để search theo nước ───
+  //   Storage key: combo_bill_country_index_v1
+  //     { byId: { [presetId]: { name, csvText, indexedAt } }, savedAt }
+  //   Lifetime: cảnh báo sau 30 ngày (KHÔNG tự xoá).
+  //   Multi-keyword: "han quoc, nhat ban" → AND, mỗi keyword expand qua alias map.
+  const CountrySearch = (() => {
+    const STORAGE_KEY = "combo_bill_country_index_v1";
+    const WARN_MS = 30 * 24 * 3600 * 1000; // 30 ngày
+    // Alias map: key (normalized) → array of normalized aliases để match
+    // VD: search "my" → match cả "usa", "america", "hoa ky", "my", "united states"
+    const ALIASES = [
+      // [VN, EN, code, ...]
+      ["my", "usa", "america", "hoa ky", "united states", "united states of america", "us"],
+      ["uae", "dubai", "united arab emirates", "tieu vuong quoc a rap thong nhat", "abu dhabi"],
+      ["nhat", "nhat ban", "japan", "jp"],
+      ["han", "han quoc", "korea", "south korea", "kr"],
+      ["trung", "trung quoc", "china", "mainland china", "cn"],
+      ["dai loan", "taiwan", "tw"],
+      ["thai", "thai lan", "thailand", "th"],
+      ["sing", "singapore", "sg"],
+      ["malay", "malaysia", "my"],
+      ["indo", "indonesia", "id", "bali", "jakarta"],
+      ["phi", "philippines", "ph", "manila"],
+      ["camp", "campuchia", "cambodia", "kh", "phnom penh"],
+      ["lao", "laos", "la"],
+      ["mien dien", "myanmar", "burma", "mm"],
+      ["an do", "india", "in"],
+      ["nepal", "np"],
+      ["bangladesh", "bd"],
+      ["sri lanka", "lk", "ceylon"],
+      ["mongolia", "mong co", "mn"],
+      ["maldives", "mv"],
+      ["nga", "russia", "ru"],
+      ["uc", "australia", "au", "uc chau"],
+      ["nz", "new zealand", "newzealand"],
+      ["my chau", "north america", "bac my"],
+      ["canada", "ca"],
+      ["mexico", "mx"],
+      ["brazil", "br"],
+      ["argentina", "ar"],
+      ["peru", "pe"],
+      ["chile", "cl"],
+      ["ecuador", "equador", "ec"],
+      ["uruguay", "uy"],
+      ["colombia", "co"],
+      ["chau au", "europe", "eu", "europa"],
+      ["anh", "uk", "united kingdom", "england", "britain", "gb"],
+      ["phap", "france", "fr"],
+      ["duc", "germany", "de", "deutschland"],
+      ["y", "italy", "italia", "it"],
+      ["tay ban nha", "spain", "espana", "es"],
+      ["bo dao nha", "portugal", "pt"],
+      ["ha lan", "netherlands", "holland", "nl"],
+      ["bi", "belgium", "be"],
+      ["thuy si", "switzerland", "swiss", "ch"],
+      ["ao", "austria", "at"],
+      ["thuy dien", "sweden", "se"],
+      ["na uy", "norway", "no"],
+      ["dan mach", "denmark", "dk"],
+      ["phan lan", "finland", "fi"],
+      ["ba lan", "poland", "pl"],
+      ["sec", "czech", "czech republic", "cz"],
+      ["hungary", "hu"],
+      ["hy lap", "greece", "gr"],
+      ["tho nhi ky", "turkey", "turkiye", "tr"],
+      ["israel", "il"],
+      ["saudi", "saudi arabia", "a rap xe ut", "a rap saudi", "ksa", "sa"],
+      ["qatar", "qa"],
+      ["kuwait", "kw"],
+      ["oman", "om"],
+      ["bahrain", "bh"],
+      ["iran", "ir"],
+      ["iraq", "iq"],
+      ["jordan", "jo"],
+      ["lebanon", "lb"],
+      ["ai cap", "egypt", "eg"],
+      ["morocco", "ma roc", "ma"],
+      ["nam phi", "south africa", "za"],
+      ["kenya", "ke"],
+      ["nigeria", "ng"],
+      ["hong kong", "hk"],
+      ["macao", "ma cao", "macau", "mo"],
+      ["saipan"],
+      ["guam", "gu"],
+      ["vn", "viet nam", "vietnam"],
+    ];
+    // Build reverse map: normalized term → alias array
+    const _aliasLookup = new Map();
+    ALIASES.forEach(arr => {
+      arr.forEach(term => {
+        const key = term.toLowerCase();
+        if (!_aliasLookup.has(key)) _aliasLookup.set(key, arr);
+      });
+    });
+
+    let _data = null; // { byId, savedAt }
+
+    function _load() {
+      if (_data) return _data;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) _data = JSON.parse(raw);
+      } catch (e) { _data = null; }
+      return _data;
+    }
+    function _save() {
+      try {
+        if (_data) localStorage.setItem(STORAGE_KEY, JSON.stringify(_data));
+      } catch (e) {
+        console.error("CountrySearch save fail:", e);
+      }
+    }
+    function isLoaded() {
+      const d = _load();
+      return !!(d && d.byId && Object.keys(d.byId).length > 0);
+    }
+    function getSavedAt() {
+      const d = _load();
+      return d ? (d.savedAt || 0) : 0;
+    }
+    function isExpired() {
+      const at = getSavedAt();
+      if (!at) return false;
+      return (Date.now() - at) > WARN_MS;
+    }
+    function getStats() {
+      const d = _load();
+      if (!d || !d.byId) return { count: 0, savedAt: 0 };
+      return { count: Object.keys(d.byId).length, savedAt: d.savedAt || 0 };
+    }
+    function clear() {
+      _data = null;
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    }
+
+    // Expand 1 keyword qua alias map: trả về array các alias bao gồm chính nó
+    function _expandKeyword(kw) {
+      const k = ComboLogic.norm(kw).trim();
+      if (!k) return [];
+      const aliases = _aliasLookup.get(k);
+      if (aliases) return aliases.map(a => ComboLogic.norm(a));
+      return [k]; // không match alias → chỉ chính nó
+    }
+
+    // Parse search input "han quoc, nhat ban" → [["han quoc", ...aliases], ["nhat ban", ...aliases]]
+    function parseQuery(input) {
+      const parts = String(input || "").split(",").map(s => s.trim()).filter(Boolean);
+      return parts.map(p => _expandKeyword(p));
+    }
+
+    // Match 1 sheet text với 1 query group (AND của các keyword group)
+    // groups = [["my", "usa", ...], ["nhat", "japan", ...]]
+    // Match khi: với MỖI group, text chứa ÍT NHẤT 1 alias của group đó.
+    function matchSheet(normText, groups) {
+      if (!groups.length) return false;
+      for (const g of groups) {
+        if (!g.length) continue;
+        let any = false;
+        for (const term of g) {
+          if (normText.indexOf(term) !== -1) { any = true; break; }
+        }
+        if (!any) return false;
+      }
+      return true;
+    }
+
+    // Trả về list presetId match
+    function search(queryStr) {
+      const d = _load();
+      if (!d || !d.byId) return [];
+      const groups = parseQuery(queryStr);
+      if (!groups.length) return [];
+      const out = [];
+      for (const [id, entry] of Object.entries(d.byId)) {
+        if (matchSheet(entry.normText || "", groups)) out.push(id);
+      }
+      return out;
+    }
+
+    // Update index: fetch CSV của tất cả 40 bảng giá preset, lưu normalized text
+    async function update(onProgress) {
+      const list = (typeof slLoadAll === "function") ? slLoadAll() : [];
+      const targets = list.filter(item => item.presetId && item.url);
+      if (!targets.length) {
+        return { ok: false, error: "Không có bảng giá nào để index." };
+      }
+      const newById = {};
+      let done = 0;
+      for (const item of targets) {
+        try {
+          const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+          if (!csvUrl) { done++; continue; }
+          let csvText = "";
+          // Reuse cache nếu có
+          if (typeof csvCache !== "undefined" && csvCache.has(csvUrl)) {
+            csvText = csvCache.get(csvUrl).csvText;
+          } else {
+            csvText = await gsFetch(csvUrl);
+            if (typeof csvCache !== "undefined") {
+              csvCache.set(csvUrl, { csvText, fetchedAt: Date.now() });
+            }
+          }
+          const normText = ComboLogic.norm(csvText || "");
+          newById[item.presetId] = {
+            name: item.name,
+            normText,
+            indexedAt: Date.now(),
+          };
+        } catch (e) {
+          console.warn("[CountryIndex] Fail " + item.name + ":", e.message);
+        }
+        done++;
+        if (onProgress) onProgress(done, targets.length, item.name);
+      }
+      _data = { byId: newById, savedAt: Date.now() };
+      _save();
+      return { ok: true, count: Object.keys(newById).length, total: targets.length };
+    }
+
+    return { isLoaded, isExpired, getStats, getSavedAt, clear, search, parseQuery, update };
+  })();
+
+  // UI handlers for CountrySearch
+  function csUpdateBadgeUI() {
+    const badge = document.getElementById("csStatusBadge");
+    const txt = document.getElementById("csStatusText");
+    const clearBtn = document.getElementById("csClearBtn");
+    const updateBtn = document.getElementById("csUpdateBtn");
+    if (!badge || !txt) return;
+    if (CountrySearch.isLoaded()) {
+      const s = CountrySearch.getStats();
+      const date = new Date(s.savedAt);
+      const ddmm = String(date.getDate()).padStart(2, "0") + "/" + String(date.getMonth() + 1).padStart(2, "0");
+      const expired = CountrySearch.isExpired();
+      badge.textContent = expired ? "🌍 Tìm theo nước ⚠️" : "🌍 Tìm theo nước ✅";
+      badge.style.color = expired ? "#b45309" : "#15803d";
+      if (expired) {
+        txt.innerHTML = `<span style="color:#b45309;font-weight:500;">Đã quá 30 ngày — cập nhật lại để chính xác (data cũ vẫn dùng được).</span>`;
+      } else {
+        txt.textContent = `(đã cập nhật ${s.count} bảng giá lúc ${ddmm})`;
+      }
+      if (clearBtn) clearBtn.style.display = "inline-block";
+      if (updateBtn) updateBtn.textContent = "🔄 Cập nhật lại";
+    } else {
+      badge.textContent = "🌍 Tìm theo nước";
+      badge.style.color = "";
+      txt.innerHTML = `<span style="color:var(--muted);">(chưa cập nhật — nhập tên nước trên ô tìm kiếm để dùng. <i>Tải lâu (~30-60s), vài ngày cập nhật 1 lần.</i>)</span>`;
+      if (clearBtn) clearBtn.style.display = "none";
+      if (updateBtn) updateBtn.textContent = "🌍 Cập nhật nước";
+    }
+  }
+  async function csUpdate() {
+    const bar = document.getElementById("csProgress");
+    const fill = document.getElementById("csProgressFill");
+    const count = document.getElementById("csProgressCount");
+    const label = document.getElementById("csProgressLabel");
+    if (bar) bar.style.display = "block";
+    const r = await CountrySearch.update((done, total, name) => {
+      if (label) label.textContent = `⏳ Đang index: ${name}`;
+      if (count) count.textContent = `${done} / ${total}`;
+      if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
+    });
+    if (label) label.textContent = `✅ Đã index ${r.count || 0}/${r.total || 0} bảng giá`;
+    setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
+    csUpdateBadgeUI();
+    // Re-render search dropdown nếu có kw
+    if (typeof slRenderDropdown === "function") slRenderDropdown();
+  }
+  function csClear() {
+    if (!confirm("Xoá data tìm theo nước? (Bấm Cập nhật nước để tải lại sau.)")) return;
+    CountrySearch.clear();
+    csUpdateBadgeUI();
+    if (typeof slRenderDropdown === "function") slRenderDropdown();
   }
 
   /* ===== DRAFTS (đơn nháp) ===== */
@@ -8358,11 +8910,404 @@ const App = (() => {
   }
   vatInit();
 
+  // ─── v10.8.33: DateRangeCalc module ───────────────────────
+  // Tính số ngày giữa "ngày đi" và "ngày về" (tính cả 2 đầu).
+  // 2 lịch nhỏ tháng đi + tháng về. Constraint: tháng trái <= tháng phải.
+  // Default: cả 2 lịch show tháng hiện tại, 2 ô ngày trống.
+  // Không lưu state — refresh page là reset.
+  const DateRangeCalc = (() => {
+    const VI_DOW = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]; // bắt đầu CN
+    const today = () => { const t = new Date(); t.setHours(0,0,0,0); return t; };
+    function fmtVN(d) {
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yy = d.getFullYear();
+      return `${dd}/${mm}/${yy}`;
+    }
+    function fmtInput(d) {
+      // dd/mm/yy (last 2 digits)
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yy = String(d.getFullYear()).slice(-2);
+      return `${dd}/${mm}/${yy}`;
+    }
+    // Parse "dd/mm/yy" hoặc "dd/mm/yyyy" → Date | null
+    function parseInput(s) {
+      const t = String(s || "").trim();
+      if (!t) return null;
+      // Normalize: replace . - space with /
+      const norm = t.replace(/[.\-\s]+/g, "/");
+      const m = norm.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+      if (!m) return null;
+      const dd = parseInt(m[1], 10);
+      const mm = parseInt(m[2], 10);
+      let yy = parseInt(m[3], 10);
+      if (m[3].length === 2) yy = 2000 + yy; // "yy luôn là 20yy"
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+      const d = new Date(yy, mm - 1, dd);
+      if (d.getFullYear() !== yy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null;
+      return d;
+    }
+    // Diff inclusive (count both endpoints)
+    function diffDays(a, b) {
+      const ms = b.getTime() - a.getTime();
+      return Math.round(ms / 86400000) + 1;
+    }
+    // State trong session (không localStorage)
+    const state = {
+      start: null,   // Date | null
+      end: null,     // Date | null
+      // Tháng đang display trên lịch trái + phải
+      // Default: cả 2 = tháng hiện tại
+      leftMonth: null,  // Date (chỉ year, month, day=1)
+      rightMonth: null,
+      popupOpen: null,  // "start" | "end" | null (cho popup pick từ nút 📅)
+      popupMonth: null, // Date hiển thị trong popup
+    };
+
+    function _initMonthAnchors() {
+      const t = today();
+      state.leftMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+      // Right tháng >= left + 1 tháng
+      state.rightMonth = new Date(t.getFullYear(), t.getMonth() + 1, 1);
+    }
+
+    function reset() {
+      state.start = null;
+      state.end = null;
+      state.popupOpen = null;
+      state.popupMonth = null;
+      _initMonthAnchors();
+      const sIn = document.getElementById("drcStartInput");
+      const eIn = document.getElementById("drcEndInput");
+      if (sIn) sIn.value = "";
+      if (eIn) eIn.value = "";
+      render();
+    }
+
+    // Render mini-calendar HTML cho 1 tháng vào element. side: "left" | "right" | "popup"
+    function _renderCalendar(monthDate, sideHint) {
+      const yr = monthDate.getFullYear();
+      const mo = monthDate.getMonth();
+      const first = new Date(yr, mo, 1);
+      const startDow = first.getDay(); // 0=CN
+      const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+      const daysInPrev = new Date(yr, mo, 0).getDate();
+      const tdy = today();
+      // 6 weeks grid
+      const cells = [];
+      // prev month tail
+      for (let i = startDow - 1; i >= 0; i--) {
+        cells.push({ day: daysInPrev - i, otherMonth: true, date: new Date(yr, mo - 1, daysInPrev - i) });
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        cells.push({ day: d, otherMonth: false, date: new Date(yr, mo, d) });
+      }
+      while (cells.length < 42) {
+        const nxt = cells.length - (startDow + daysInMonth) + 1;
+        cells.push({ day: nxt, otherMonth: true, date: new Date(yr, mo + 1, nxt) });
+      }
+      const start = state.start, end = state.end;
+      const inRange = (d) => {
+        if (!start || !end) return false;
+        return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
+      };
+      const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+      const dowHtml = VI_DOW.map(d => `<div class="drc-cal-dow">${d}</div>`).join("");
+      const cellsHtml = cells.map(c => {
+        const classes = ["drc-cal-day"];
+        if (c.otherMonth) classes.push("other-month");
+        if (sameDay(c.date, tdy)) classes.push("today");
+        if (!c.otherMonth) {
+          if (sameDay(c.date, start)) classes.push("range-start");
+          else if (sameDay(c.date, end)) classes.push("range-end");
+          else if (inRange(c.date)) classes.push("in-range");
+        }
+        const onclick = c.otherMonth ? "" : `onclick="App.drcPickDate(${c.date.getFullYear()}, ${c.date.getMonth()}, ${c.date.getDate()}, '${sideHint}')"`;
+        return `<div class="${classes.join(" ")}" ${onclick}>${c.day}</div>`;
+      }).join("");
+      return `<div class="drc-cal-grid">${dowHtml}${cellsHtml}</div>`;
+    }
+
+    function _renderSideCal(sideKey) {
+      // sideKey: "left" | "right"
+      const el = document.getElementById(sideKey === "left" ? "drcCalLeft" : "drcCalRight");
+      if (!el) return;
+      const mon = sideKey === "left" ? state.leftMonth : state.rightMonth;
+      const monLabel = `Tháng ${mon.getMonth() + 1}/${mon.getFullYear()}`;
+      // Constraints:
+      // - left.next() phải < right (không cho >= right)
+      // - right.prev() phải > left
+      const canPrev = true; // luôn cho lùi
+      let canNext = true;
+      if (sideKey === "left") {
+        // Next của left phải < right
+        const nextLeft = new Date(mon.getFullYear(), mon.getMonth() + 1, 1);
+        canNext = nextLeft.getTime() < state.rightMonth.getTime();
+      } else {
+        // Prev của right phải > left → tức right - 1 > left → right > left + 1
+        // → cho prev khi right.prev() > left
+        const prevRight = new Date(mon.getFullYear(), mon.getMonth() - 1, 1);
+        // canPrev cho right
+        var canPrevRight = prevRight.getTime() > state.leftMonth.getTime();
+      }
+      const canPrevFinal = sideKey === "left" ? canPrev : canPrevRight;
+      el.innerHTML = `
+        <div class="drc-cal-head">
+          <button class="drc-cal-nav" onclick="App.drcNavMonth('${sideKey}', -1)" ${canPrevFinal ? "" : "disabled"} title="Tháng trước">‹</button>
+          <span>${monLabel}</span>
+          <button class="drc-cal-nav" onclick="App.drcNavMonth('${sideKey}', 1)" ${canNext ? "" : "disabled"} title="Tháng sau">›</button>
+        </div>
+        ${_renderCalendar(mon, sideKey)}
+      `;
+    }
+
+    function _renderPopup() {
+      const which = state.popupOpen;
+      if (!which) {
+        ["drcPopupStart", "drcPopupEnd"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove("open");
+        });
+        return;
+      }
+      const el = document.getElementById(which === "start" ? "drcPopupStart" : "drcPopupEnd");
+      if (!el) return;
+      const mon = state.popupMonth || today();
+      const monLabel = `Tháng ${mon.getMonth() + 1}/${mon.getFullYear()}`;
+      el.innerHTML = `
+        <div class="drc-cal-head">
+          <button class="drc-cal-nav" onclick="App.drcPopupNav(-1)" title="Tháng trước">‹</button>
+          <span>${monLabel}</span>
+          <button class="drc-cal-nav" onclick="App.drcPopupNav(1)" title="Tháng sau">›</button>
+        </div>
+        ${_renderCalendar(mon, "popup")}
+        <div style="margin-top:6px;text-align:right;">
+          <button class="drc-cal-nav" onclick="App.drcClosePopup()" title="Đóng">✕ Đóng</button>
+        </div>
+      `;
+      el.classList.add("open");
+    }
+
+    function _renderResult() {
+      const el = document.getElementById("drcResult");
+      if (!el) return;
+      if (state.start && state.end) {
+        const days = diffDays(state.start, state.end);
+        const txt = `Từ ${fmtVN(state.start)} → ${fmtVN(state.end)} là tổng: ${days} ngày.`;
+        el.className = "drc-result";
+        el.innerHTML = `
+          <span class="drc-result-text">${txt}</span>
+          <button onclick="App.drcCopyResult()" title="Copy text">📋 Copy</button>
+          <button class="drc-reset-btn" onclick="App.drcReset()" title="Reset về mặc định">↺ Reset</button>
+        `;
+      } else if (state.start && !state.end) {
+        el.className = "drc-result empty";
+        el.innerHTML = `<span class="drc-result-text">Đã chọn ngày đi: ${fmtVN(state.start)}. Chưa có ngày về.</span>
+          <button class="drc-reset-btn" onclick="App.drcReset()" title="Reset">↺ Reset</button>`;
+      } else if (!state.start && state.end) {
+        el.className = "drc-result empty";
+        el.innerHTML = `<span class="drc-result-text">Đã chọn ngày về: ${fmtVN(state.end)}. Chưa có ngày đi.</span>
+          <button class="drc-reset-btn" onclick="App.drcReset()" title="Reset">↺ Reset</button>`;
+      } else {
+        el.className = "drc-result empty";
+        el.innerHTML = `<span class="drc-result-text">Chưa đủ 2 ngày để tính.</span>
+          <button class="drc-reset-btn" onclick="App.drcReset()" title="Reset">↺ Reset</button>`;
+      }
+    }
+
+    function render() {
+      // Auto-adjust month anchors khi user đổi ngày → đảm bảo left.month <= right.month
+      if (state.start) {
+        state.leftMonth = new Date(state.start.getFullYear(), state.start.getMonth(), 1);
+      }
+      if (state.end) {
+        state.rightMonth = new Date(state.end.getFullYear(), state.end.getMonth(), 1);
+      }
+      // Constraint: rightMonth > leftMonth
+      if (state.rightMonth.getTime() <= state.leftMonth.getTime()) {
+        state.rightMonth = new Date(state.leftMonth.getFullYear(), state.leftMonth.getMonth() + 1, 1);
+      }
+      _renderSideCal("left");
+      _renderSideCal("right");
+      _renderPopup();
+      _renderResult();
+    }
+
+    function navMonth(side, delta) {
+      const target = side === "left" ? state.leftMonth : state.rightMonth;
+      const next = new Date(target.getFullYear(), target.getMonth() + delta, 1);
+      if (side === "left") {
+        if (next.getTime() >= state.rightMonth.getTime()) return; // blocked
+        state.leftMonth = next;
+      } else {
+        if (next.getTime() <= state.leftMonth.getTime()) return; // blocked
+        state.rightMonth = next;
+      }
+      render();
+    }
+
+    function pickDate(yr, mo, day, sideHint) {
+      const d = new Date(yr, mo, day);
+      d.setHours(0, 0, 0, 0);
+      // Xác định set vào start hay end:
+      // - Nếu sideHint là "popup": dùng state.popupOpen
+      // - Nếu sideHint là "left": set start
+      // - Nếu sideHint là "right": set end
+      let target = sideHint;
+      if (sideHint === "popup") target = state.popupOpen;
+      if (target === "start") {
+        state.start = d;
+        const sIn = document.getElementById("drcStartInput");
+        if (sIn) sIn.value = fmtInput(d);
+        // Nếu end < start → clear end
+        if (state.end && state.end.getTime() < d.getTime()) {
+          state.end = null;
+          const eIn = document.getElementById("drcEndInput");
+          if (eIn) eIn.value = "";
+        }
+      } else if (target === "end") {
+        // Nếu end < start → swap (user pick ngày về sớm hơn ngày đi)
+        if (state.start && d.getTime() < state.start.getTime()) {
+          // Swap: ngày được pick thành start, start cũ thành end
+          state.end = state.start;
+          state.start = d;
+          document.getElementById("drcStartInput").value = fmtInput(state.start);
+          document.getElementById("drcEndInput").value = fmtInput(state.end);
+        } else {
+          state.end = d;
+          const eIn = document.getElementById("drcEndInput");
+          if (eIn) eIn.value = fmtInput(d);
+        }
+      } else {
+        // sideHint là "left"/"right" từ click vào lịch chính
+        if (sideHint === "left") {
+          // click vào lịch trái → set start
+          state.start = d;
+          document.getElementById("drcStartInput").value = fmtInput(d);
+          if (state.end && state.end.getTime() < d.getTime()) {
+            state.end = null;
+            document.getElementById("drcEndInput").value = "";
+          }
+        } else if (sideHint === "right") {
+          if (state.start && d.getTime() < state.start.getTime()) {
+            state.end = state.start;
+            state.start = d;
+            document.getElementById("drcStartInput").value = fmtInput(state.start);
+            document.getElementById("drcEndInput").value = fmtInput(state.end);
+          } else {
+            state.end = d;
+            document.getElementById("drcEndInput").value = fmtInput(d);
+          }
+        }
+      }
+      // Đóng popup nếu đang mở
+      if (state.popupOpen) {
+        state.popupOpen = null;
+        state.popupMonth = null;
+      }
+      render();
+    }
+
+    function onInputChange(which) {
+      const inp = document.getElementById(which === "start" ? "drcStartInput" : "drcEndInput");
+      if (!inp) return;
+      const d = parseInput(inp.value);
+      if (d) {
+        if (which === "start") state.start = d;
+        else state.end = d;
+        render();
+      }
+    }
+    function onInputBlur(which) {
+      const inp = document.getElementById(which === "start" ? "drcStartInput" : "drcEndInput");
+      if (!inp) return;
+      const d = parseInput(inp.value);
+      if (d) {
+        // Normalize value về dd/mm/yy
+        inp.value = fmtInput(d);
+      } else if (inp.value.trim()) {
+        // Invalid → clear
+        inp.value = "";
+        if (which === "start") state.start = null;
+        else state.end = null;
+        render();
+      }
+    }
+
+    function togglePopup(which) {
+      if (state.popupOpen === which) {
+        state.popupOpen = null;
+        state.popupMonth = null;
+      } else {
+        state.popupOpen = which;
+        // Popup hiện tháng của ngày hiện tại nếu đã có, không thì today
+        const ref = (which === "start" ? state.start : state.end) || today();
+        state.popupMonth = new Date(ref.getFullYear(), ref.getMonth(), 1);
+      }
+      render();
+    }
+    function closePopup() {
+      state.popupOpen = null;
+      state.popupMonth = null;
+      render();
+    }
+    function popupNav(delta) {
+      if (!state.popupMonth) return;
+      state.popupMonth = new Date(state.popupMonth.getFullYear(), state.popupMonth.getMonth() + delta, 1);
+      render();
+    }
+
+    async function copyResult() {
+      if (!state.start || !state.end) return;
+      const days = diffDays(state.start, state.end);
+      const txt = `Từ ${fmtVN(state.start)} → ${fmtVN(state.end)} là tổng: ${days} ngày.`;
+      try {
+        await navigator.clipboard.writeText(txt);
+        // Flash status briefly
+        const el = document.getElementById("drcResult");
+        if (el) {
+          const txtEl = el.querySelector(".drc-result-text");
+          if (txtEl) {
+            const orig = txtEl.textContent;
+            txtEl.textContent = "✅ Đã copy: " + txt;
+            setTimeout(() => { if (txtEl) txtEl.textContent = orig; }, 1500);
+          }
+        }
+      } catch (e) {
+        console.error("DRC copy fail:", e);
+      }
+    }
+
+    function init() {
+      _initMonthAnchors();
+      render();
+    }
+
+    return { init, render, reset, navMonth, pickDate, onInputChange, onInputBlur, togglePopup, closePopup, popupNav, copyResult };
+  })();
+  // Đóng popup khi click ngoài
+  document.addEventListener("click", (e) => {
+    const inDrc = e.target.closest(".drc-field, .drc-popup");
+    if (!inDrc) {
+      const sp = document.getElementById("drcPopupStart");
+      const ep = document.getElementById("drcPopupEnd");
+      if ((sp && sp.classList.contains("open")) || (ep && ep.classList.contains("open"))) {
+        DateRangeCalc.closePopup();
+      }
+    }
+  });
+
   render();
   liveRecalc();
   Cust2B.syncToDOM(); // init UI section 2B
   updateShipVatVisibility(); // v10.8.27: init shipVat checkbox visibility
   _updateSaveBarUI(); // init UI hàng nút Lưu (State 1)
+  // v10.8.33: init Date Range Calc
+  try { DateRangeCalc.init(); } catch (e) { console.error("DRC init fail:", e); }
+  // v10.8.33: init CountrySearch UI badge
+  try { csUpdateBadgeUI(); } catch (e) { console.error("CS init fail:", e); }
   // Khi render lần đầu, gắn share param vào Cust2B nếu có pendingImportPayload đã được decode trước đó
 
   // v10.8.25: Init StockOverflow + PackageGuides — phải đặt TRƯỚC `return` của IIFE
@@ -8411,6 +9356,19 @@ const App = (() => {
     slRestorePresets,
     updateShipFee,
     toggleShipVat,
+    // v10.8.33: DateRangeCalc exports
+    drcReset: () => DateRangeCalc.reset(),
+    drcNavMonth: (side, delta) => DateRangeCalc.navMonth(side, delta),
+    drcPickDate: (yr, mo, day, side) => DateRangeCalc.pickDate(yr, mo, day, side),
+    drcOnInput: (which) => DateRangeCalc.onInputChange(which),
+    drcOnBlur: (which) => DateRangeCalc.onInputBlur(which),
+    drcTogglePopup: (which) => DateRangeCalc.togglePopup(which),
+    drcClosePopup: () => DateRangeCalc.closePopup(),
+    drcPopupNav: (delta) => DateRangeCalc.popupNav(delta),
+    drcCopyResult: () => DateRangeCalc.copyResult(),
+    // v10.8.33: CountrySearch
+    csUpdate,
+    csClear,
     onManualDiscChange,
     setActiveStk,
     regenOrderCode,
