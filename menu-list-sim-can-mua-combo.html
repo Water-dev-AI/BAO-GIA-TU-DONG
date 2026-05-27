@@ -76,6 +76,16 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.32 · 26/05/2026 · 19:25 (GMT+7)
+ - Fix: bấm "Nhập sổ" làm draft bị đẩy lên đầu danh sách (do upsert luôn set
+   `updatedAt = now` → sort theo updatedAt desc đẩy lên top).
+ - Thêm opts `preserveUpdatedAt` cho `DraftStore.upsert(draft, opts)` → giữ
+   updatedAt cũ khi chỉ tick metadata (không phải edit nội dung).
+ - Áp dụng cho `_draftMarkImported` + `_draftToggleImported`. Các upsert khác
+   (edit cart/VAT/codes) vẫn cập nhật updatedAt như cũ.
+ Prompt: "tạo sao tôi bấm nhập sổ thì draftlist tự thay đổi thứ tự cho đơn đó
+ lên trên cùng? tôi ko có muốn vậy, vị trí ko đổi."
+
  v10.8.31 · 26/05/2026 · 19:10 (GMT+7)
  - Fix ảnh báo giá hiển thị méo/nén 2 bên: canvas `#qrFullCanvas` đang có
    `max-width: 50%` → ảnh vuông 1200×1200 bị ép xuống 50% width của container.
@@ -617,7 +627,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.31 · 26/05/2026 · 19:10
+    Version 10.8.32 · 26/05/2026 · 19:25
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3053,6 +3063,7 @@ const App = (() => {
   }
 
   // v10.8.26: Tag "Đã nhập sổ" — toggle off khi bấm ✕
+  // v10.8.32: preserveUpdatedAt → không đẩy draft lên top list khi tick metadata.
   async function _draftToggleImported(draftId, val) {
     const d = DraftStore.getById(draftId);
     if (!d) return;
@@ -3063,7 +3074,7 @@ const App = (() => {
       d.imported = false;
       delete d.importedAt;
     }
-    await DraftStore.upsert(d);
+    await DraftStore.upsert(d, { preserveUpdatedAt: true });
     draftRender();
   }
   // Mark imported = true. Gọi khi user copy payload thành công ở 1 trong 2 nơi.
@@ -3073,7 +3084,7 @@ const App = (() => {
     if (!d || d.imported === true) return;
     d.imported = true;
     d.importedAt = Date.now();
-    await DraftStore.upsert(d);
+    await DraftStore.upsert(d, { preserveUpdatedAt: true });
     draftRender();
   }
 
@@ -4751,13 +4762,19 @@ const App = (() => {
       return true;
     }
 
-    async function upsert(draft) {
+    async function upsert(draft, opts) {
       const idx = list.findIndex(d => d.id === draft.id);
       const now = Date.now();
+      // v10.8.32: opts.preserveUpdatedAt=true → giữ updatedAt cũ (không đẩy lên top
+      // khi sort). Dùng cho tick metadata như "Đã nhập sổ" — không phải edit nội dung.
+      let updatedAt = now;
+      if (opts && opts.preserveUpdatedAt && idx >= 0) {
+        updatedAt = list[idx].updatedAt || list[idx].createdAt || now;
+      }
       const merged = {
         ...draft,
         createdAt: idx >= 0 ? list[idx].createdAt : now,
-        updatedAt: now,
+        updatedAt,
       };
       if (idx >= 0) list[idx] = merged; else list.unshift(merged);
       _save();
