@@ -76,6 +76,35 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.37 · 27/05/2026 · 12:35 (GMT+7)
+ - Nút "📷 Bắt seri" trong modal Xem đơn nháp đổi vị trí: từ DƯỚI textarea Mã SIM VL
+   → BÊN PHẢI textarea. Wrap container thành flex (textarea co giãn, button fix).
+ - Mỗi nhóm SIM VL có 1 nút riêng (giữ nguyên — vì xen kẽ ESIM/SIM VL có nhiều nhóm
+   SIM VL độc lập, mỗi nhóm cần bắt seri riêng để fill đúng anchor).
+ Prompt: "Đưa vị trí bắt seri sang nằm phía sau ô mã SIM VL chứ ko phải phía dưới.
+ Và có phải mỗi ô SIM VL một nút bắt ko, hay là chỉ có 1 nút cho toàn bộ?"
+
+ v10.8.36 · 27/05/2026 · 12:15 (GMT+7)
+ - Fix lỗi 1: Nút ℹ️ trước đó đặt sau MỖI gói (sai). Sửa: nút ℹ️ giờ nằm ở góc dưới
+   phải của TAB HEADER trong picker modal, chỉ hiện khi tab có infoText. Bấm = mở
+   popup info của tab đó.
+ - Fix lỗi 2: Bảng giá Mỹ (và sheet khác có info split qua nhiều rows) không hiển
+   thị nhà mạng. Nguyên nhân: row 1 chứa header info ("APN... Danh sách nhà mạng"),
+   row 2+ chứa danh sách carrier (🇺🇸USA: 📶T-Mobile...) ở cell riêng cùng cột infoCol.
+   Sửa: scan TẤT CẢ rows ở cột infoCol, ghép tất cả non-empty cells thành 1 block
+   multi-line (stop khi gặp 3 rows liên tiếp rỗng để không kéo sang bộ kế tiếp).
+ - Fix lỗi 3a: SerialScanner modal bị che sau modal Xem đơn nháp.
+   Sửa: bump z-index của serialScanModal lên 2000, pkgInfoModal lên 1500.
+ - Fix lỗi 3b: "❌ Lỗi quét: ZXing.GenericMultipleBarcodeReader is not a constructor".
+   Class này không có trong UMD build của @zxing/library 0.21. Sửa: bỏ approach
+   GenericMultipleBarcodeReader, dùng grid scanning thay vào:
+   • Step 1: decode full image (1 mã trung tâm)
+   • Step 2: chia 4×4 grid với overlap 25%, decode từng region
+   • Step 3: thêm 2×2 grid thô (cho ảnh ít mã)
+   • Dedupe theo text code. ResultPoints chuyển sang abs coords.
+ Prompt: "ℹ️ trên tab header thay vì sau gói + bảng giá Mỹ không hiện nhà mạng +
+ modal Bắt seri bị che + lỗi GenericMultipleBarcodeReader is not a constructor."
+
  v10.8.35 · 27/05/2026 · 11:30 (GMT+7)
  - Tab description trong picker: bớt padding (12→7px), font (13.5→12.5px) cho gọn.
  - Picker rows: thêm nút ℹ️ (xanh) cạnh tên gói khi tab có data cột P+2.
@@ -875,7 +904,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.35 · 27/05/2026 · 11:30
+    Version 10.8.37 · 27/05/2026 · 12:35
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1429,7 +1458,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 
 <!-- v10.8.35: SerialScanner modal -->
-<div id="serialScanModal" class="picker-overlay" style="display:none;" onclick="if(event.target===this)App.serialScanClose()">
+<div id="serialScanModal" class="picker-overlay" style="display:none;z-index:2000;" onclick="if(event.target===this)App.serialScanClose()">
   <div class="picker-modal" style="width:min(96vw, 980px);max-height:92vh;display:flex;flex-direction:column;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;font-size:15px;">📷 Bắt seri SIM từ ảnh (QR + barcode)</h3>
@@ -1465,7 +1494,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 
 <!-- v10.8.35: PkgInfo modal (APN/timezone + nhà mạng) -->
-<div id="pkgInfoModal" class="picker-overlay" style="display:none;" onclick="if(event.target===this)App.pkgInfoClose()">
+<div id="pkgInfoModal" class="picker-overlay" style="display:none;z-index:1500;" onclick="if(event.target===this)App.pkgInfoClose()">
   <div class="picker-modal" style="width:min(96vw, 540px);max-height:85vh;display:flex;flex-direction:column;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;font-size:15px;">📡 Thông tin gói (APN / nhà mạng)</h3>
@@ -4008,15 +4037,21 @@ const App = (() => {
       const bg = isActive
         ? 'background:var(--blue);color:white;box-shadow:0 2px 6px rgba(23,92,211,.25);'
         : 'background:#eef2f7;color:#344054;';
-      return '<div role="button" tabindex="0" title="' + tooltip + '" onclick="App.pickerSwitchTab(' + i + ')" style="' +
-        'box-sizing:border-box;padding:7px 12px;border:0;border-radius:8px;cursor:pointer;' +
+      // v10.8.36: nút ℹ️ ở góc dưới phải nếu tab có info text
+      const hasInfo = t.infoText && PkgInfo.has(t.infoText);
+      const infoBtn = hasInfo
+        ? `<button type="button" onclick="event.stopPropagation();App.pkgInfoOpenForTab(${i})" title="Xem APN / nhà mạng / timezone" style="position:absolute;bottom:2px;right:2px;background:${isActive ? 'rgba(255,255,255,0.25)' : '#fff'};color:${isActive ? '#fff' : '#1e40af'};border:1px solid ${isActive ? 'rgba(255,255,255,0.4)' : '#93c5fd'};border-radius:4px;padding:1px 5px;font-size:10px;cursor:pointer;font-family:inherit;line-height:1.1;">ℹ️</button>`
+        : "";
+      return '<div role="button" tabindex="0" title="' + tooltip + '" onclick="App.pickerSwitchTab(' + i + ')" style="position:relative;' +
+        'box-sizing:border-box;padding:7px 12px ' + (hasInfo ? '18px' : '7px') + ' 12px;border:0;border-radius:8px;cursor:pointer;' +
         'font-size:12px;font-weight:600;line-height:1.3;text-align:left;' +
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
         'max-width:280px;flex:0 0 auto;' +
         'display:flex;flex-direction:column;justify-content:center;gap:2px;' +
         'font-family:inherit;' + bg +
         '"><div style="overflow:hidden;text-overflow:ellipsis;">' + safeLabel + '</div>' +
-        '<div style="font-weight:400;font-size:10px;opacity:.8;">' + t.items.length + ' gói</div></div>';
+        '<div style="font-weight:400;font-size:10px;opacity:.8;">' + t.items.length + ' gói</div>' +
+        infoBtn + '</div>';
     }).join("");
 
     // Hiện panel mô tả full của tab active nếu tên có nhiều dòng (mô tả chi tiết bộ giá)
@@ -4166,20 +4201,6 @@ const App = (() => {
         const typeForOpen = p.type || "";
         gBtn.onclick = (ev) => { ev.stopPropagation(); pkgGuideOpen(nameForOpen, typeForOpen); };
         nameDiv.appendChild(gBtn);
-      }
-      // v10.8.35: Nút info ℹ️ — hiện khi tab hiện tại có infoText
-      if (tbl.infoText && PkgInfo.has(tbl.infoText)) {
-        const iBtn = document.createElement("button");
-        iBtn.type = "button";
-        iBtn.className = "pkg-guide-btn";
-        iBtn.title = "Xem APN / nhà mạng / timezone";
-        iBtn.textContent = "ℹ️";
-        iBtn.style.background = "#dbeafe";
-        iBtn.style.borderColor = "#93c5fd";
-        iBtn.style.color = "#1e40af";
-        const infoTextForOpen = tbl.infoText;
-        iBtn.onclick = (ev) => { ev.stopPropagation(); PkgInfo.open(infoTextForOpen); };
-        nameDiv.appendChild(iBtn);
       }
       tdName.appendChild(nameDiv);
       if (p.note) {
@@ -5867,14 +5888,14 @@ const App = (() => {
         const code = (groupsForCodes[idx] && groupsForCodes[idx].code) || "";
         const placeholder = r.type === "esim" ? "vd: b0000262605220047" : "vd: b0001fd2605220002";
         const meta = `${r.count} dòng${r.count > 1 ? " (merge)" : ""}`;
-        // v10.8.35: Nút bắt seri từ ảnh — chỉ cho SIM VL
+        // v10.8.37: Nút bắt seri từ ảnh — chỉ cho SIM VL, nằm BÊN PHẢI textarea
         const scanBtn = r.type === "physical"
-          ? `<button type="button" onclick="App.serialScanOpen('${d.id}', ${idx})" style="margin:6px 0 0 0;padding:5px 9px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;display:block;width:fit-content;" title="Bắt seri từ ảnh (QR + barcode trong clipboard hoặc file)">📷 Bắt seri</button>`
+          ? `<button type="button" onclick="App.serialScanOpen('${d.id}', ${idx})" style="margin:0;padding:6px 10px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;align-self:flex-start;line-height:1.3;" title="Bắt seri từ ảnh (QR + barcode trong clipboard hoặc file)">📷 Bắt<br>seri</button>`
           : "";
         return `
           <div style="display:contents;">
             <span style="color:var(--muted);padding-top:6px;">${label}<br><span style="font-size:10px;color:#9ca3af;">${meta}</span></span>
-            <div>
+            <div style="display:flex;gap:6px;align-items:flex-start;">
               <textarea id="drcCodeTA_${d.id}_${idx}" rows="2" placeholder="${placeholder}&#10;Mỗi mã 1 dòng (Enter để xuống dòng)"
                 onblur="App._draftSaveGroupCode('${d.id}', ${idx}, this.value)"
                 style="${codeTaStyle}">${escapeHtml(code)}</textarea>
@@ -7912,13 +7933,24 @@ const App = (() => {
       let subTableName = ((allRows[0] || [])[nameCol] || "").trim();
       if (!subTableName) subTableName = "Bộ " + (subTables.length + 1);
 
-      // v10.8.35: lấy cell info từ row 0 (header bộ — merged cell thường ở dòng đầu)
+      // v10.8.36: Cell info có thể nằm SPLIT qua nhiều rows ở cột infoCol.
+      // Vd sheet Mỹ: row 1 chứa header "APN: ... Danh sách nhà mạng", row 2 chứa
+      // dòng đầu carrier (🇺🇸USA: 📶T-Mobile / 📶Verizon), row 3+ rỗng hoặc trống.
+      // → Ghép TẤT CẢ non-empty cells trong cột infoCol thành 1 block multi-line.
+      // Stop khi gặp >= 3 rows liên tiếp rỗng (để không kéo sang bộ kế tiếp nếu nhầm).
       let infoText = "";
       if (infoCol >= 0) {
-        for (let r = 0; r < Math.min(5, allRows.length); r++) {
-          const v = (allRows[r][infoCol] || "").trim();
-          if (v) { infoText = v; break; }
+        const parts = [];
+        let consecutiveEmpty = 0;
+        for (let r = 0; r < allRows.length; r++) {
+          const row = allRows[r];
+          if (!row) { consecutiveEmpty++; if (consecutiveEmpty >= 3 && parts.length) break; continue; }
+          const v = String(row[infoCol] || "").trim();
+          if (!v) { consecutiveEmpty++; if (consecutiveEmpty >= 3 && parts.length) break; continue; }
+          consecutiveEmpty = 0;
+          parts.push(v);
         }
+        infoText = parts.join("\n");
       }
 
       subTables.push({
@@ -9283,10 +9315,13 @@ const App = (() => {
       return _zxingReady;
     }
 
-    // Decode ALL QR + barcode trong ảnh blob → array of {code, format, x, y, width, height}
+    // v10.8.36: Decode multi QR + barcode bằng grid scanning (vì GenericMultipleBarcodeReader
+    // không có trong UMD build). Strategy:
+    //   1. Decode FULL image trước (1 mã trung tâm)
+    //   2. Chia ảnh thành grid NxN regions (overlap nhẹ) → decode mỗi region
+    //   3. Tính BBox + dedupe theo text code
     async function _decodeAll(blob) {
       const ZXing = await _loadZxing();
-      // Convert blob → ImageBitmap → canvas → ImageData
       const img = new Image();
       const url = URL.createObjectURL(blob);
       await new Promise((res, rej) => {
@@ -9300,10 +9335,7 @@ const App = (() => {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // ZXing MultiFormatReader có thể decode 1 lần. Để decode MULTI codes trong 1 ảnh,
-      // ta dùng GenericMultipleBarcodeReader (wrapper). Available trong @zxing/library 0.21.
       const hints = new Map();
       hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
       hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
@@ -9319,38 +9351,89 @@ const App = (() => {
       ]);
       const reader = new ZXing.MultiFormatReader();
       reader.setHints(hints);
-      const multiReader = new ZXing.GenericMultipleBarcodeReader(reader);
-      const luminanceSource = new ZXing.RGBLuminanceSource(
-        _imgDataToUint8(imgData),
-        imgData.width,
-        imgData.height
-      );
-      const binBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
-      let results = [];
-      try {
-        results = multiReader.decodeMultiple(binBitmap, hints) || [];
-      } catch (e) {
-        // No barcode found
-        results = [];
-      }
-      const out = results.map(r => {
-        const text = r.getText();
-        const format = r.getBarcodeFormat ? r.getBarcodeFormat() : "";
-        const pts = r.getResultPoints ? r.getResultPoints() : [];
-        let x = 0, y = 0, w = 0, h = 0;
-        if (pts && pts.length) {
-          const xs = pts.map(p => p.getX()).filter(v => isFinite(v));
-          const ys = pts.map(p => p.getY()).filter(v => isFinite(v));
-          if (xs.length && ys.length) {
-            x = Math.min(...xs);
-            y = Math.min(...ys);
-            w = Math.max(...xs) - x;
-            h = Math.max(...ys) - y;
+
+      // Helper: decode 1 region (x, y, w, h) — trả về result hoặc null
+      function decodeRegion(rx, ry, rw, rh) {
+        try {
+          const imgData = ctx.getImageData(rx, ry, rw, rh);
+          const lum = _imgDataToUint8(imgData);
+          const lumSrc = new ZXing.RGBLuminanceSource(lum, rw, rh);
+          const bb = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lumSrc));
+          const result = reader.decode(bb, hints);
+          if (result) {
+            const text = result.getText();
+            const fmt = result.getBarcodeFormat ? result.getBarcodeFormat() : "";
+            const pts = result.getResultPoints ? result.getResultPoints() : [];
+            let lx = 0, ly = 0, lw = 0, lh = 0;
+            if (pts && pts.length) {
+              const xs = pts.map(p => p.getX()).filter(v => isFinite(v));
+              const ys = pts.map(p => p.getY()).filter(v => isFinite(v));
+              if (xs.length && ys.length) {
+                lx = Math.min(...xs);
+                ly = Math.min(...ys);
+                lw = Math.max(...xs) - lx;
+                lh = Math.max(...ys) - ly;
+              }
+            }
+            // Convert to absolute coords (offset by region origin)
+            return {
+              code: text,
+              format: String(fmt),
+              x: rx + lx,
+              y: ry + ly,
+              width: lw,
+              height: lh,
+            };
           }
+        } catch (e) {
+          // NotFoundException — bình thường khi không có mã trong region này
         }
-        return { code: text, format: String(format), x, y, width: w, height: h };
-      });
-      return { serials: out, imageUrl: canvas.toDataURL("image/jpeg", 0.8), width: canvas.width, height: canvas.height };
+        return null;
+      }
+
+      const found = [];
+      // Step 1: decode toàn bộ ảnh
+      const fullResult = decodeRegion(0, 0, canvas.width, canvas.height);
+      if (fullResult) found.push(fullResult);
+
+      // Step 2: Grid scan 4x4 regions với overlap 25%
+      const cols = 4, rows = 4;
+      const cellW = canvas.width / cols;
+      const cellH = canvas.height / rows;
+      const overlap = 0.25;
+      for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+          const rx = Math.max(0, Math.round(cx * cellW - cellW * overlap));
+          const ry = Math.max(0, Math.round(cy * cellH - cellH * overlap));
+          const rw = Math.min(canvas.width - rx, Math.round(cellW * (1 + overlap * 2)));
+          const rh = Math.min(canvas.height - ry, Math.round(cellH * (1 + overlap * 2)));
+          if (rw < 50 || rh < 50) continue;
+          const r = decodeRegion(rx, ry, rw, rh);
+          if (r) found.push(r);
+        }
+      }
+
+      // Step 3: thêm grid 2x2 thô (cho ảnh ít mã / mã lớn)
+      const coarseCols = 2, coarseRows = 2;
+      const cellW2 = canvas.width / coarseCols;
+      const cellH2 = canvas.height / coarseRows;
+      for (let cy = 0; cy < coarseRows; cy++) {
+        for (let cx = 0; cx < coarseCols; cx++) {
+          const rx = Math.round(cx * cellW2);
+          const ry = Math.round(cy * cellH2);
+          const rw = Math.round(cellW2);
+          const rh = Math.round(cellH2);
+          const r = decodeRegion(rx, ry, rw, rh);
+          if (r) found.push(r);
+        }
+      }
+
+      return {
+        serials: found,
+        imageUrl: canvas.toDataURL("image/jpeg", 0.85),
+        width: canvas.width,
+        height: canvas.height,
+      };
     }
 
     // ZXing RGBLuminanceSource expects ARGB int array — convert ImageData
@@ -9994,6 +10077,10 @@ const App = (() => {
     csClear,
     // v10.8.35
     pkgInfoOpen: (text) => PkgInfo.open(text),
+    pkgInfoOpenForTab: (idx) => {
+      const t = pickerTables[idx];
+      if (t && t.infoText) PkgInfo.open(t.infoText);
+    },
     pkgInfoClose: () => PkgInfo.close(),
     pkgInfoCopyLine: (line) => PkgInfo.copyLine(line),
     serialScanOpen: (draftId, runIdx) => SerialScanner.open(draftId, runIdx),
