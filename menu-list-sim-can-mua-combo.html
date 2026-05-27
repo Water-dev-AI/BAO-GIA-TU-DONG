@@ -76,6 +76,22 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.34 · 26/05/2026 · 20:55 (GMT+7)
+ - DRC: cả 2 ô input default = ngày hôm nay (`dd/mm/yy`), state.start/end cũng set today
+   → result hiện sẵn "Từ today → today là tổng: 1 ngày." cho copy nhanh.
+ - Slist search placeholder đổi: "Tìm bảng giá theo tên hoặc theo nước, nhiều nước
+   cách nhau bởi dấu , (Ví dụ: Pháp, Thổ Nhĩ Kỳ)".
+ - CountrySearch fix nhiễu (rất nhiều false positive):
+   • Alias map refactor: structured `{vn, en, short}` thay vì flat array.
+   • `_expandKeyword`: CHỈ trả về EN aliases (>=3 char). Vì content sheet là tiếng Anh,
+     match VN terms vô nghĩa và 2-char codes như "my"/"sg"/"in" gây false positive.
+   • Nếu user gõ short code chính xác (vd "kr") → bonus thêm short vào search terms.
+   • Fallback khi không match alias: chỉ accept keyword >=3 char (1-2 char skip hoàn toàn).
+   • `parseQuery` filter empty groups, `matchSheet` strict AND.
+   • Ví dụ: gõ "han quoc" → search "korea, south korea" trong content (không phải "han quoc").
+ Prompt: "chưa để dd/mm là ngày hôm nay + sửa placeholder + tìm hàn quốc phải tìm korea
+ trong content sheet (không phải han quoc) + search ra nhiều bảng giá lung tung."
+
  v10.8.33 · 26/05/2026 · 20:30 (GMT+7)
  - Task 1: Tab description trong picker đậm hơn — font 13.5px, color #1e3a8a,
    bg #eff6ff, border-left xanh 3px (trước đó nhạt 12px).
@@ -832,7 +848,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.33 · 26/05/2026 · 20:30
+    Version 10.8.34 · 26/05/2026 · 20:55
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -932,7 +948,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
       <!-- Search box + dropdown overlay -->
       <div style="position:relative;">
-        <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên..."
+        <input id="slSearch" type="text" placeholder="🔍 Tìm bảng giá theo tên hoặc theo nước, nhiều nước cách nhau bởi dấu , (Ví dụ: Pháp, Thổ Nhĩ Kỳ)"
           autocomplete="off"
           oninput="App.slFilter()"
           onfocus="App.slFilter()"
@@ -4316,90 +4332,92 @@ const App = (() => {
   const CountrySearch = (() => {
     const STORAGE_KEY = "combo_bill_country_index_v1";
     const WARN_MS = 30 * 24 * 3600 * 1000; // 30 ngày
-    // Alias map: key (normalized) → array of normalized aliases để match
-    // VD: search "my" → match cả "usa", "america", "hoa ky", "my", "united states"
+    // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
+    //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
+    //   `short` (code 2-3 char) chỉ match khi user gõ chính xác code đó.
+    //   Format: { vn: [...], en: [...], short: [...] }
     const ALIASES = [
-      // [VN, EN, code, ...]
-      ["my", "usa", "america", "hoa ky", "united states", "united states of america", "us"],
-      ["uae", "dubai", "united arab emirates", "tieu vuong quoc a rap thong nhat", "abu dhabi"],
-      ["nhat", "nhat ban", "japan", "jp"],
-      ["han", "han quoc", "korea", "south korea", "kr"],
-      ["trung", "trung quoc", "china", "mainland china", "cn"],
-      ["dai loan", "taiwan", "tw"],
-      ["thai", "thai lan", "thailand", "th"],
-      ["sing", "singapore", "sg"],
-      ["malay", "malaysia", "my"],
-      ["indo", "indonesia", "id", "bali", "jakarta"],
-      ["phi", "philippines", "ph", "manila"],
-      ["camp", "campuchia", "cambodia", "kh", "phnom penh"],
-      ["lao", "laos", "la"],
-      ["mien dien", "myanmar", "burma", "mm"],
-      ["an do", "india", "in"],
-      ["nepal", "np"],
-      ["bangladesh", "bd"],
-      ["sri lanka", "lk", "ceylon"],
-      ["mongolia", "mong co", "mn"],
-      ["maldives", "mv"],
-      ["nga", "russia", "ru"],
-      ["uc", "australia", "au", "uc chau"],
-      ["nz", "new zealand", "newzealand"],
-      ["my chau", "north america", "bac my"],
-      ["canada", "ca"],
-      ["mexico", "mx"],
-      ["brazil", "br"],
-      ["argentina", "ar"],
-      ["peru", "pe"],
-      ["chile", "cl"],
-      ["ecuador", "equador", "ec"],
-      ["uruguay", "uy"],
-      ["colombia", "co"],
-      ["chau au", "europe", "eu", "europa"],
-      ["anh", "uk", "united kingdom", "england", "britain", "gb"],
-      ["phap", "france", "fr"],
-      ["duc", "germany", "de", "deutschland"],
-      ["y", "italy", "italia", "it"],
-      ["tay ban nha", "spain", "espana", "es"],
-      ["bo dao nha", "portugal", "pt"],
-      ["ha lan", "netherlands", "holland", "nl"],
-      ["bi", "belgium", "be"],
-      ["thuy si", "switzerland", "swiss", "ch"],
-      ["ao", "austria", "at"],
-      ["thuy dien", "sweden", "se"],
-      ["na uy", "norway", "no"],
-      ["dan mach", "denmark", "dk"],
-      ["phan lan", "finland", "fi"],
-      ["ba lan", "poland", "pl"],
-      ["sec", "czech", "czech republic", "cz"],
-      ["hungary", "hu"],
-      ["hy lap", "greece", "gr"],
-      ["tho nhi ky", "turkey", "turkiye", "tr"],
-      ["israel", "il"],
-      ["saudi", "saudi arabia", "a rap xe ut", "a rap saudi", "ksa", "sa"],
-      ["qatar", "qa"],
-      ["kuwait", "kw"],
-      ["oman", "om"],
-      ["bahrain", "bh"],
-      ["iran", "ir"],
-      ["iraq", "iq"],
-      ["jordan", "jo"],
-      ["lebanon", "lb"],
-      ["ai cap", "egypt", "eg"],
-      ["morocco", "ma roc", "ma"],
-      ["nam phi", "south africa", "za"],
-      ["kenya", "ke"],
-      ["nigeria", "ng"],
-      ["hong kong", "hk"],
-      ["macao", "ma cao", "macau", "mo"],
-      ["saipan"],
-      ["guam", "gu"],
-      ["vn", "viet nam", "vietnam"],
+      { vn: ["my", "hoa ky"],            en: ["usa", "america", "united states", "united states of america"], short: ["us"] },
+      { vn: ["uae", "dubai"],            en: ["united arab emirates", "abu dhabi", "emirates"], short: [] },
+      { vn: ["nhat", "nhat ban"],        en: ["japan", "japanese"], short: ["jp"] },
+      { vn: ["han", "han quoc"],         en: ["korea", "south korea"], short: ["kr"] },
+      { vn: ["trung quoc", "tq"],        en: ["china", "mainland china", "chinese"], short: ["cn"] },
+      { vn: ["dai loan"],                en: ["taiwan", "taiwanese"], short: ["tw"] },
+      { vn: ["thai", "thai lan"],        en: ["thailand", "thai"], short: ["th"] },
+      { vn: ["singapore", "sing"],       en: ["singapore"], short: ["sg"] },
+      { vn: ["malay", "malaysia"],       en: ["malaysia", "malaysian"], short: ["my"] },
+      { vn: ["indo", "indonesia"],       en: ["indonesia", "indonesian", "bali", "jakarta"], short: ["id"] },
+      { vn: ["phi", "philippines"],      en: ["philippines", "manila"], short: ["ph"] },
+      { vn: ["campuchia", "camp"],       en: ["cambodia", "phnom penh"], short: ["kh"] },
+      { vn: ["lao"],                     en: ["laos"], short: ["la"] },
+      { vn: ["mien dien"],               en: ["myanmar", "burma"], short: ["mm"] },
+      { vn: ["an do"],                   en: ["india", "indian"], short: ["in"] },
+      { vn: ["nepal"],                   en: ["nepal"], short: ["np"] },
+      { vn: ["bangladesh"],              en: ["bangladesh"], short: ["bd"] },
+      { vn: ["sri lanka"],               en: ["sri lanka", "ceylon"], short: ["lk"] },
+      { vn: ["mong co", "mongolia"],     en: ["mongolia", "mongolian"], short: ["mn"] },
+      { vn: ["maldives"],                en: ["maldives", "dhiraagu"], short: ["mv"] },
+      { vn: ["nga"],                     en: ["russia", "russian"], short: ["ru"] },
+      { vn: ["uc", "australia"],         en: ["australia", "australian"], short: ["au"] },
+      { vn: ["new zealand", "nz"],       en: ["new zealand"], short: [] },
+      { vn: ["bac my"],                  en: ["north america"], short: [] },
+      { vn: ["canada"],                  en: ["canada", "canadian"], short: ["ca"] },
+      { vn: ["mexico"],                  en: ["mexico", "mexican"], short: ["mx"] },
+      { vn: ["brazil", "bra"],           en: ["brazil", "brazilian"], short: ["br"] },
+      { vn: ["argentina"],               en: ["argentina"], short: ["ar"] },
+      { vn: ["peru"],                    en: ["peru"], short: ["pe"] },
+      { vn: ["chile"],                   en: ["chile"], short: ["cl"] },
+      { vn: ["ecuador", "equador"],      en: ["ecuador"], short: [] },
+      { vn: ["uruguay"],                 en: ["uruguay"], short: ["uy"] },
+      { vn: ["colombia"],                en: ["colombia"], short: ["co"] },
+      { vn: ["chau au", "eu"],           en: ["europe", "european", "europa"], short: [] },
+      { vn: ["anh", "uk"],               en: ["united kingdom", "england", "britain", "british"], short: ["gb"] },
+      { vn: ["phap"],                    en: ["france", "french"], short: ["fr"] },
+      { vn: ["duc"],                     en: ["germany", "german", "deutschland"], short: ["de"] },
+      { vn: ["y", "italy"],              en: ["italy", "italian", "italia"], short: ["it"] },
+      { vn: ["tay ban nha"],             en: ["spain", "spanish", "espana"], short: ["es"] },
+      { vn: ["bo dao nha"],              en: ["portugal", "portuguese"], short: ["pt"] },
+      { vn: ["ha lan"],                  en: ["netherlands", "holland", "dutch"], short: ["nl"] },
+      { vn: ["bi"],                      en: ["belgium", "belgian"], short: ["be"] },
+      { vn: ["thuy si"],                 en: ["switzerland", "swiss"], short: ["ch"] },
+      { vn: ["ao", "austria"],           en: ["austria", "austrian"], short: ["at"] },
+      { vn: ["thuy dien"],               en: ["sweden", "swedish"], short: ["se"] },
+      { vn: ["na uy"],                   en: ["norway", "norwegian"], short: [] },
+      { vn: ["dan mach"],                en: ["denmark", "danish"], short: ["dk"] },
+      { vn: ["phan lan"],                en: ["finland", "finnish"], short: ["fi"] },
+      { vn: ["ba lan"],                  en: ["poland", "polish"], short: ["pl"] },
+      { vn: ["sec"],                     en: ["czech", "czech republic"], short: ["cz"] },
+      { vn: ["hungary"],                 en: ["hungary", "hungarian"], short: ["hu"] },
+      { vn: ["hy lap"],                  en: ["greece", "greek"], short: ["gr"] },
+      { vn: ["tho nhi ky", "thonhiky"],  en: ["turkey", "turkish", "turkiye"], short: ["tr"] },
+      { vn: ["israel"],                  en: ["israel"], short: ["il"] },
+      { vn: ["a rap xe ut", "a rap saudi", "saudi"], en: ["saudi arabia", "saudi"], short: ["ksa"] },
+      { vn: ["qatar"],                   en: ["qatar"], short: ["qa"] },
+      { vn: ["kuwait"],                  en: ["kuwait"], short: ["kw"] },
+      { vn: ["oman"],                    en: ["oman"], short: [] },
+      { vn: ["bahrain"],                 en: ["bahrain"], short: ["bh"] },
+      { vn: ["iran"],                    en: ["iran", "iranian"], short: ["ir"] },
+      { vn: ["iraq"],                    en: ["iraq", "iraqi"], short: ["iq"] },
+      { vn: ["jordan"],                  en: ["jordan"], short: ["jo"] },
+      { vn: ["lebanon"],                 en: ["lebanon"], short: ["lb"] },
+      { vn: ["ai cap"],                  en: ["egypt", "egyptian"], short: [] },
+      { vn: ["morocco", "ma roc"],       en: ["morocco", "moroccan"], short: [] },
+      { vn: ["nam phi"],                 en: ["south africa"], short: [] },
+      { vn: ["kenya"],                   en: ["kenya"], short: ["ke"] },
+      { vn: ["nigeria"],                 en: ["nigeria"], short: ["ng"] },
+      { vn: ["hong kong"],               en: ["hong kong"], short: ["hk"] },
+      { vn: ["macao", "ma cao"],         en: ["macao", "macau"], short: [] },
+      { vn: ["saipan"],                  en: ["saipan"], short: [] },
+      { vn: ["guam"],                    en: ["guam"], short: [] },
+      { vn: ["viet nam", "vietnam", "vn"],en: ["vietnam", "vietnamese"], short: [] },
     ];
-    // Build reverse map: normalized term → alias array
+    // Reverse lookup: normalized input → alias group object
     const _aliasLookup = new Map();
-    ALIASES.forEach(arr => {
-      arr.forEach(term => {
-        const key = term.toLowerCase();
-        if (!_aliasLookup.has(key)) _aliasLookup.set(key, arr);
+    ALIASES.forEach(group => {
+      // Index all VN, EN, short → group
+      [...group.vn, ...group.en, ...group.short].forEach(term => {
+        const key = ComboLogic.norm(term);
+        if (!_aliasLookup.has(key)) _aliasLookup.set(key, group);
       });
     });
 
@@ -4443,28 +4461,44 @@ const App = (() => {
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     }
 
-    // Expand 1 keyword qua alias map: trả về array các alias bao gồm chính nó
+    // v10.8.34: User gõ tên VN/EN — expand thành EN aliases ONLY (content sheet là tiếng Anh).
+    //   - Nếu match alias group → trả EN aliases của group (+ short nếu user gõ chính xác short).
+    //   - Nếu KHÔNG match alias nào → fallback: chỉ dùng keyword gốc nếu >= 3 ký tự (tránh
+    //     2 ký tự gây false positive lung tung).
     function _expandKeyword(kw) {
       const k = ComboLogic.norm(kw).trim();
       if (!k) return [];
-      const aliases = _aliasLookup.get(k);
-      if (aliases) return aliases.map(a => ComboLogic.norm(a));
-      return [k]; // không match alias → chỉ chính nó
+      const group = _aliasLookup.get(k);
+      if (group) {
+        // Trả EN aliases. Nếu user gõ chính xác short code → thêm short vào (vì user chủ động chọn).
+        const enTerms = group.en.map(t => ComboLogic.norm(t)).filter(Boolean);
+        // Filter EN >= 3 char để tránh code gây nhiễu
+        const safeEn = enTerms.filter(t => t.length >= 3);
+        const userTypedShort = group.short.some(s => ComboLogic.norm(s) === k);
+        if (userTypedShort) safeEn.push(k);
+        return safeEn.length ? safeEn : [k];
+      }
+      // Không match alias → fallback (kw >= 3 ký tự để tránh nhiễu)
+      if (k.length < 3) return [];
+      return [k];
     }
 
-    // Parse search input "han quoc, nhat ban" → [["han quoc", ...aliases], ["nhat ban", ...aliases]]
+    // Parse search input "han quoc, nhat ban" → array các keyword group đã expand
+    // Loại bỏ keyword không expand được (vd 1-2 char không match alias).
     function parseQuery(input) {
       const parts = String(input || "").split(",").map(s => s.trim()).filter(Boolean);
-      return parts.map(p => _expandKeyword(p));
+      const groups = parts.map(p => _expandKeyword(p)).filter(g => g.length > 0);
+      return groups;
     }
 
-    // Match 1 sheet text với 1 query group (AND của các keyword group)
-    // groups = [["my", "usa", ...], ["nhat", "japan", ...]]
+    // Match 1 sheet text với query groups (AND của các keyword group).
+    // groups = [["korea", "south korea"], ["japan", "japanese"]] (sau expand)
     // Match khi: với MỖI group, text chứa ÍT NHẤT 1 alias của group đó.
+    // Nếu groups rỗng → KHÔNG match (tránh return tất cả).
     function matchSheet(normText, groups) {
-      if (!groups.length) return false;
+      if (!groups || !groups.length) return false;
       for (const g of groups) {
-        if (!g.length) continue;
+        if (!g.length) return false; // safety
         let any = false;
         for (const term of g) {
           if (normText.indexOf(term) !== -1) { any = true; break; }
@@ -8972,16 +9006,27 @@ const App = (() => {
       state.rightMonth = new Date(t.getFullYear(), t.getMonth() + 1, 1);
     }
 
+    // v10.8.34: Khi init/reset → set cả 2 ô = ngày hôm nay (set vào state.start/end luôn
+    // để result hiện "Từ ... → ... là tổng: 1 ngày." sẵn cho copy nhanh).
+    function _setBothToToday() {
+      const t = today();
+      state.start = t;
+      state.end = t;
+      const v = fmtInput(t);
+      const sIn = document.getElementById("drcStartInput");
+      const eIn = document.getElementById("drcEndInput");
+      if (sIn) sIn.value = v;
+      if (eIn) eIn.value = v;
+    }
+
     function reset() {
       state.start = null;
       state.end = null;
       state.popupOpen = null;
       state.popupMonth = null;
       _initMonthAnchors();
-      const sIn = document.getElementById("drcStartInput");
-      const eIn = document.getElementById("drcEndInput");
-      if (sIn) sIn.value = "";
-      if (eIn) eIn.value = "";
+      // v10.8.34: prefill both inputs với today
+      _setBothToToday();
       render();
     }
 
@@ -9282,6 +9327,8 @@ const App = (() => {
 
     function init() {
       _initMonthAnchors();
+      // v10.8.34: default = hôm nay cho cả 2 ô
+      _setBothToToday();
       render();
     }
 
