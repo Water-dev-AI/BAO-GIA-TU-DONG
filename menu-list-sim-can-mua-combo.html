@@ -76,6 +76,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.30 · 26/05/2026 · 19:00 (GMT+7)
+ - Fix bug VAT hiển thị 2 lần trong ảnh "Xem báo giá" (qrRenderFull).
+ - Nguyên nhân: v10.8.27 đã embed VAT block vào `result.bill` trong calc(), nhưng
+   qrRenderFull vẫn append VAT block 1 lần nữa.
+ - Fix: chỉ append VAT khi bill text CHƯA có marker "Thông tin hóa đơn:" (back-compat).
+ Prompt: "kiểm tra phần Xem báo giá, đang hiển thị VAT 2 lần."
+
  v10.8.29 · 26/05/2026 · 18:45 (GMT+7)
  - Fix bug: Bill text preview trong modal Xem đơn nháp KHÔNG hiển thị ship/discount/shipVat
    (lúc đó các opts hard-coded = 0, không đọc `d.extras`).
@@ -604,7 +611,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.29 · 26/05/2026 · 18:45
+    Version 10.8.30 · 26/05/2026 · 19:00
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -6358,12 +6365,13 @@ const App = (() => {
     const W = 1200;
     const padding = 50;
 
-    // Lấy VAT: ưu tiên từ state (vd draftViewCopyFullImage truyền draft.vat),
-    // fallback Cust2B (đơn đang làm). Append block VAT vào cuối bill.
+    // v10.8.30: bill từ calc() ĐÃ embed VAT block (từ v10.8.27) — KHÔNG append nữa.
+    // Trước đây block này tự append "Thông tin hoá đơn:" lần 2 → bug VAT 2 lần.
+    // Tuy nhiên CẦN fallback: nếu caller truyền state.result.bill chưa có VAT mà có
+    // state.vat (vd flow cũ), thì check bằng marker "Thông tin hoá đơn:" trong text.
     let billText = state.result.bill || "";
     let vatInfo = state.vat;
     if (vatInfo === undefined) {
-      // Caller không truyền explicit → fallback Cust2B
       Cust2B.syncFromDOM();
       const s = Cust2B.state;
       if (s.type === "company") {
@@ -6371,7 +6379,9 @@ const App = (() => {
         if (v.mst || v.name || v.addr || v.email) vatInfo = v;
       }
     }
-    if (vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email)) {
+    // Chỉ append VAT block khi bill TEXT chưa có (back-compat phòng caller truyền bill thô)
+    if (vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email)
+        && !/Thông tin hóa đơn:|Thông tin hoá đơn:/.test(billText)) {
       billText = billText.trimEnd() + "\n-------------\n" + _renderVatBlock(vatInfo);
     }
     let billLines = billText.split("\n");
