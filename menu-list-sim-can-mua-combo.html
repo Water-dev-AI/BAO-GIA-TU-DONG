@@ -76,6 +76,25 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.38 · 27/05/2026 · 13:10 (GMT+7)
+ - Fix DRC navigation mũi tên ‹ › không hoạt động: `render()` luôn override
+   `state.leftMonth`/`rightMonth` từ `state.start`/`end` → click nav bị revert.
+   Sửa: tách logic sync ra `_syncMonthsFromDates()`, chỉ gọi khi user pick date /
+   sửa input. Nav chỉ update state.leftMonth/rightMonth rồi render — không sync.
+ - DRC: bỏ 2 nút 📅 picker icon redundant (2 lịch nhỏ ở dưới đã đủ). Loại popup
+   logic + click-outside listener tương ứng.
+ - VAT tự điền: cảnh báo khi các ô VAT đã có dữ liệu, KHÔNG cho điền tự động đè lên.
+   User phải clear thủ công các ô trước rồi bấm lại. Liệt kê chi tiết ô nào đang có
+   data gì trong alert message để verify.
+ - SerialScanner cải tiến lớn:
+   • Primary engine: `BarcodeDetector` native API (Chrome/Edge/Android) — fast,
+     accurate, multi-detect 1 lần. Hỗ trợ qr_code/code_128/code_39/ean_13/8/upc_a/e/
+     itf/data_matrix/pdf417/aztec.
+   • Fallback engine: ZXing grid scan + jsQR cho QR (cho Firefox/Safari).
+   • Status message ghi engine đang dùng để debug.
+ Prompt: "Bắt seri không bắt được trong khi ảnh nét + VAT cần cảnh báo nếu ô đích
+ đã có data + DRC mũi tên trái phải không bấm được + thừa 2 nút icon lịch."
+
  v10.8.37 · 27/05/2026 · 12:35 (GMT+7)
  - Nút "📷 Bắt seri" trong modal Xem đơn nháp đổi vị trí: từ DƯỚI textarea Mã SIM VL
    → BÊN PHẢI textarea. Wrap container thành flex (textarea co giãn, button fix).
@@ -904,7 +923,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.37 · 27/05/2026 · 12:35
+    Version 10.8.38 · 27/05/2026 · 13:10
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -940,17 +959,13 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
                 <label>Ngày đi</label>
                 <div class="drc-input-row">
                   <input id="drcStartInput" type="text" placeholder="dd/mm/yy" maxlength="10" oninput="App.drcOnInput('start')" onblur="App.drcOnBlur('start')" />
-                  <button class="drc-pick-btn" onclick="App.drcTogglePopup('start')" title="Chọn từ lịch">📅</button>
                 </div>
-                <div id="drcPopupStart" class="drc-popup"></div>
               </div>
               <div class="drc-field">
                 <label>Ngày về</label>
                 <div class="drc-input-row">
                   <input id="drcEndInput" type="text" placeholder="dd/mm/yy" maxlength="10" oninput="App.drcOnInput('end')" onblur="App.drcOnBlur('end')" />
-                  <button class="drc-pick-btn" onclick="App.drcTogglePopup('end')" title="Chọn từ lịch">📅</button>
                 </div>
-                <div id="drcPopupEnd" class="drc-popup"></div>
               </div>
             </div>
             <div id="drcResult" class="drc-result empty">
@@ -5351,6 +5366,24 @@ const App = (() => {
       alert("Không nhận diện được field VAT nào trong text. Vui lòng check lại.");
       return;
     }
+    // v10.8.38: Cảnh báo nếu các ô đích đã có data (so với CÁC field parser tìm thấy).
+    // Mục đích: bảo vệ data đang có sẵn — user phải clear trước khi auto-fill.
+    Cust2B.syncFromDOM(); // đảm bảo state.vat đồng bộ với DOM hiện tại
+    const cur = Cust2B.state.vat || {};
+    const conflicts = [];
+    if (r.mst && (cur.mst || "").trim()) conflicts.push(`MST đang là "${cur.mst.trim()}"`);
+    if (r.name && (cur.name || "").trim()) conflicts.push(`Tên CTY đang là "${cur.name.trim()}"`);
+    if (r.addr && (cur.addr || "").trim()) conflicts.push(`Địa chỉ đang là "${(cur.addr || "").trim().slice(0, 60)}${cur.addr.length > 60 ? "..." : ""}"`);
+    if (r.email && (cur.email || "").trim()) conflicts.push(`Email đang là "${cur.email.trim()}"`);
+    if (conflicts.length) {
+      alert(
+        "⚠️ KHÔNG thể điền tự động — các ô VAT đang có dữ liệu:\n\n" +
+        conflicts.map(s => "• " + s).join("\n") +
+        "\n\nVui lòng XOÁ TRỐNG các ô VAT trước rồi bấm \"Điền vào VAT\" lại.\n" +
+        "(Tránh đè data cũ chưa kịp save.)"
+      );
+      return;
+    }
     // Bật mode company + fill (chỉ ghi đè field nào parser có giá trị)
     Cust2B.state.type = "company";
     if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "" };
@@ -9315,13 +9348,11 @@ const App = (() => {
       return _zxingReady;
     }
 
-    // v10.8.36: Decode multi QR + barcode bằng grid scanning (vì GenericMultipleBarcodeReader
-    // không có trong UMD build). Strategy:
-    //   1. Decode FULL image trước (1 mã trung tâm)
-    //   2. Chia ảnh thành grid NxN regions (overlap nhẹ) → decode mỗi region
-    //   3. Tính BBox + dedupe theo text code
+    // v10.8.38: Rewrite decode multi-barcode.
+    // Strategy:
+    //   1. Primary: BarcodeDetector native API (Chrome/Edge/Android, return multi codes).
+    //   2. Fallback: ZXing với grid scanning + jsQR cho QR codes.
     async function _decodeAll(blob) {
-      const ZXing = await _loadZxing();
       const img = new Image();
       const url = URL.createObjectURL(blob);
       await new Promise((res, rej) => {
@@ -9335,6 +9366,44 @@ const App = (() => {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
+      const imageUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+      // ─── Primary: BarcodeDetector native ───
+      if ("BarcodeDetector" in window) {
+        try {
+          const supported = await window.BarcodeDetector.getSupportedFormats();
+          // Filter formats to ones we want
+          const wantedFormats = [
+            "qr_code", "code_128", "code_39", "code_93", "codabar",
+            "ean_13", "ean_8", "upc_a", "upc_e", "itf", "data_matrix", "pdf417", "aztec",
+          ].filter(f => supported.includes(f));
+          const detector = new BarcodeDetector({ formats: wantedFormats });
+          const results = await detector.detect(canvas);
+          if (results && results.length) {
+            console.log(`[SerialScan] BarcodeDetector found ${results.length} codes`);
+            const found = results.map(r => ({
+              code: r.rawValue || "",
+              format: r.format || "",
+              x: r.boundingBox ? r.boundingBox.x : 0,
+              y: r.boundingBox ? r.boundingBox.y : 0,
+              width: r.boundingBox ? r.boundingBox.width : 0,
+              height: r.boundingBox ? r.boundingBox.height : 0,
+            })).filter(r => r.code);
+            if (found.length) {
+              return { serials: found, imageUrl, width: canvas.width, height: canvas.height };
+            }
+          }
+        } catch (e) {
+          console.warn("[SerialScan] BarcodeDetector failed:", e.message);
+        }
+      } else {
+        console.log("[SerialScan] BarcodeDetector not available, fallback to ZXing+jsQR");
+      }
+
+      // ─── Fallback: ZXing grid scan + jsQR ───
+      const ZXing = await _loadZxing();
+      let jsQRFn = null;
+      try { jsQRFn = await _loadJsQR(); } catch (e) { console.warn("[SerialScan] jsQR load fail:", e.message); }
 
       const hints = new Map();
       hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
@@ -9352,8 +9421,9 @@ const App = (() => {
       const reader = new ZXing.MultiFormatReader();
       reader.setHints(hints);
 
-      // Helper: decode 1 region (x, y, w, h) — trả về result hoặc null
-      function decodeRegion(rx, ry, rw, rh) {
+      const allFound = [];
+
+      function decodeRegionZXing(rx, ry, rw, rh) {
         try {
           const imgData = ctx.getImageData(rx, ry, rw, rh);
           const lum = _imgDataToUint8(imgData);
@@ -9375,28 +9445,36 @@ const App = (() => {
                 lh = Math.max(...ys) - ly;
               }
             }
-            // Convert to absolute coords (offset by region origin)
+            return { code: text, format: String(fmt), x: rx + lx, y: ry + ly, width: lw, height: lh };
+          }
+        } catch (e) { /* NotFoundException */ }
+        return null;
+      }
+      function decodeRegionJsQR(rx, ry, rw, rh) {
+        if (!jsQRFn) return null;
+        try {
+          const imgData = ctx.getImageData(rx, ry, rw, rh);
+          const code = jsQRFn(imgData.data, rw, rh, { inversionAttempts: "dontInvert" });
+          if (code && code.data) {
             return {
-              code: text,
-              format: String(fmt),
-              x: rx + lx,
-              y: ry + ly,
-              width: lw,
-              height: lh,
+              code: code.data,
+              format: "qr_code",
+              x: rx + (code.location ? code.location.topLeftCorner.x : 0),
+              y: ry + (code.location ? code.location.topLeftCorner.y : 0),
+              width: rw, height: rh,
             };
           }
-        } catch (e) {
-          // NotFoundException — bình thường khi không có mã trong region này
-        }
+        } catch (e) { /* fail silent */ }
         return null;
       }
 
-      const found = [];
-      // Step 1: decode toàn bộ ảnh
-      const fullResult = decodeRegion(0, 0, canvas.width, canvas.height);
-      if (fullResult) found.push(fullResult);
+      // Step 1: full image
+      let r = decodeRegionZXing(0, 0, canvas.width, canvas.height);
+      if (r) allFound.push(r);
+      r = decodeRegionJsQR(0, 0, canvas.width, canvas.height);
+      if (r) allFound.push(r);
 
-      // Step 2: Grid scan 4x4 regions với overlap 25%
+      // Step 2: 4x4 grid with 25% overlap
       const cols = 4, rows = 4;
       const cellW = canvas.width / cols;
       const cellH = canvas.height / rows;
@@ -9408,12 +9486,14 @@ const App = (() => {
           const rw = Math.min(canvas.width - rx, Math.round(cellW * (1 + overlap * 2)));
           const rh = Math.min(canvas.height - ry, Math.round(cellH * (1 + overlap * 2)));
           if (rw < 50 || rh < 50) continue;
-          const r = decodeRegion(rx, ry, rw, rh);
-          if (r) found.push(r);
+          const r1 = decodeRegionZXing(rx, ry, rw, rh);
+          if (r1) allFound.push(r1);
+          const r2 = decodeRegionJsQR(rx, ry, rw, rh);
+          if (r2) allFound.push(r2);
         }
       }
 
-      // Step 3: thêm grid 2x2 thô (cho ảnh ít mã / mã lớn)
+      // Step 3: 2x2 coarse grid (for large barcodes)
       const coarseCols = 2, coarseRows = 2;
       const cellW2 = canvas.width / coarseCols;
       const cellH2 = canvas.height / coarseRows;
@@ -9423,17 +9503,31 @@ const App = (() => {
           const ry = Math.round(cy * cellH2);
           const rw = Math.round(cellW2);
           const rh = Math.round(cellH2);
-          const r = decodeRegion(rx, ry, rw, rh);
-          if (r) found.push(r);
+          const r1 = decodeRegionZXing(rx, ry, rw, rh);
+          if (r1) allFound.push(r1);
+          const r2 = decodeRegionJsQR(rx, ry, rw, rh);
+          if (r2) allFound.push(r2);
         }
       }
 
-      return {
-        serials: found,
-        imageUrl: canvas.toDataURL("image/jpeg", 0.85),
-        width: canvas.width,
-        height: canvas.height,
-      };
+      return { serials: allFound, imageUrl, width: canvas.width, height: canvas.height };
+    }
+
+    let _jsqrReady = null;
+    async function _loadJsQR() {
+      if (_jsqrReady) return _jsqrReady;
+      _jsqrReady = new Promise((resolve, reject) => {
+        if (window.jsQR) { resolve(window.jsQR); return; }
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+        s.onload = () => {
+          if (window.jsQR) resolve(window.jsQR);
+          else reject(new Error("jsQR load fail"));
+        };
+        s.onerror = () => reject(new Error("Không tải được jsQR CDN."));
+        document.head.appendChild(s);
+      });
+      return _jsqrReady;
     }
 
     // ZXing RGBLuminanceSource expects ARGB int array — convert ImageData
@@ -9507,7 +9601,7 @@ const App = (() => {
         _state.imageUrl = res.imageUrl;
         _state.sortedSerials = unique;
         if (!unique.length) {
-          _setStatus("⚠️ Không bắt được mã nào trong ảnh. Thử ảnh khác hoặc rõ hơn.", "error");
+          _setStatus("⚠️ Không bắt được mã nào trong ảnh. Thử ảnh khác (rõ hơn, không nghiêng, ánh sáng tốt). Browser hiện tại: " + ("BarcodeDetector" in window ? "native (Chrome/Edge)" : "fallback ZXing+jsQR (Firefox/Safari)"), "error");
           _renderResults();
           return;
         }
@@ -9822,21 +9916,35 @@ const App = (() => {
     }
 
     function render() {
-      // Auto-adjust month anchors khi user đổi ngày → đảm bảo left.month <= right.month
-      if (state.start) {
-        state.leftMonth = new Date(state.start.getFullYear(), state.start.getMonth(), 1);
-      }
-      if (state.end) {
-        state.rightMonth = new Date(state.end.getFullYear(), state.end.getMonth(), 1);
-      }
-      // Constraint: rightMonth > leftMonth
+      // v10.8.38: KHÔNG auto-sync leftMonth/rightMonth từ state.start/end mỗi lần render.
+      // Logic sync giờ chuyển vào _syncMonthsFromDates() — gọi explicit khi pickDate/onInput.
+      // Constraint vẫn enforce: rightMonth > leftMonth.
       if (state.rightMonth.getTime() <= state.leftMonth.getTime()) {
         state.rightMonth = new Date(state.leftMonth.getFullYear(), state.leftMonth.getMonth() + 1, 1);
       }
       _renderSideCal("left");
       _renderSideCal("right");
-      _renderPopup();
       _renderResult();
+    }
+
+    // Sync month anchors theo start/end khi DATE thay đổi (không phải khi NAV thay đổi)
+    function _syncMonthsFromDates() {
+      if (state.start) {
+        state.leftMonth = new Date(state.start.getFullYear(), state.start.getMonth(), 1);
+      }
+      if (state.end) {
+        // Right tháng = tháng của end, nhưng nếu end cùng tháng start → right = left + 1
+        const endMonth = new Date(state.end.getFullYear(), state.end.getMonth(), 1);
+        if (endMonth.getTime() <= state.leftMonth.getTime()) {
+          state.rightMonth = new Date(state.leftMonth.getFullYear(), state.leftMonth.getMonth() + 1, 1);
+        } else {
+          state.rightMonth = endMonth;
+        }
+      }
+      // Constraint
+      if (state.rightMonth.getTime() <= state.leftMonth.getTime()) {
+        state.rightMonth = new Date(state.leftMonth.getFullYear(), state.leftMonth.getMonth() + 1, 1);
+      }
     }
 
     function navMonth(side, delta) {
@@ -9911,6 +10019,7 @@ const App = (() => {
         state.popupOpen = null;
         state.popupMonth = null;
       }
+      _syncMonthsFromDates(); // v10.8.38
       render();
     }
 
@@ -9921,6 +10030,7 @@ const App = (() => {
       if (d) {
         if (which === "start") state.start = d;
         else state.end = d;
+        _syncMonthsFromDates(); // v10.8.38
         render();
       }
     }
@@ -9993,17 +10103,7 @@ const App = (() => {
 
     return { init, render, reset, navMonth, pickDate, onInputChange, onInputBlur, togglePopup, closePopup, popupNav, copyResult };
   })();
-  // Đóng popup khi click ngoài
-  document.addEventListener("click", (e) => {
-    const inDrc = e.target.closest(".drc-field, .drc-popup");
-    if (!inDrc) {
-      const sp = document.getElementById("drcPopupStart");
-      const ep = document.getElementById("drcPopupEnd");
-      if ((sp && sp.classList.contains("open")) || (ep && ep.classList.contains("open"))) {
-        DateRangeCalc.closePopup();
-      }
-    }
-  });
+  // v10.8.38: bỏ popup picker → bỏ click-outside listener.
 
   render();
   liveRecalc();
@@ -10068,9 +10168,6 @@ const App = (() => {
     drcPickDate: (yr, mo, day, side) => DateRangeCalc.pickDate(yr, mo, day, side),
     drcOnInput: (which) => DateRangeCalc.onInputChange(which),
     drcOnBlur: (which) => DateRangeCalc.onInputBlur(which),
-    drcTogglePopup: (which) => DateRangeCalc.togglePopup(which),
-    drcClosePopup: () => DateRangeCalc.closePopup(),
-    drcPopupNav: (delta) => DateRangeCalc.popupNav(delta),
     drcCopyResult: () => DateRangeCalc.copyResult(),
     // v10.8.33: CountrySearch
     csUpdate,
