@@ -76,6 +76,33 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.35 · 27/05/2026 · 11:30 (GMT+7)
+ - Tab description trong picker: bớt padding (12→7px), font (13.5→12.5px) cho gọn.
+ - Picker rows: thêm nút ℹ️ (xanh) cạnh tên gói khi tab có data cột P+2.
+   • Module `PkgInfo`: parse cột P+2, split 2 khối "Thông tin chung" + "Danh sách nhà mạng"
+     bằng heading "Danh sách nhà mạng" (case-insensitive).
+   • Popup hiện 2 khối, mỗi dòng có nút 📋 copy → đóng popup ngay sau khi copy.
+   • Cell info lấy từ row 0-4 (merged cell thường ở đầu bộ).
+ - Fix bug: Share link không lưu mã eSIM/SIM VL/extras/imported/groupByType.
+   • `buildShareLink` + `parseSharePayload` thêm fields: `cd` (codes), `ex` (extras),
+     `im` (imported), `gbt` (groupByType).
+   • Update 3 callers: draftShare, draftViewSheetPayload, QR card payload, sheetPayloadOpen.
+   • `draftImportConfirm` restore extras/codes vào DOM + cart, 3 branches save draft.
+ - VAT Ảnh: ưu tiên clipboard trước, fallback file picker.
+   • Helper chung `_readImageFromClipboard()` dùng cho VAT + SerialScanner.
+   • Tách `_processVatImageBlob` để dùng chung 2 source.
+ - Bắt seri SIM từ ảnh (module SerialScanner):
+   • Nút "📷 Bắt seri" bên phải textarea SIM VL (chỉ hiện cho run type=physical).
+   • Click → đọc clipboard (fallback file) → load ZXing CDN → decode multi QR + barcode.
+   • Dedupe theo code text. Sort theo position (hàng trước, cột sau).
+   • Popup chia 2 cột: trái = list seri (có copy từng dòng), phải = ảnh preview.
+   • Nút "Append tất cả vào ô SIM VL" → fill vào textarea + save.
+   • ZXing supports: QR_CODE, CODE_128, CODE_39, EAN_13/8, UPC_A/E, ITF, DATA_MATRIX.
+   • CDN: cdn.jsdelivr.net/npm/@zxing/library@0.21.3 (~200KB, cache sau lần đầu).
+ Prompt: "tab desc + bỏ giới hạn 5 mã + nút ℹ️ popup info P+2 + fix bug share link
+ mất mã/note + VAT clipboard trước + scan seri từ ảnh (clipboard, QR+barcode, popup
+ ảnh+list)."
+
  v10.8.34 · 26/05/2026 · 20:55 (GMT+7)
  - DRC: cả 2 ô input default = ngày hôm nay (`dd/mm/yy`), state.start/end cũng set today
    → result hiện sẵn "Từ today → today là tổng: 1 ngày." cho copy nhanh.
@@ -848,7 +875,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.34 · 26/05/2026 · 20:55
+    Version 10.8.35 · 27/05/2026 · 11:30
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1223,7 +1250,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
     <div id="pickerTabBar" style="padding:10px 14px;display:flex;flex-wrap:nowrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;"></div>
-    <div id="pickerTabDesc" style="display:none;padding:12px 18px;background:#eff6ff;border-bottom:1px solid var(--line);border-left:3px solid #3b82f6;font-size:13.5px;line-height:1.55;color:#1e3a8a;font-weight:500;white-space:pre-wrap;flex-shrink:0;max-height:150px;overflow-y:auto;"></div>
+    <div id="pickerTabDesc" style="display:none;padding:7px 18px;background:#eff6ff;border-bottom:1px solid var(--line);border-left:3px solid #3b82f6;font-size:12.5px;line-height:1.5;color:#1e3a8a;font-weight:500;white-space:pre-wrap;flex-shrink:0;max-height:150px;overflow-y:auto;"></div>
     <div id="pickerFilterBar" style="padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#fafbfc;flex-shrink:0;font-size:13px;">
       <span style="color:var(--muted);font-weight:600;">Loại:</span>
       <button id="fltAll"      class="light" onclick="App.pickerSetTypeFilter('ALL')"     style="margin:0;padding:6px 14px;font-size:12px;">Cả 2</button>
@@ -1398,6 +1425,53 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="pgf-copy" onclick="App.pkgGuideCopy()">📋 Copy ảnh</button>
       <button class="pgf-download" onclick="App.pkgGuideDownload()">⬇️ Tải ảnh</button>
     </div>
+  </div>
+</div>
+
+<!-- v10.8.35: SerialScanner modal -->
+<div id="serialScanModal" class="picker-overlay" style="display:none;" onclick="if(event.target===this)App.serialScanClose()">
+  <div class="picker-modal" style="width:min(96vw, 980px);max-height:92vh;display:flex;flex-direction:column;">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;font-size:15px;">📷 Bắt seri SIM từ ảnh (QR + barcode)</h3>
+      <button onclick="App.serialScanClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden;flex:1;">
+      <div id="serialScanStatus" style="display:none;padding:8px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:7px;font-size:12.5px;color:#1e40af;"></div>
+      <input id="serialScanFileInput" type="file" accept="image/*" style="display:none;" onchange="App.serialScanPickFile(event)" />
+      <div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1.4fr);gap:12px;flex:1;overflow:hidden;">
+        <!-- Left: list of detected serials -->
+        <div style="display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line);border-radius:8px;">
+          <div style="padding:8px 12px;background:#f8fafc;border-bottom:1px solid var(--line);font-weight:600;font-size:12.5px;color:#1f2937;">
+            🔢 Danh sách seri (theo thứ tự trong ảnh)
+          </div>
+          <div id="serialScanList" style="flex:1;overflow-y:auto;"></div>
+        </div>
+        <!-- Right: image preview -->
+        <div style="display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line);border-radius:8px;">
+          <div style="padding:8px 12px;background:#f8fafc;border-bottom:1px solid var(--line);font-weight:600;font-size:12.5px;color:#1f2937;">
+            🖼️ Ảnh đã quét
+          </div>
+          <div style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:8px;background:#f9fafb;">
+            <img id="serialScanImage" src="" alt="Ảnh" style="max-width:100%;height:auto;display:block;" />
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+        <button onclick="App.serialScanClose()" style="margin:0;padding:7px 14px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12.5px;">Đóng</button>
+        <button onclick="App.serialScanAppendAll()" style="margin:0;padding:7px 14px;background:#16a34a;color:white;border:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;">✅ Append tất cả vào ô SIM VL</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- v10.8.35: PkgInfo modal (APN/timezone + nhà mạng) -->
+<div id="pkgInfoModal" class="picker-overlay" style="display:none;" onclick="if(event.target===this)App.pkgInfoClose()">
+  <div class="picker-modal" style="width:min(96vw, 540px);max-height:85vh;display:flex;flex-direction:column;">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;font-size:15px;">📡 Thông tin gói (APN / nhà mạng)</h3>
+      <button onclick="App.pkgInfoClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div id="pkgInfoBody" style="padding:14px 16px;overflow-y:auto;flex:1;"></div>
   </div>
 </div>
 
@@ -3865,6 +3939,7 @@ const App = (() => {
       const { good } = ComboLogic.buildCartFromText(t.lines.join("\n"));
       return {
         name: t.name,
+        infoText: t.infoText || "", // v10.8.35
         items: good.map(g => ({ line: g.line, qty: g.qty, parsed: parseLineForDisplay(g.line) }))
       };
     }).filter(t => t.items.length > 0);
@@ -4091,6 +4166,20 @@ const App = (() => {
         const typeForOpen = p.type || "";
         gBtn.onclick = (ev) => { ev.stopPropagation(); pkgGuideOpen(nameForOpen, typeForOpen); };
         nameDiv.appendChild(gBtn);
+      }
+      // v10.8.35: Nút info ℹ️ — hiện khi tab hiện tại có infoText
+      if (tbl.infoText && PkgInfo.has(tbl.infoText)) {
+        const iBtn = document.createElement("button");
+        iBtn.type = "button";
+        iBtn.className = "pkg-guide-btn";
+        iBtn.title = "Xem APN / nhà mạng / timezone";
+        iBtn.textContent = "ℹ️";
+        iBtn.style.background = "#dbeafe";
+        iBtn.style.borderColor = "#93c5fd";
+        iBtn.style.color = "#1e40af";
+        const infoTextForOpen = tbl.infoText;
+        iBtn.onclick = (ev) => { ev.stopPropagation(); PkgInfo.open(infoTextForOpen); };
+        nameDiv.appendChild(iBtn);
       }
       tdName.appendChild(nameDiv);
       if (p.note) {
@@ -4783,41 +4872,58 @@ const App = (() => {
   }
 
   // Trigger file picker
-  function vatImageOpen() {
+  // v10.8.35: Helper — đọc ảnh từ clipboard (trả Blob hoặc null)
+  async function _readImageFromClipboard() {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) return null;
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        for (const type of it.types) {
+          if (type.startsWith("image/")) {
+            const blob = await it.getType(type);
+            if (blob && blob.size > 0) return blob;
+          }
+        }
+      }
+    } catch (e) {
+      // Permission denied / no clipboard image / API not supported
+      console.log("[ClipboardImage] no image or denied:", e.message);
+    }
+    return null;
+  }
+
+  async function vatImageOpen() {
+    // v10.8.35: ưu tiên clipboard trước, fallback file picker
+    _showVatOcrStatus("📋 Đang thử lấy ảnh từ clipboard...", "info");
+    const clipBlob = await _readImageFromClipboard();
+    if (clipBlob) {
+      _hideVatOcrStatus();
+      // Fake event giống file input để reuse vatImageProcess
+      await _processVatImageBlob(clipBlob);
+      return;
+    }
+    _hideVatOcrStatus();
     const inp = document.getElementById("vatImageInput");
     if (inp) { inp.value = ""; inp.click(); }
   }
 
-  // Sau khi user chọn ảnh → OCR → mở modal VAT tự điền với text raw đã pre-fill.
-  // v10.8.19: KHÔNG fill thẳng nữa — vì OCR table có thể có format khó (visual rows ngang),
-  // user cần review/edit text trước khi parse. Modal cũng có nút "Phân tích thử" để preview.
-  async function vatImageProcess(event) {
-    const file = event.target.files && event.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      _showVatOcrStatus("❌ Vui lòng chọn 1 file ảnh.", "error");
-      return;
-    }
-
+  // Tách logic xử lý blob ra để dùng chung cho clipboard + file input
+  async function _processVatImageBlob(blob) {
     try {
       const Tess = await _loadTesseract();
       _showVatOcrStatus("📖 Đang đọc ảnh (vie + eng)... Có thể mất 10-30 giây.", "info");
-      const { data: { text } } = await Tess.recognize(file, "vie+eng", {});
+      const { data: { text } } = await Tess.recognize(blob, "vie+eng", {});
       if (!text || !text.trim()) {
         _showVatOcrStatus("⚠️ OCR không đọc được text. Thử ảnh rõ hơn.", "error");
         return;
       }
       console.log("[VAT OCR] Raw text:\n", text);
       _hideVatOcrStatus();
-
-      // Mở modal VAT tự điền với text OCR pre-fill + auto-preview ngay
       vatAutoFillOpen();
       const inp = document.getElementById("vatAutoFillInput");
       if (inp) {
         inp.value = text.trim();
-        // Auto-run preview để user thấy parser detect được gì
         vatAutoFillPreview();
-        // Scroll preview vào view
         const prev = document.getElementById("vatAutoFillPreview");
         if (prev) prev.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
@@ -4825,6 +4931,17 @@ const App = (() => {
       console.error("[VAT OCR] Error:", e);
       _showVatOcrStatus("❌ Lỗi OCR: " + e.message, "error");
     }
+  }
+
+  // Sau khi user chọn ảnh từ file picker → reuse _processVatImageBlob
+  async function vatImageProcess(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      _showVatOcrStatus("❌ Vui lòng chọn 1 file ảnh.", "error");
+      return;
+    }
+    await _processVatImageBlob(file);
   }
 
   // Parse OCR text / paste text → trả về { mst, name, addr, email }
@@ -5750,13 +5867,18 @@ const App = (() => {
         const code = (groupsForCodes[idx] && groupsForCodes[idx].code) || "";
         const placeholder = r.type === "esim" ? "vd: b0000262605220047" : "vd: b0001fd2605220002";
         const meta = `${r.count} dòng${r.count > 1 ? " (merge)" : ""}`;
+        // v10.8.35: Nút bắt seri từ ảnh — chỉ cho SIM VL
+        const scanBtn = r.type === "physical"
+          ? `<button type="button" onclick="App.serialScanOpen('${d.id}', ${idx})" style="margin:6px 0 0 0;padding:5px 9px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;display:block;width:fit-content;" title="Bắt seri từ ảnh (QR + barcode trong clipboard hoặc file)">📷 Bắt seri</button>`
+          : "";
         return `
           <div style="display:contents;">
             <span style="color:var(--muted);padding-top:6px;">${label}<br><span style="font-size:10px;color:#9ca3af;">${meta}</span></span>
             <div>
-              <textarea rows="2" placeholder="${placeholder}&#10;Mỗi mã 1 dòng (Enter để xuống dòng)"
+              <textarea id="drcCodeTA_${d.id}_${idx}" rows="2" placeholder="${placeholder}&#10;Mỗi mã 1 dòng (Enter để xuống dòng)"
                 onblur="App._draftSaveGroupCode('${d.id}', ${idx}, this.value)"
                 style="${codeTaStyle}">${escapeHtml(code)}</textarea>
+              ${scanBtn}
             </div>
           </div>
         `;
@@ -5974,6 +6096,10 @@ const App = (() => {
       const draftLink = buildShareLink(d.name || "Đơn từ app", d.tag || "ZALO", d.customTag || "", d.cart, {
         orderCode: d.orderCode || "",
         vat: d.vat || null,
+        codes: d.codes || null,
+        extras: d.extras || null,
+        imported: d.imported === true,
+        groupByType: typeof d.groupByType === "boolean" ? d.groupByType : null,
       });
       const payload = {
         v: 1,
@@ -6498,6 +6624,27 @@ const App = (() => {
         email: opts.vat.email || "",
       };
     }
+    // v10.8.35: codes.groups + extras + imported vào share link (đã bị thiếu)
+    if (opts.codes && Array.isArray(opts.codes.groups) && opts.codes.groups.length) {
+      // Chỉ encode khi có ít nhất 1 group có code
+      const hasAny = opts.codes.groups.some(g => g && (g.code || "").trim());
+      if (hasAny) {
+        payload.cd = opts.codes.groups.map(g => ({ t: g.type, c: g.code || "" }));
+      }
+    }
+    if (opts.extras && typeof opts.extras === "object") {
+      const ex = opts.extras;
+      const hasExtras = (ex.shipFeeK > 0) || (ex.manualDiscK > 0) || (ex.manualDiscPct > 0) || ex.shipVat === true;
+      if (hasExtras) {
+        payload.ex = {};
+        if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
+        if (ex.manualDiscK > 0) payload.ex.dk = ex.manualDiscK;
+        if (ex.manualDiscPct > 0) payload.ex.dp = ex.manualDiscPct;
+        if (ex.shipVat === true) payload.ex.sv = 1;
+      }
+    }
+    if (opts.imported === true) payload.im = 1;
+    if (typeof opts.groupByType === "boolean") payload.gbt = opts.groupByType ? 1 : 0;
     const json = JSON.stringify(payload);
     const encoded = urlSafeEncode(json);
     const base = location.origin + location.pathname + location.search;
@@ -6511,6 +6658,18 @@ const App = (() => {
     try {
       const json = urlSafeDecode(m[1]);
       const data = JSON.parse(json);
+      // v10.8.35: codes + extras + imported + groupByType decode
+      const codes = Array.isArray(data.cd)
+        ? { groups: data.cd.map(g => ({ type: String(g.t || ""), code: String(g.c || "") })) }
+        : null;
+      const extras = data.ex && typeof data.ex === "object"
+        ? {
+            shipFeeK: parseInt(data.ex.s, 10) || 0,
+            manualDiscK: parseInt(data.ex.dk, 10) || 0,
+            manualDiscPct: parseFloat(data.ex.dp) || 0,
+            shipVat: data.ex.sv === 1,
+          }
+        : null;
       return {
         name: String(data.n || ""),
         tag: String(data.t || "ZALO"),
@@ -6522,6 +6681,10 @@ const App = (() => {
           addr: String(data.vat.addr || ""),
           email: String(data.vat.email || ""),
         } : null,
+        codes,
+        extras,
+        imported: data.im === 1,
+        groupByType: data.gbt === 1 ? true : (data.gbt === 0 ? false : null),
         cart: (data.c || []).map(x => ({
           line: String(x.l || ""),
           qty: x.q == null ? "1" : String(x.q),
@@ -6542,6 +6705,11 @@ const App = (() => {
     lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart, {
       orderCode: d.orderCode || "",
       vat: d.vat || null,
+      // v10.8.35: include codes + extras + imported + groupByType
+      codes: d.codes || null,
+      extras: d.extras || null,
+      imported: d.imported === true,
+      groupByType: typeof d.groupByType === "boolean" ? d.groupByType : null,
     });
     const ta = document.getElementById("draftShareLink");
     ta.value = lastShareLink;
@@ -6615,11 +6783,16 @@ const App = (() => {
     _loadingDraft = true; // chặn auto-regen mã đơn (sẽ dùng mã của link)
     cart = p.cart;
     saveCart();
+    // v10.8.35: restore groupByType + extras BEFORE render
+    if (typeof p.groupByType === "boolean") _setGroupToggle(p.groupByType);
+    resetCartExtras();
+    if (p.extras) applyCartExtras(p.extras);
     render();
     // Restore mã đơn nếu có trong link (đồng bộ với QR card + bill)
     if (p.orderCode) setOrderCode(p.orderCode);
     // Restore Cust2B từ link share (gồm VAT + tag + name)
     Cust2B.loadFromImport(p);
+    updateShipVatVisibility(); // v10.8.35
     // Pending* để fallback (Payload modal đọc nếu chưa save thành draft)
     pendingVatFromImport = p.vat && (p.vat.mst || p.vat.name) ? { ...p.vat } : null;
     pendingTagFromImport = draftTagToSpTag(p.tag);
@@ -6652,6 +6825,11 @@ const App = (() => {
           cart: JSON.parse(JSON.stringify(p.cart)),
           orderCode: p.orderCode || dup.orderCode || "",
           vat: p.vat || null,
+          // v10.8.35: codes/extras/imported/groupByType từ link
+          codes: p.codes || dup.codes || { groups: [] },
+          extras: p.extras || dup.extras || null,
+          imported: p.imported || dup.imported || false,
+          groupByType: typeof p.groupByType === "boolean" ? p.groupByType : (typeof dup.groupByType === "boolean" ? dup.groupByType : _getGroupToggle()),
         };
         const r = await DraftStore.upsert(draft);
         draftEditingId = draft.id;
@@ -6678,6 +6856,11 @@ const App = (() => {
           cart: JSON.parse(JSON.stringify(p.cart)),
           orderCode: currentOrderCode,
           vat: p.vat || null,
+          // v10.8.35
+          codes: p.codes || { groups: [] },
+          extras: p.extras || null,
+          imported: p.imported || false,
+          groupByType: typeof p.groupByType === "boolean" ? p.groupByType : _getGroupToggle(),
         };
         // Cập nhật Cust2B với tên mới
         Cust2B.state.name = newName;
@@ -6701,6 +6884,11 @@ const App = (() => {
       cart: JSON.parse(JSON.stringify(p.cart)),
       orderCode: p.orderCode || "",
       vat: p.vat || null,
+      // v10.8.35
+      codes: p.codes || { groups: [] },
+      extras: p.extras || null,
+      imported: p.imported || false,
+      groupByType: typeof p.groupByType === "boolean" ? p.groupByType : _getGroupToggle(),
     };
     const r = await DraftStore.upsert(draft);
     draftEditingId = draft.id;
@@ -7718,9 +7906,20 @@ const App = (() => {
       const dateCol = P - 1;
       const nameCol = P - 3;
       const noteCol = P + 1 < maxCols ? P + 1 : -1;
+      // v10.8.35: Cột P+2 chứa thông tin chung (APN/timezone) + danh sách nhà mạng
+      const infoCol = P + 2 < maxCols ? P + 2 : -1;
 
       let subTableName = ((allRows[0] || [])[nameCol] || "").trim();
       if (!subTableName) subTableName = "Bộ " + (subTables.length + 1);
+
+      // v10.8.35: lấy cell info từ row 0 (header bộ — merged cell thường ở dòng đầu)
+      let infoText = "";
+      if (infoCol >= 0) {
+        for (let r = 0; r < Math.min(5, allRows.length); r++) {
+          const v = (allRows[r][infoCol] || "").trim();
+          if (v) { infoText = v; break; }
+        }
+      }
 
       subTables.push({
         name: subTableName,
@@ -7729,6 +7928,8 @@ const App = (() => {
         dateCol,
         priceCol: P,
         noteCol,
+        infoCol,
+        infoText,
       });
     }
 
@@ -7769,7 +7970,7 @@ const App = (() => {
         if (note) parts.push(note);
         lines.push(parts.join("\t"));
       }
-      return { name: tbl.name, lines };
+      return { name: tbl.name, lines, infoText: tbl.infoText || "" };
     }).filter(t => t.lines.length > 0);
 
     return result;
@@ -8386,9 +8587,23 @@ const App = (() => {
         return;
       }
       const cust = Cust2B.getDraftPayload();
+      // v10.8.35: lấy codes/extras từ draft đang edit (nếu có)
+      let _shareCodes = null, _shareExtras = null, _shareImported = false;
+      if (draftEditingId) {
+        const _ed = DraftStore.getById(draftEditingId);
+        if (_ed) {
+          _shareCodes = _ed.codes || null;
+          _shareImported = _ed.imported === true;
+        }
+      }
+      _shareExtras = readCartExtras();
       const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag || "ZALO", cust.customTag || "", cart, {
         orderCode: currentOrderCode || "",
         vat: cust.vat || null,
+        codes: _shareCodes,
+        extras: _shareExtras,
+        imported: _shareImported,
+        groupByType: _getGroupToggle(),
       });
       const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
       const tagPrefix = cust.name && cust.tag ? (mapTagPrefix[cust.tag] || "") : "";
@@ -8550,9 +8765,22 @@ const App = (() => {
     if (!currentOrderCode) regenOrderCode();
 
     const cust = Cust2B.getDraftPayload();
+    // v10.8.35: lấy codes/extras từ draft đang edit + DOM
+    let _spCodes = null, _spImported = false;
+    if (draftEditingId) {
+      const _ed = DraftStore.getById(draftEditingId);
+      if (_ed) {
+        _spCodes = _ed.codes || null;
+        _spImported = _ed.imported === true;
+      }
+    }
     const draftLink = buildShareLink(cust.name || "Đơn từ app", cust.tag, cust.customTag, cart, {
       orderCode: currentOrderCode || "",
       vat: cust.vat || null,
+      codes: _spCodes,
+      extras: readCartExtras(),
+      imported: _spImported,
+      groupByType: _getGroupToggle(),
     });
 
     // Map tag draft → spTag prefix
@@ -8944,7 +9172,355 @@ const App = (() => {
   }
   vatInit();
 
-  // ─── v10.8.33: DateRangeCalc module ───────────────────────
+  // ─── v10.8.35: PkgInfo — popup hiển thị cột P+2 ───
+  const PkgInfo = (() => {
+    function parse(text) {
+      // Tách 2 khối: trước "Danh sách nhà mạng" (header info) và sau (carriers list)
+      // - header: array of line strings
+      // - carriers: array of {label, ...} (mỗi line 1 entry)
+      const raw = String(text || "").trim();
+      if (!raw) return { header: [], carriers: [] };
+      const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const splitRe = /danh\s*s[aá]ch\s*nh[aà]\s*m[aạ]ng/i;
+      let splitIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (splitRe.test(lines[i])) { splitIdx = i; break; }
+      }
+      if (splitIdx === -1) {
+        // Không có heading "Danh sách nhà mạng" → toàn bộ là header, carriers rỗng
+        return { header: lines, carriers: [] };
+      }
+      const header = lines.slice(0, splitIdx);
+      const carriers = lines.slice(splitIdx + 1);
+      return { header, carriers };
+    }
+    function has(text) {
+      const p = parse(text);
+      return p.header.length > 0 || p.carriers.length > 0;
+    }
+    let _activeInfoText = "";
+    function open(infoText) {
+      _activeInfoText = infoText || "";
+      const modal = document.getElementById("pkgInfoModal");
+      if (!modal) return;
+      const body = document.getElementById("pkgInfoBody");
+      const p = parse(infoText);
+      let html = "";
+      // Header block
+      if (p.header.length) {
+        html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:10px;">`;
+        html += `<div style="font-weight:700;color:#92400e;margin-bottom:6px;font-size:12.5px;">📌 Thông tin chung</div>`;
+        p.header.forEach((line) => {
+          const safe = escapeHtml(line);
+          html += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12.5px;">
+            <span style="flex:1;color:#1f2937;">${safe}</span>
+            <button onclick="App.pkgInfoCopyLine(${JSON.stringify(line).replace(/"/g, '&quot;')})" title="Copy dòng này" style="margin:0;padding:3px 8px;font-size:11px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:5px;cursor:pointer;font-family:inherit;">📋</button>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      // Carriers block
+      if (p.carriers.length) {
+        html += `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;">`;
+        html += `<div style="font-weight:700;color:#1e40af;margin-bottom:6px;font-size:12.5px;">📡 Danh sách nhà mạng</div>`;
+        p.carriers.forEach((line) => {
+          const safe = escapeHtml(line);
+          html += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12.5px;border-bottom:1px dashed #dbeafe;">
+            <span style="flex:1;color:#1f2937;">${safe}</span>
+            <button onclick="App.pkgInfoCopyLine(${JSON.stringify(line).replace(/"/g, '&quot;')})" title="Copy dòng này (rồi đóng popup)" style="margin:0;padding:3px 8px;font-size:11px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:5px;cursor:pointer;font-family:inherit;">📋</button>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      if (!html) html = `<div style="color:var(--muted);font-style:italic;text-align:center;padding:20px;">Không có thông tin chi tiết.</div>`;
+      body.innerHTML = html;
+      modal.style.display = "flex";
+    }
+    function close() {
+      const modal = document.getElementById("pkgInfoModal");
+      if (modal) modal.style.display = "none";
+      _activeInfoText = "";
+    }
+    async function copyLine(line) {
+      try {
+        await navigator.clipboard.writeText(line);
+        // Đóng popup sau khi copy
+        close();
+      } catch (e) {
+        console.error("PkgInfo copy fail:", e);
+      }
+    }
+    return { parse, has, open, close, copyLine };
+  })();
+
+  // ─── v10.8.35: SerialScanner — quét QR + barcode từ ảnh để bắt seri SIM ───
+  const SerialScanner = (() => {
+    let _zxingReady = null;
+    let _state = {
+      open: false,
+      draftId: "",
+      runIdx: -1,
+      imageUrl: "", // data URL hiển thị
+      serials: [], // [{code, format, x, y, width, height}]
+      sortedSerials: [], // sorted by position (top-left → bottom-right)
+    };
+    async function _loadZxing() {
+      if (_zxingReady) return _zxingReady;
+      _zxingReady = new Promise((resolve, reject) => {
+        if (window.ZXingBrowser || window.ZXing) {
+          resolve(window.ZXingBrowser || window.ZXing);
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+        script.onload = () => {
+          if (window.ZXing) resolve(window.ZXing);
+          else reject(new Error("ZXing không load được."));
+        };
+        script.onerror = () => reject(new Error("Không tải được ZXing từ CDN."));
+        document.head.appendChild(script);
+      });
+      return _zxingReady;
+    }
+
+    // Decode ALL QR + barcode trong ảnh blob → array of {code, format, x, y, width, height}
+    async function _decodeAll(blob) {
+      const ZXing = await _loadZxing();
+      // Convert blob → ImageBitmap → canvas → ImageData
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+        img.src = url;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // ZXing MultiFormatReader có thể decode 1 lần. Để decode MULTI codes trong 1 ảnh,
+      // ta dùng GenericMultipleBarcodeReader (wrapper). Available trong @zxing/library 0.21.
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.DATA_MATRIX,
+      ]);
+      const reader = new ZXing.MultiFormatReader();
+      reader.setHints(hints);
+      const multiReader = new ZXing.GenericMultipleBarcodeReader(reader);
+      const luminanceSource = new ZXing.RGBLuminanceSource(
+        _imgDataToUint8(imgData),
+        imgData.width,
+        imgData.height
+      );
+      const binBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+      let results = [];
+      try {
+        results = multiReader.decodeMultiple(binBitmap, hints) || [];
+      } catch (e) {
+        // No barcode found
+        results = [];
+      }
+      const out = results.map(r => {
+        const text = r.getText();
+        const format = r.getBarcodeFormat ? r.getBarcodeFormat() : "";
+        const pts = r.getResultPoints ? r.getResultPoints() : [];
+        let x = 0, y = 0, w = 0, h = 0;
+        if (pts && pts.length) {
+          const xs = pts.map(p => p.getX()).filter(v => isFinite(v));
+          const ys = pts.map(p => p.getY()).filter(v => isFinite(v));
+          if (xs.length && ys.length) {
+            x = Math.min(...xs);
+            y = Math.min(...ys);
+            w = Math.max(...xs) - x;
+            h = Math.max(...ys) - y;
+          }
+        }
+        return { code: text, format: String(format), x, y, width: w, height: h };
+      });
+      return { serials: out, imageUrl: canvas.toDataURL("image/jpeg", 0.8), width: canvas.width, height: canvas.height };
+    }
+
+    // ZXing RGBLuminanceSource expects ARGB int array — convert ImageData
+    function _imgDataToUint8(imgData) {
+      const data = imgData.data;
+      const out = new Uint8ClampedArray(imgData.width * imgData.height);
+      for (let i = 0; i < out.length; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+        // Standard luminance
+        out[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      }
+      return out;
+    }
+
+    // Dedupe + sort theo position (top→bottom, left→right)
+    function _processResults(serials) {
+      const seen = new Set();
+      const unique = [];
+      // Sort theo center (y trước, x sau)
+      const withCenter = serials.map(s => ({
+        ...s,
+        cx: s.x + s.width / 2,
+        cy: s.y + s.height / 2,
+      }));
+      // Sắp xếp theo hàng (group y gần nhau)
+      withCenter.sort((a, b) => {
+        if (Math.abs(a.cy - b.cy) > 80) return a.cy - b.cy;
+        return a.cx - b.cx;
+      });
+      for (const s of withCenter) {
+        const key = String(s.code).trim();
+        if (!key) continue;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(s);
+      }
+      return unique;
+    }
+
+    async function open(draftId, runIdx) {
+      _state.open = true;
+      _state.draftId = draftId;
+      _state.runIdx = runIdx;
+      _showModal();
+      _setStatus("📋 Đang lấy ảnh từ clipboard...", "info");
+      const clipBlob = await _readImageFromClipboard();
+      if (clipBlob) {
+        await _processBlob(clipBlob);
+        return;
+      }
+      // Fallback: file picker
+      _setStatus("Không có ảnh trong clipboard. Chọn file ảnh...", "info");
+      const inp = document.getElementById("serialScanFileInput");
+      if (inp) { inp.value = ""; inp.click(); }
+    }
+
+    async function pickFile(event) {
+      const f = event.target.files && event.target.files[0];
+      if (!f) return;
+      await _processBlob(f);
+    }
+
+    async function _processBlob(blob) {
+      _setStatus("📷 Đang quét QR + barcode trong ảnh...", "info");
+      try {
+        await _loadZxing();
+        const res = await _decodeAll(blob);
+        const unique = _processResults(res.serials);
+        _state.imageUrl = res.imageUrl;
+        _state.sortedSerials = unique;
+        if (!unique.length) {
+          _setStatus("⚠️ Không bắt được mã nào trong ảnh. Thử ảnh khác hoặc rõ hơn.", "error");
+          _renderResults();
+          return;
+        }
+        _setStatus(`✅ Bắt được ${unique.length} mã. Bấm "Append vào ô" để chèn vào ô SIM VL.`, "success");
+        _renderResults();
+      } catch (e) {
+        console.error("[SerialScan] error:", e);
+        _setStatus("❌ Lỗi quét: " + e.message, "error");
+      }
+    }
+
+    function _showModal() {
+      const m = document.getElementById("serialScanModal");
+      if (!m) return;
+      m.style.display = "flex";
+      const list = document.getElementById("serialScanList");
+      if (list) list.innerHTML = "";
+      const imgEl = document.getElementById("serialScanImage");
+      if (imgEl) imgEl.src = "";
+    }
+    function close() {
+      const m = document.getElementById("serialScanModal");
+      if (m) m.style.display = "none";
+      _state.open = false;
+    }
+    function _setStatus(msg, type) {
+      const el = document.getElementById("serialScanStatus");
+      if (!el) return;
+      const colors = {
+        info: { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af" },
+        success: { bg: "#dcfce7", border: "#86efac", text: "#166534" },
+        error: { bg: "#fee2e2", border: "#fca5a5", text: "#991b1b" },
+      };
+      const c = colors[type] || colors.info;
+      el.style.background = c.bg;
+      el.style.borderColor = c.border;
+      el.style.color = c.text;
+      el.textContent = msg;
+      el.style.display = "block";
+    }
+    function _renderResults() {
+      const list = document.getElementById("serialScanList");
+      const imgEl = document.getElementById("serialScanImage");
+      if (imgEl) imgEl.src = _state.imageUrl || "";
+      if (!list) return;
+      if (!_state.sortedSerials.length) {
+        list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-style:italic;">Chưa bắt được mã nào.</div>`;
+        return;
+      }
+      list.innerHTML = _state.sortedSerials.map((s, i) => {
+        const fmt = String(s.format || "").replace(/^.*_/, "");
+        return `
+          <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #f3f4f6;background:${i % 2 ? "#fafbfc" : "#fff"};">
+            <span style="background:#e5e7eb;color:#374151;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;min-width:24px;text-align:center;">${i + 1}</span>
+            <code style="flex:1;font-family:'Roboto Mono',monospace;font-size:12px;color:#111;word-break:break-all;">${escapeHtml(s.code)}</code>
+            <span style="font-size:10px;color:var(--muted);padding:0 4px;">${escapeHtml(fmt)}</span>
+            <button onclick="App.serialScanCopyOne(${i})" title="Copy mã này" style="margin:0;padding:3px 8px;font-size:11px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:5px;cursor:pointer;font-family:inherit;">📋</button>
+          </div>
+        `;
+      }).join("");
+    }
+    async function copyOne(idx) {
+      const s = _state.sortedSerials[idx];
+      if (!s) return;
+      try {
+        await navigator.clipboard.writeText(s.code);
+        const list = document.getElementById("serialScanList");
+        if (list) {
+          const flash = document.createElement("div");
+          flash.textContent = `✅ Đã copy: ${s.code}`;
+          flash.style.cssText = "position:absolute;top:10px;right:14px;background:#16a34a;color:white;padding:6px 12px;border-radius:6px;font-size:12px;z-index:10;animation:fadeOut 1.5s ease forwards;";
+          list.parentElement.style.position = "relative";
+          list.parentElement.appendChild(flash);
+          setTimeout(() => flash.remove(), 1500);
+        }
+      } catch (e) {
+        console.error("Copy fail:", e);
+      }
+    }
+    async function appendAllToTextarea() {
+      if (!_state.sortedSerials.length) return;
+      const ta = document.getElementById(`drcCodeTA_${_state.draftId}_${_state.runIdx}`);
+      if (!ta) {
+        alert("Không tìm thấy ô SIM VL.");
+        return;
+      }
+      const curr = ta.value.trim();
+      const newCodes = _state.sortedSerials.map(s => s.code).join("\n");
+      ta.value = curr ? (curr + "\n" + newCodes) : newCodes;
+      // Trigger save (call blur handler manually)
+      await _draftSaveGroupCode(_state.draftId, _state.runIdx, ta.value);
+      close();
+    }
+
+    return { open, pickFile, close, copyOne, appendAllToTextarea };
+  })();
   // Tính số ngày giữa "ngày đi" và "ngày về" (tính cả 2 đầu).
   // 2 lịch nhỏ tháng đi + tháng về. Constraint: tháng trái <= tháng phải.
   // Default: cả 2 lịch show tháng hiện tại, 2 ô ngày trống.
@@ -9416,6 +9992,15 @@ const App = (() => {
     // v10.8.33: CountrySearch
     csUpdate,
     csClear,
+    // v10.8.35
+    pkgInfoOpen: (text) => PkgInfo.open(text),
+    pkgInfoClose: () => PkgInfo.close(),
+    pkgInfoCopyLine: (line) => PkgInfo.copyLine(line),
+    serialScanOpen: (draftId, runIdx) => SerialScanner.open(draftId, runIdx),
+    serialScanClose: () => SerialScanner.close(),
+    serialScanPickFile: (event) => SerialScanner.pickFile(event),
+    serialScanCopyOne: (idx) => SerialScanner.copyOne(idx),
+    serialScanAppendAll: () => SerialScanner.appendAllToTextarea(),
     onManualDiscChange,
     setActiveStk,
     regenOrderCode,
