@@ -76,6 +76,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.42 · 27/05/2026 · 14:15 (GMT+7)
+ - Mục 1 (Thêm vào giỏ hàng): textarea `#pasteBox` cao 320px (desktop) ngang với
+   widget Tính số ngày bên phải. Mobile (<1000px) giảm về 140px khi stack dọc.
+ Prompt: "thêm gói vào giỏ hàng mở rộng ô điền text xuống nhé ngang với bên phải
+ chỗ tính số ngày."
+
  v10.8.41 · 27/05/2026 · 14:05 (GMT+7)
  - LUÔN show tab bar trong picker modal dù chỉ có 1 tab (yêu cầu). Trước đó <=1 tab
    thì ẩn → giờ luôn hiện. Nút ℹ️ vì vậy luôn nằm ở tab header (góc dưới phải).
@@ -443,6 +449,13 @@
     font-size: 13px;
     line-height: 1.5;
     font-family: "Roboto Mono", ui-monospace, monospace;
+  }
+  /* v10.8.42: pasteBox cao ngang DRC widget (mục Tính số ngày) bên cạnh */
+  #pasteBox {
+    min-height: 320px;
+  }
+  @media (max-width: 1000px) {
+    #pasteBox { min-height: 140px; }
   }
   button {
     cursor: pointer;
@@ -946,7 +959,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.41 · 27/05/2026 · 14:05
+    Version 10.8.42 · 27/05/2026 · 14:15
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
