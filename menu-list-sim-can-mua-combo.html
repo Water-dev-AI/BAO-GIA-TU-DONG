@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.10 · 28/05/2026 · (GMT+7)
+ - FIX giỏ hàng trống trắng (render throw): const PriceIndex (v10.9.9) khai báo SAU render()
+   → TDZ ReferenceError khi render gọi PriceIndex.lookup. Đã chuyển PriceIndex lên SỚM trong
+   IIFE (ngay trước popup giá / render). Logic giữ nguyên.
+
  v10.9.9 · 28/05/2026 · (GMT+7)
  - Cảnh báo GIÁ LỆCH: thêm module PriceIndex (build key "tên|loại|ngày" → giá đúng) nạp từ
    các sheet ĐÃ TẢI (slOpen + preload). Khi thêm vào giỏ mà giá khác giá sheet → ô giá NHẤP
@@ -1044,7 +1049,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.9 · 28/05/2026
+    Version 10.9.10 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3245,6 +3250,35 @@ const App = (() => {
     const tbody = document.getElementById("tbody");
     if (tbody) tbody.querySelectorAll("tr").forEach(r => r.classList.remove("drop-above", "drop-below", "dragging"));
   }
+
+  // ─── v10.9.9: PriceIndex — giá đúng theo gói từ các sheet ĐÃ TẢI ───────────
+  // Build key "tên|loại|ngày" → giá đúng, nạp khi parse sheet (slOpen/preload).
+  // Đặt SỚM trong IIFE (trước render) để mọi render() đều thấy (tránh TDZ const).
+  const PriceIndex = (() => {
+    const map = new Map();
+    function norm(s) {
+      return String(s || "").trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d").replace(/\s+/g, " ");
+    }
+    function key(name, type, days) { return norm(name) + "|" + norm(type) + "|" + norm(days); }
+    function addFromLines(lines) {
+      (lines || []).forEach(line => {
+        const parts = String(line).split("\t");
+        if (parts.length < 4) return;
+        const [name, type, days, price] = parts;
+        const k = ComboLogic.parseK(price);
+        if (!Number.isFinite(k) || k <= 0) return;
+        map.set(key(name, type, days), k);
+      });
+    }
+    function lookup(name, type, days) {
+      const k = map.get(key(name, type, days));
+      return (typeof k === "number") ? k : null;
+    }
+    function size() { return map.size; }
+    return { addFromLines, lookup, size };
+  })();
 
   // v10.9.9: Popup nhỏ hiện giá đúng từ sheet + nút thay giá.
   let _pricePopupEl = null;
@@ -8413,41 +8447,6 @@ const App = (() => {
     const parsed = gsParseCsv(row);
     return parsed[0] || [];
   }
-
-  // ─── v10.9.9: PriceIndex — giá đúng theo gói từ các sheet ĐÃ TẢI ───────────
-  // Build từ dòng "name\ttype\tdays\tprice" mỗi khi parse sheet (slOpen/refresh).
-  // Lookup theo key "tên|loại|ngày" (giống StockOverflow). Dùng để cảnh báo giá lệch
-  // khi thêm vào giỏ từ text (giá gõ tay khác giá sheet).
-  const PriceIndex = (() => {
-    const map = new Map(); // key → priceK (number)
-    function norm(s) {
-      return String(s || "").trim().toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d").replace(/\s+/g, " ");
-    }
-    function key(name, type, days) {
-      return norm(name) + "|" + norm(type) + "|" + norm(days);
-    }
-    // Thêm từ mảng dòng tab-separated (name\ttype\tdays\tprice[\tnote])
-    function addFromLines(lines) {
-      (lines || []).forEach(line => {
-        const parts = String(line).split("\t");
-        if (parts.length < 4) return;
-        const [name, type, days, price] = parts;
-        const k = ComboLogic.parseK(price);
-        if (!Number.isFinite(k) || k <= 0) return;
-        map.set(key(name, type, days), k);
-      });
-    }
-    // Trả priceK đúng nếu có trong index, ngược lại null (sheet chưa tải → không cảnh báo)
-    function lookup(name, type, days) {
-      const k = map.get(key(name, type, days));
-      return (typeof k === "number") ? k : null;
-    }
-    function size() { return map.size; }
-    return { addFromLines, lookup, size };
-  })();
-
 
   // Fetch CSV sheet tồn kho → build Set key "tên|loại|ngày" để check khớp.
   // Render tên gói màu tím + tooltip + nút "Xem tồn kho" trong giỏ + draft view.
