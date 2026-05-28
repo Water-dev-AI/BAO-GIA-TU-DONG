@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.4 · 28/05/2026 · (GMT+7)
+ - Thay dau-cong-ty.png bằng bản crop sát (442×448 RGBA) — bản cũ có viền trắng thừa
+   làm dấu lệch tâm/đóng "chả trúng". Giờ dấu cân, mép phải chạm đầu chữ.
+ - Đổi nhãn Hóa đơn lẻ: NẠP GÓI (tách từ SIM VẬT LÝ) → "TOP UP";
+   NẠP GÓI (cú pháp N) → "RECHARGE".
+ Prompt: "con dấu đóng sai, gửi lại png crop + NẠP GÓI→RECHARGE, NẠP GÓI(sim vật lý)→TOP UP."
+
  v10.9.3 · 28/05/2026 · (GMT+7)
  - Fix modal Hóa đơn lẻ bị che footer (nút Tải/Copy/Đóng ẩn 1/2): bọc thân modal bằng
    `.picker-body` (cuộn riêng, footer cố định). Bỏ max-height inner canvas wrap.
@@ -1004,7 +1011,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.3 · 28/05/2026
+    Version 10.9.4 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2198,7 +2205,7 @@ const ComboLogic = (() => {
           unitK: rechargeUnitK,
           isRecharge: true,
           isPhysical: isPhysical,
-          invName: buildInvoiceName(lineCore, "NẠP GÓI"),
+          invName: buildInvoiceName(lineCore, "RECHARGE"),
           note: rowNote,
         });
       }
@@ -10386,7 +10393,7 @@ const App = (() => {
           const rechargeUnitK = round3(Math.max(perUnitFullK - simWhiteFullK, 0) * factor);
           const baseName = it.invName.replace(/^SIM\s+V[ẬA]T\s+L[ÝY]\s*/i, "").trim();
           rows.push({
-            name: "NẠP GÓI " + baseName,
+            name: "TOP UP " + baseName,
             unit: "Gói",
             qty: qty,
             unitPriceK: rechargeUnitK,
