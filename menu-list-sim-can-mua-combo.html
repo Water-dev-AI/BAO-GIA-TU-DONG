@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.12 · 28/05/2026 · (GMT+7)
+ - FIX Safari iPad/iPhone vẫn lỗi "not allowed by user agent" khi copy QR/ảnh báo giá:
+   v10.9.8 mới sửa draftView*, BỎ SÓT qrCopyImage / qrCopyQuick / qrCopyFullQuick (nút copy
+   chính ở card QR). Giờ cả 3 dùng copyImageToClipboardSafe (ClipboardItem ôm Promise<Blob>).
+ Prompt: "Safari iPad/iPhone vẫn lỗi user agent khi copy QR ảnh vô clipboard."
+
  v10.9.11 · 28/05/2026 · (GMT+7)
  - FIX giỏ trống khi giá LỆCH: render (App scope) gọi fmtK() trần — nhưng fmtK định nghĩa
    trong ComboLogic scope → ReferenceError chỉ khi nhánh giá-lệch chạy. Đổi 5 chỗ thành
@@ -1054,7 +1060,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.11 · 28/05/2026
+    Version 10.9.12 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7961,16 +7967,15 @@ const App = (() => {
   }
 
   async function qrCopyImage(which) {
-    try {
+    const ok = await copyImageToClipboardSafe(async () => {
       const blob = await qrCanvasOrImageToBlob(which);
-      if (!navigator.clipboard || !navigator.clipboard.write) {
-        qrShowStatus("⚠️ Trình duyệt không hỗ trợ copy ảnh. Hãy bấm Tải về.");
-        return;
-      }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      if (!blob) throw new Error("Tạo ảnh thất bại");
+      return blob;
+    });
+    if (ok) {
       qrShowStatus("✅ Đã copy ảnh vào clipboard.");
-    } catch(e) {
-      qrShowStatus("❌ Lỗi copy: " + e.message);
+    } else {
+      qrShowStatus("⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải về.");
     }
   }
 
@@ -7999,27 +8004,30 @@ const App = (() => {
     const s = qrGetState();
     if (!s) return;
     slShowLoading("🎨 Đang tạo QR…");
-    try {
+    const produce = async () => {
       const img = await loadImage(s.qrUrl);
       const c = document.createElement("canvas");
       c.width = img.naturalWidth || 500;
       c.height = img.naturalHeight || 500;
       c.getContext("2d").drawImage(img, 0, 0);
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
+      if (!blob) throw new Error("Tạo ảnh thất bại");
+      return blob;
+    };
+    try {
+      const ok = await copyImageToClipboardSafe(produce);
       slHideLoading();
-      if (!blob) { qrShowStatus("❌ Tạo ảnh thất bại."); return; }
-      if (!navigator.clipboard || !navigator.clipboard.write) {
-        // Fallback download
+      if (ok) {
+        qrShowStatus(`✅ Đã copy QR thanh toán ${ComboLogic.fmtK(s.finalPayK)} vào clipboard. Paste vào Zalo/FB.`);
+      } else {
+        const blob = await produce();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url; a.download = `QR_${currentOrderCode}.png`;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        qrShowStatus("📥 Đã tải QR (browser không hỗ trợ copy ảnh).");
-        return;
+        qrShowStatus("📥 Đã tải QR (trình duyệt không cho copy ảnh).");
       }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      qrShowStatus(`✅ Đã copy QR thanh toán ${ComboLogic.fmtK(s.finalPayK)} vào clipboard. Paste vào Zalo/FB.`);
     } catch (e) {
       slHideLoading();
       qrShowStatus("❌ Lỗi: " + e.message);
@@ -8031,32 +8039,30 @@ const App = (() => {
     const s = qrGetState();
     if (!s) return;
     slShowLoading("🖼️ Đang tạo ảnh báo giá…");
-    try {
-      // Cần render lên canvas #qrFullCanvas (qrRenderFull đang dùng nó cố định)
-      // Tạm ẩn cột full để user không thấy canvas "nhấp nháy" trong lúc render
-      const fullColEl = document.getElementById("qrFullCol");
-      const wasOpen = fullColEl.style.display !== "none";
+    const fullColEl = document.getElementById("qrFullCol");
+    const wasOpen = fullColEl.style.display !== "none";
+    const produce = async () => {
       await qrRenderFull(s);
       const canvas = document.getElementById("qrFullCanvas");
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
-      // Nếu cột full không đang mở từ trước → giấu lại để không show ra
-      if (!wasOpen) {
-        fullColEl.style.display = "none";
-        _qrUpdateGridLayout();
-      }
+      if (!wasOpen) { fullColEl.style.display = "none"; _qrUpdateGridLayout(); }
+      if (!blob) throw new Error("Tạo ảnh thất bại");
+      return blob;
+    };
+    try {
+      const ok = await copyImageToClipboardSafe(produce);
       slHideLoading();
-      if (!blob) { qrShowStatus("❌ Tạo ảnh thất bại."); return; }
-      if (!navigator.clipboard || !navigator.clipboard.write) {
+      if (ok) {
+        qrShowStatus(`✅ Đã copy ảnh báo giá full vào clipboard. Paste vào Zalo/FB.`);
+      } else {
+        const blob = await produce();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url; a.download = `BaoGia_${currentOrderCode}.png`;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        qrShowStatus("📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh).");
-        return;
+        qrShowStatus("📥 Đã tải ảnh báo giá (trình duyệt không cho copy ảnh).");
       }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      qrShowStatus(`✅ Đã copy ảnh báo giá full vào clipboard. Paste vào Zalo/FB.`);
     } catch (e) {
       slHideLoading();
       qrShowStatus("❌ Lỗi: " + e.message);
