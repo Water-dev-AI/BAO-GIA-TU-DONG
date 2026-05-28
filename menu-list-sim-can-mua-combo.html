@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.11 · 28/05/2026 · (GMT+7)
+ - FIX giỏ trống khi giá LỆCH: render (App scope) gọi fmtK() trần — nhưng fmtK định nghĩa
+   trong ComboLogic scope → ReferenceError chỉ khi nhánh giá-lệch chạy. Đổi 5 chỗ thành
+   ComboLogic.fmtK() (popup giá + applyCorrectPrice + title cảnh báo).
+
  v10.9.10 · 28/05/2026 · (GMT+7)
  - FIX giỏ hàng trống trắng (render throw): const PriceIndex (v10.9.9) khai báo SAU render()
    → TDZ ReferenceError khi render gọi PriceIndex.lookup. Đã chuyển PriceIndex lên SỚM trong
@@ -1049,7 +1054,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.10 · 28/05/2026
+    Version 10.9.11 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3297,10 +3302,10 @@ const App = (() => {
       "border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;min-width:210px;font-size:13px;color:#111827;";
     pop.innerHTML =
       `<div style="font-weight:700;color:#b45309;margin-bottom:6px;">⚠️ Giá lệch bảng giá</div>` +
-      `<div style="margin-bottom:4px;">Giá hiện tại: <b style="color:#dc2626;">${fmtK(curPriceK)}</b></div>` +
-      `<div style="margin-bottom:10px;">Giá đúng (bảng giá): <b style="color:#059669;">${fmtK(sheetPriceK)}</b></div>`;
+      `<div style="margin-bottom:4px;">Giá hiện tại: <b style="color:#dc2626;">${ComboLogic.fmtK(curPriceK)}</b></div>` +
+      `<div style="margin-bottom:10px;">Giá đúng (bảng giá): <b style="color:#059669;">${ComboLogic.fmtK(sheetPriceK)}</b></div>`;
     const btn = document.createElement("button");
-    btn.textContent = `✓ Thay lại giá đúng (${fmtK(sheetPriceK)})`;
+    btn.textContent = `✓ Thay lại giá đúng (${ComboLogic.fmtK(sheetPriceK)})`;
     btn.style.cssText = "width:100%;padding:8px 10px;border:none;border-radius:8px;background:#059669;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
     btn.onclick = (ev) => { ev.stopPropagation(); applyCorrectPrice(idx, sheetPriceK); _closePricePopup(); };
     pop.appendChild(btn);
@@ -3313,7 +3318,7 @@ const App = (() => {
   function applyCorrectPrice(idx, sheetPriceK) {
     const item = cart[idx];
     if (!item) return;
-    const newPriceStr = fmtK(sheetPriceK);
+    const newPriceStr = ComboLogic.fmtK(sheetPriceK);
     const line = String(item.line);
     if (ComboLogic.priceRe.test(line)) {
       item.line = line.replace(ComboLogic.priceRe, newPriceStr);
@@ -3428,7 +3433,7 @@ const App = (() => {
       if (_sheetPriceK !== null && Number.isFinite(_curPriceK) && _sheetPriceK !== _curPriceK) {
         tdPrice.classList.add("price-mismatch"); // nhấp nháy (CSS)
         tdPrice.style.color = "#dc2626";
-        tdPrice.title = `⚠️ Giá lệch! Giá đúng trong bảng giá: ${fmtK(_sheetPriceK)}`;
+        tdPrice.title = `⚠️ Giá lệch! Giá đúng trong bảng giá: ${ComboLogic.fmtK(_sheetPriceK)}`;
         const warnBtn = document.createElement("button");
         warnBtn.type = "button";
         warnBtn.textContent = "⚠️";
