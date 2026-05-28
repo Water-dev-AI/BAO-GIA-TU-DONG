@@ -77,6 +77,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.8 · 28/05/2026 · (GMT+7)
+ - Note "(FullVAT là: X, không bao gồm phí ship)" giờ hiện khi TICK xuất VAT KỂ CẢ khi
+   chưa điền phí ship (trước chỉ hiện khi shipFeeK>0). Có ship+shipVat → "đã bao gồm phí ship".
+ - Fix copy QR/ảnh báo giá/hóa đơn lẻ lỗi trên Safari iPad ("not allowed by user agent"):
+   thêm helper copyImageToClipboardSafe() — ClipboardItem ôm Promise<Blob>, gọi clipboard.write
+   ngay trong user gesture (WebKit không cho await blob trước). Fallback download nếu vẫn fail.
+ Prompt: "FullVAT note hiện cả khi chưa điền ship + Safari iPad copy ảnh báo lỗi user agent."
+
  v10.9.7 · 28/05/2026 · (GMT+7)
  - Fix đúng ý "+ phí ship": phân biệt ô ship RỖNG vs nhập 0. Thêm opts.shipEntered
    (true khi #shipFeeK.value !== ""). Có SIM vật lý <10 cái: ô rỗng → "+ phí ship";
@@ -1028,7 +1036,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.7 · 28/05/2026
+    Version 10.9.8 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2290,10 +2298,10 @@ const ComboLogic = (() => {
     if (shipFeeK > 0) {
       summaryLines.push("Tổng thanh toán: " + fmtK(finalPayK));
     }
-    // v10.8.27: Dòng note FullVAT — chỉ hiện khi có VAT (vatInfo) + có ship (shipFeeK > 0)
+    // v10.9.8: Dòng note FullVAT hiện khi có VAT (vatInfo), KỂ CẢ khi chưa điền phí ship.
     const hasVatInfo = vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email);
-    if (hasVatInfo && shipFeeK > 0) {
-      if (shipVat) {
+    if (hasVatInfo) {
+      if (shipVat && shipFeeK > 0) {
         summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", đã bao gồm phí ship)");
       } else {
         summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", không bao gồm phí ship)");
@@ -6261,6 +6269,32 @@ const App = (() => {
     return k * 1000;
   }
 
+  // v10.9.8: Copy ảnh vào clipboard kiểu Safari-safe.
+  // WebKit yêu cầu ClipboardItem ôm Promise<Blob> và clipboard.write được gọi NGAY trong
+  // user gesture (không await blob/render trước). Truyền hàm async trả về Blob.
+  // Trả về true nếu copy OK, false nếu không hỗ trợ/À lỗi (caller tự fallback download).
+  async function copyImageToClipboardSafe(produceBlobAsync) {
+    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === "undefined") {
+      return false;
+    }
+    try {
+      // Promise<Blob> truyền thẳng vào ClipboardItem → Safari giữ user activation
+      const item = new ClipboardItem({ "image/png": produceBlobAsync() });
+      await navigator.clipboard.write([item]);
+      return true;
+    } catch (e) {
+      // Một số trình duyệt (Chrome cũ) không nhận Promise trong ClipboardItem → thử cách await
+      try {
+        const blob = await produceBlobAsync();
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        return true;
+      } catch (e2) {
+        console.warn("[clipboard] copy ảnh thất bại:", e2.message);
+        return false;
+      }
+    }
+  }
+
   // Copy ảnh QR thanh toán của draft vào clipboard
   async function draftViewCopyQR() {
     if (!_draftViewingId) return;
@@ -6273,26 +6307,29 @@ const App = (() => {
     slShowLoading("🎨 Đang tạo QR...");
     try {
       const url = buildVietQRUrl(amountVnd, d.orderCode);
-      const img = await loadImage(url);
-      // Render ra canvas tạm để có blob
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth || 500;
-      canvas.height = img.naturalHeight || 500;
-      canvas.getContext("2d").drawImage(img, 0, 0);
-      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      const produce = async () => {
+        const img = await loadImage(url);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || 500;
+        canvas.height = img.naturalHeight || 500;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+        if (!blob) throw new Error("Tạo blob thất bại");
+        return blob;
+      };
+      const ok = await copyImageToClipboardSafe(produce);
       slHideLoading();
-      if (!blob) { _draftViewStatus("❌ Tạo blob thất bại.", "error"); return; }
-      if (!navigator.clipboard || !navigator.clipboard.write) {
+      if (ok) {
+        _draftViewStatus(`✅ Đã copy ảnh QR thanh toán của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
+      } else {
         // Fallback: download
+        const blob = await produce();
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = `QR_${d.orderCode}.png`;
         a.click();
-        _draftViewStatus(`📥 Đã tải QR (browser không hỗ trợ copy ảnh — file đã tải về máy).`, "info");
-        return;
+        _draftViewStatus(`📥 Đã tải QR (trình duyệt không cho copy ảnh — file đã tải về máy).`, "info");
       }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      _draftViewStatus(`✅ Đã copy ảnh QR thanh toán của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
     } catch (e) {
       slHideLoading();
       _draftViewStatus("❌ Lỗi tạo QR: " + e.message, "error");
@@ -6320,23 +6357,27 @@ const App = (() => {
         vat: d.vat || null,
       };
       const savedOrderCode = currentOrderCode;
-      currentOrderCode = d.orderCode;
-      await qrRenderFull(state);
-      currentOrderCode = savedOrderCode;
-      const canvas = document.getElementById("qrFullCanvas");
-      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      const produce = async () => {
+        currentOrderCode = d.orderCode;
+        await qrRenderFull(state);
+        currentOrderCode = savedOrderCode;
+        const canvas = document.getElementById("qrFullCanvas");
+        const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+        if (!blob) throw new Error("Tạo blob thất bại");
+        return blob;
+      };
+      const ok = await copyImageToClipboardSafe(produce);
       slHideLoading();
-      if (!blob) { _draftViewStatus("❌ Tạo blob thất bại.", "error"); return; }
-      if (!navigator.clipboard || !navigator.clipboard.write) {
+      if (ok) {
+        _draftViewStatus(`✅ Đã copy ảnh báo giá full của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
+      } else {
+        const blob = await produce();
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = `BaoGia_${d.orderCode}.png`;
         a.click();
-        _draftViewStatus(`📥 Đã tải ảnh báo giá (browser không hỗ trợ copy ảnh — file đã tải về máy).`, "info");
-        return;
+        _draftViewStatus(`📥 Đã tải ảnh báo giá (trình duyệt không cho copy ảnh — file đã tải về máy).`, "info");
       }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      _draftViewStatus(`✅ Đã copy ảnh báo giá full của "${d.name}" vào clipboard. Mở Zalo/FB và Ctrl+V (hoặc dán) để gửi cho khách.`, "success");
     } catch (e) {
       slHideLoading();
       _draftViewStatus("❌ Lỗi tạo ảnh: " + e.message, "error");
@@ -10805,17 +10846,15 @@ const App = (() => {
       const canvas = document.getElementById("invoiceCanvas");
       const st = document.getElementById("invoiceStatus");
       if (!canvas || !canvas.width) { alert("Chưa có hóa đơn."); return; }
-      try {
+      const ok = await copyImageToClipboardSafe(async () => {
         const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
-        if (!navigator.clipboard || !navigator.clipboard.write) {
-          if (st) st.textContent = "⚠️ Trình duyệt không hỗ trợ copy ảnh — hãy bấm Tải ảnh.";
-          return;
-        }
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        // v10.9.3: đóng popup luôn sau khi copy thành công
-        close();
-      } catch (e) {
-        if (st) st.textContent = "⚠️ Copy thất bại: " + e.message + " — hãy bấm Tải ảnh.";
+        if (!blob) throw new Error("Tạo blob thất bại");
+        return blob;
+      });
+      if (ok) {
+        close(); // v10.9.3: đóng popup luôn sau khi copy thành công
+      } else {
+        if (st) st.textContent = "⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải ảnh.";
       }
     }
 
