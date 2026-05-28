@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.5 · 28/05/2026 · (GMT+7)
+ - Dấu ĐÃ THANH TOÁN: xoay random -45..45° (trước -10..10), nhỏ còn 2/3 (ảnh mới lớn hơn),
+   dời xuống DƯỚI CÙNG nằm giữa "Người mua hàng" và "Người bán hàng". footerH 160→230.
+ Prompt: "dấu đã thanh toán random -45..45, nhỏ 2/3, xuống dưới giữa người mua/bán hàng."
+
  v10.9.4 · 28/05/2026 · (GMT+7)
  - Thay dau-cong-ty.png bằng bản crop sát (442×448 RGBA) — bản cũ có viền trắng thừa
    làm dấu lệch tâm/đóng "chả trúng". Giờ dấu cân, mép phải chạm đầu chữ.
@@ -1011,7 +1016,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.4 · 28/05/2026
+    Version 10.9.5 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -10432,7 +10437,7 @@ const App = (() => {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
       // Random góc xoay 2 dấu (-10..10 độ), khác nhau mỗi lần mở
       rotStamp1 = (Math.random() * 20 - 10) * Math.PI / 180;
-      rotStamp2 = (Math.random() * 20 - 10) * Math.PI / 180;
+      rotStamp2 = (Math.random() * 90 - 45) * Math.PI / 180;
       // Tự đổ thông tin KH từ VAT (nếu có) — chỉ đổ khi ô đang trống
       Cust2B.syncFromDOM();
       const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
@@ -10521,7 +10526,7 @@ const App = (() => {
       const headerCtyH = 200;
       const titleH = 76;
       const custH = 86;
-      const footerH = 160;
+      const footerH = 230;
       const H = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
 
       canvas.width = W * DPR;
@@ -10756,12 +10761,12 @@ const App = (() => {
       ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.24, y + 20);
       ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.76, y + 20);
 
-      // Con dấu ĐÃ THANH TOÁN — giữa bill (xoay random)
+      // Con dấu ĐÃ THANH TOÁN — xoay random -45..45°, nhỏ còn 2/3, nằm giữa Người mua/bán hàng (dưới cùng)
       if (opt.showPaid && stampPaid) {
-        const sW = 320;
+        const sW = 320 * 2 / 3; // nhỏ còn 2/3 (ảnh mới lớn hơn)
         const sH = sW * stampPaid.height / stampPaid.width;
         ctx.save();
-        ctx.translate(W / 2, tableTop + (y - tableTop) * 0.42);
+        ctx.translate(W / 2, y + 4); // giữa 2 cột ký tên, dưới cùng
         ctx.rotate(rotStamp2);
         ctx.globalAlpha = 0.85;
         ctx.drawImage(stampPaid, -sW / 2, -sH / 2, sW, sH);
