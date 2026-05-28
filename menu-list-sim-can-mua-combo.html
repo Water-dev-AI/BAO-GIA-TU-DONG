@@ -77,6 +77,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.9 · 28/05/2026 · (GMT+7)
+ - Cảnh báo GIÁ LỆCH: thêm module PriceIndex (build key "tên|loại|ngày" → giá đúng) nạp từ
+   các sheet ĐÃ TẢI (slOpen + preload). Khi thêm vào giỏ mà giá khác giá sheet → ô giá NHẤP
+   NHÁY đỏ + nút ⚠️; bấm mở popup hiện giá hiện tại vs giá đúng + nút "Thay lại giá đúng"
+   → cập nhật cart[idx].line. Sheet chưa tải → không cảnh báo (không có dữ liệu để so).
+   Khớp y chang StockOverflow.check (tên+loại+ngày). CSS @keyframes priceBlink.
+ Prompt: "cảnh báo nhấp nháy ở giá khi import giá khác giá sheet đã tải + popup + nút thay giá."
+
  v10.9.8 · 28/05/2026 · (GMT+7)
  - Note "(FullVAT là: X, không bao gồm phí ship)" giờ hiện khi TICK xuất VAT KỂ CẢ khi
    chưa điền phí ship (trước chỉ hiện khi shipFeeK>0). Có ship+shipVat → "đã bao gồm phí ship".
@@ -1036,7 +1044,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.8 · 28/05/2026
+    Version 10.9.9 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1452,6 +1460,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 <style>
 @keyframes slSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes priceBlink { 0%,100%{background:transparent} 50%{background:#fee2e2} }
+table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-out infinite; border-radius:5px; }
 .vat-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #cfd5df; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:240px; overflow-y:auto; margin-top:2px; }
 .vat-dropdown.open { display:block; }
 .vat-dropdown-item { display:flex; align-items:flex-start; gap:6px; padding:7px 10px; border-bottom:1px solid #f0f2f5; cursor:pointer; font-size:12px; }
@@ -3236,6 +3246,51 @@ const App = (() => {
     if (tbody) tbody.querySelectorAll("tr").forEach(r => r.classList.remove("drop-above", "drop-below", "dragging"));
   }
 
+  // v10.9.9: Popup nhỏ hiện giá đúng từ sheet + nút thay giá.
+  let _pricePopupEl = null;
+  function _closePricePopup() {
+    if (_pricePopupEl) { _pricePopupEl.remove(); _pricePopupEl = null; }
+    document.removeEventListener("click", _onDocClickClosePopup, true);
+  }
+  function _onDocClickClosePopup(ev) {
+    if (_pricePopupEl && !_pricePopupEl.contains(ev.target)) _closePricePopup();
+  }
+  function showPriceMismatchPopup(anchorEl, idx, sheetPriceK, curPriceK) {
+    _closePricePopup();
+    const pop = document.createElement("div");
+    _pricePopupEl = pop;
+    pop.style.cssText = "position:absolute;z-index:9999;background:#fff;border:1px solid #f59e0b;" +
+      "border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;min-width:210px;font-size:13px;color:#111827;";
+    pop.innerHTML =
+      `<div style="font-weight:700;color:#b45309;margin-bottom:6px;">⚠️ Giá lệch bảng giá</div>` +
+      `<div style="margin-bottom:4px;">Giá hiện tại: <b style="color:#dc2626;">${fmtK(curPriceK)}</b></div>` +
+      `<div style="margin-bottom:10px;">Giá đúng (bảng giá): <b style="color:#059669;">${fmtK(sheetPriceK)}</b></div>`;
+    const btn = document.createElement("button");
+    btn.textContent = `✓ Thay lại giá đúng (${fmtK(sheetPriceK)})`;
+    btn.style.cssText = "width:100%;padding:8px 10px;border:none;border-radius:8px;background:#059669;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
+    btn.onclick = (ev) => { ev.stopPropagation(); applyCorrectPrice(idx, sheetPriceK); _closePricePopup(); };
+    pop.appendChild(btn);
+    document.body.appendChild(pop);
+    const r = anchorEl.getBoundingClientRect();
+    pop.style.top = (window.scrollY + r.bottom + 6) + "px";
+    pop.style.left = (window.scrollX + Math.max(8, r.left - 80)) + "px";
+    setTimeout(() => document.addEventListener("click", _onDocClickClosePopup, true), 0);
+  }
+  function applyCorrectPrice(idx, sheetPriceK) {
+    const item = cart[idx];
+    if (!item) return;
+    const newPriceStr = fmtK(sheetPriceK);
+    const line = String(item.line);
+    if (ComboLogic.priceRe.test(line)) {
+      item.line = line.replace(ComboLogic.priceRe, newPriceStr);
+    } else {
+      item.line = line + "\t" + newPriceStr;
+    }
+    saveCart();
+    render();
+    updateQuickTotals();
+  }
+
   function render() {
     // v10.6: Sync UI toggle gộp phân loại (mỗi lần render đảm bảo trạng thái đúng)
     const tgInp = document.getElementById("groupToggleInput");
@@ -3330,8 +3385,27 @@ const App = (() => {
 
       const tdPrice = document.createElement("td");
       tdPrice.className = "td-price";
-      tdPrice.style.cssText = "font-weight:600;color:var(--green);";
+      tdPrice.style.cssText = "font-weight:600;color:var(--green);position:relative;";
       tdPrice.textContent = p.price;
+
+      // v10.9.9: Cảnh báo giá lệch — so với giá đúng từ sheet đã tải (PriceIndex).
+      const _sheetPriceK = PriceIndex.lookup(p.name, p.type, p.days);
+      const _curPriceK = ComboLogic.parseK(p.price);
+      if (_sheetPriceK !== null && Number.isFinite(_curPriceK) && _sheetPriceK !== _curPriceK) {
+        tdPrice.classList.add("price-mismatch"); // nhấp nháy (CSS)
+        tdPrice.style.color = "#dc2626";
+        tdPrice.title = `⚠️ Giá lệch! Giá đúng trong bảng giá: ${fmtK(_sheetPriceK)}`;
+        const warnBtn = document.createElement("button");
+        warnBtn.type = "button";
+        warnBtn.textContent = "⚠️";
+        warnBtn.title = "Giá khác bảng giá — bấm xem & sửa";
+        warnBtn.style.cssText = "margin-left:5px;border:none;background:transparent;cursor:pointer;font-size:13px;padding:0;vertical-align:middle;";
+        warnBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          showPriceMismatchPopup(warnBtn, idx, _sheetPriceK, _curPriceK);
+        };
+        tdPrice.appendChild(warnBtn);
+      }
 
       const tdQty = document.createElement("td");
       tdQty.className = "td-qty";
@@ -4189,6 +4263,8 @@ const App = (() => {
       document.getElementById("slStatus").textContent = "❌ Không parse được gói nào.";
       return;
     }
+    // v10.9.9: nạp giá đúng vào PriceIndex để cảnh báo giá lệch khi thêm vào giỏ
+    tables.forEach(t => PriceIndex.addFromLines(t.lines));
 
     const customNames = (item.tabNames || "").split("|").map(s => s.trim()).filter(Boolean);
     if (customNames.length) {
@@ -4634,6 +4710,8 @@ const App = (() => {
           const csvText = await gsFetch(csvUrl);
           csvCache.set(csvUrl, { csvText, fetchedAt: Date.now() });
           _slPreloadCachedIds.add(item.presetId);
+          // v10.9.9: nạp giá đúng vào PriceIndex ngay khi preload
+          try { gsParseTables(csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
           done++;
         }
       } catch (e) {
@@ -8336,7 +8414,41 @@ const App = (() => {
     return parsed[0] || [];
   }
 
-  // ─── v10.8.20: StockOverflow — gói thừa tồn kho ──────────────────────────
+  // ─── v10.9.9: PriceIndex — giá đúng theo gói từ các sheet ĐÃ TẢI ───────────
+  // Build từ dòng "name\ttype\tdays\tprice" mỗi khi parse sheet (slOpen/refresh).
+  // Lookup theo key "tên|loại|ngày" (giống StockOverflow). Dùng để cảnh báo giá lệch
+  // khi thêm vào giỏ từ text (giá gõ tay khác giá sheet).
+  const PriceIndex = (() => {
+    const map = new Map(); // key → priceK (number)
+    function norm(s) {
+      return String(s || "").trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d").replace(/\s+/g, " ");
+    }
+    function key(name, type, days) {
+      return norm(name) + "|" + norm(type) + "|" + norm(days);
+    }
+    // Thêm từ mảng dòng tab-separated (name\ttype\tdays\tprice[\tnote])
+    function addFromLines(lines) {
+      (lines || []).forEach(line => {
+        const parts = String(line).split("\t");
+        if (parts.length < 4) return;
+        const [name, type, days, price] = parts;
+        const k = ComboLogic.parseK(price);
+        if (!Number.isFinite(k) || k <= 0) return;
+        map.set(key(name, type, days), k);
+      });
+    }
+    // Trả priceK đúng nếu có trong index, ngược lại null (sheet chưa tải → không cảnh báo)
+    function lookup(name, type, days) {
+      const k = map.get(key(name, type, days));
+      return (typeof k === "number") ? k : null;
+    }
+    function size() { return map.size; }
+    return { addFromLines, lookup, size };
+  })();
+
+
   // Fetch CSV sheet tồn kho → build Set key "tên|loại|ngày" để check khớp.
   // Render tên gói màu tím + tooltip + nút "Xem tồn kho" trong giỏ + draft view.
   const StockOverflow = (() => {
