@@ -10,7 +10,8 @@
  - Tích hợp Google Sheet qua: (a) CSV publish để đọc bảng giá + hướng dẫn gói,
    (b) Apps Script Web App cho VAT DB + DRAFTS (online drafts, share giữa máy).
  - File deploy: menu-list-sim-can-mua-combo.html, STK.json, sheets.json,
-   vat-config.json, logo.png. (vat-sheet.gs paste 1 lần vào Apps Script editor.)
+   vat-config.json, hoadonle.json, logo.png, dau-cong-ty.png, dau-thanh-toan.png.
+   (vat-sheet.gs paste 1 lần vào Apps Script editor.)
 
  PHÂN LOẠI SIM — QUAN TRỌNG (v10.8.10 rule)
  - ESIM: KHÔNG có cột "Ngày" — ngày LUÔN nằm trong tên gói (vd "Maldives 7 Days 5GB").
@@ -75,6 +76,23 @@
 ═══════════════════════════════════════════════════════════════════════════════
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
+
+ v10.9.0 · 28/05/2026 · (GMT+7)
+ - Thêm nút "🧾 Hóa đơn lẻ" (cạnh "Xem Báo giá") → modal render ảnh HÓA ĐƠN BÁN LẺ.
+ - Layout theo mẫu PDF: header cty (name/MST/địa chỉ/hotline từ hoadonle.json) + logo phải,
+   tiêu đề "HOÁ ĐƠN BÁN LẺ", ô KH (Họ tên/ĐT/Địa chỉ — tự đổ từ VAT nếu có, cho sửa),
+   bảng STT|Tên hàng hóa|ĐVT|SL|Đơn giá|Thành tiền, dòng VAT 10%, dòng CỘNG, footer ký tên.
+ - ĐƠN GIÁ chưa VAT = (giá sau phân bổ giảm) × 10/11. VAT 10% = 1/11 × FullVAT.
+   CỘNG = tổng các dòng + VAT (có thể lệch ~1-2đ vs FullVAT do làm tròn 3 số lẻ — chấp nhận).
+ - SIM VẬT LÝ → tách 2 dòng: SIM TRẮNG (ĐVT "Cái", giá full 25k từ json ×10/11) +
+   NẠP GÓI (ĐVT "Gói", (giá_sim_sau_phân_bổ − 25) ×10/11). ESIM/NẠP GÓI: ĐVT "Gói".
+ - Làm tròn đơn giá & thành tiền đến 3 số lẻ (đơn vị nghìn) = đến đồng. Hiển thị VNĐ đầy đủ.
+ - 2 con dấu PNG nền trong suốt, xoay random -10..10° mỗi lần mở: dấu cty góc trái ăn vào
+   bộ chữ (luôn hiện), dấu "ĐÃ THANH TOÁN" giữa bill (chỉ hiện khi tick checkbox, default off).
+ - calc() expose thêm parsedItems + discShares (+ field unitK/isPhysical/invName mỗi item).
+ - File deploy MỚI: hoadonle.json, dau-cong-ty.png, dau-thanh-toan.png.
+ Prompt: "làm nút Hóa đơn lẻ tạo ảnh như Xem báo giá nhưng theo mẫu PDF, đơn giá ×10/11,
+ VAT 10% = 1/11 FullVAT, SIM VẬT LÝ tách SIM TRẮNG + NẠP GÓI, 2 con dấu xoay random."
 
  v10.8.42 · 27/05/2026 · 14:15 (GMT+7)
  - Mục 1 (Thêm vào giỏ hàng): textarea `#pasteBox` cao 320px (desktop) ngang với
@@ -1257,6 +1275,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button onclick="App.qrGenerate()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#a7f3d0;color:#065f46;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị QR thanh toán">🎨 Xem QR TT</button>
         <button class="blue" onclick="App.qrCopyFullQuick()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo ảnh báo giá full + Copy vào clipboard ngay (không hiển thị)">🖼️ Copy Báo giá</button>
         <button onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#bfdbfe;color:#1e40af;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị ảnh báo giá full">🖼️ Xem Báo giá</button>
+        <button onclick="App.invoiceOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#fde68a;color:#92400e;border:none;border-radius:7px;cursor:pointer;" title="Tạo ảnh Hóa đơn bán lẻ">🧾 Hóa đơn lẻ</button>
         <button class="amber" onclick="App.qrCustomOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Copy thông tin chuyển khoản text">📋 Thông tin CK</button>
         <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadCopyDirect()" title="Copy mã nhập sổ vào clipboard ngay (không mở popup)">📤 Nhập sổ</button>
@@ -1647,6 +1666,51 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   </div>
 </div>
 
+<!-- Modal Hóa đơn bán lẻ (v10.9.0) -->
+<div class="picker-overlay" id="invoiceOverlay" onclick="if(event.target===this)App.invoiceClose()">
+  <div class="picker-modal" style="width:min(96vw, 920px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">🧾 Hóa đơn bán lẻ</h3>
+      <button onclick="App.invoiceClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="grid-column:1 / -1;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Họ tên khách hàng</div>
+          <input id="invCustName" type="text" placeholder="Nhập họ tên khách hàng"
+            oninput="App.invoiceRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Điện thoại (ĐT)</div>
+          <input id="invCustPhone" type="text" placeholder="VD: 0901234567"
+            oninput="App.invoiceRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Địa chỉ</div>
+          <input id="invCustAddr" type="text" placeholder="Địa chỉ khách hàng"
+            oninput="App.invoiceRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
+        <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
+      </label>
+      <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow-y:auto;">
+        <canvas id="invoiceCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
+      </div>
+      <div id="invoiceStatus" class="status" style="font-size:12.5px;"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.invoiceDownload()">💾 Tải ảnh</button>
+      <button class="blue"  onclick="App.invoiceCopy()">📋 Copy ảnh</button>
+      <button class="light" onclick="App.invoiceClose()">Đóng</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Sheet Payload -->
 <div class="picker-overlay" id="sheetPayloadOverlay" onclick="if(event.target===this)App.sheetPayloadClose()">
   <div class="picker-modal" style="width:min(96vw,720px);">
@@ -1854,6 +1918,38 @@ const ComboLogic = (() => {
     return String(productType || "SIM").trim().toUpperCase() || "SIM";
   }
 
+  // v10.9.0: Build tên hàng hóa cho Hóa đơn lẻ.
+  //  - GIỮ nguyên kbps/mbps (không cleanPackageName).
+  //  - Tách phần trước giá, bỏ ô là "loại" (ESIM/SIM VẬT LÝ/SIM/NẠP GÓI), ghép phần còn lại bằng ", ".
+  //  - Prefix typeLabel ở đầu. VD: "ESIM Mainland China A, 5 Days, Premium unlimited data/day".
+  function buildInvoiceName(lineCore, typeLabel) {
+    const beforePrice = String(lineCore || "").replace(priceRe, "").trim();
+    const rawParts = beforePrice.split("\t").map(x => x.trim()).filter(Boolean);
+    const isTypeCell = c => {
+      const n = norm(c);
+      return n === "esim" || n === "sim" || n.includes("sim vat ly")
+        || n === "nap goi" || n.includes("nap goi");
+    };
+    let nameParts;
+    if (rawParts.length >= 2) {
+      // Format có cột: bỏ ô loại, giữ thứ tự còn lại
+      nameParts = rawParts.filter(c => !isTypeCell(c));
+    } else {
+      // Inline: bỏ từ khóa loại trong text
+      let t = beforePrice
+        .replace(/SIM\s+V[ẬA]T\s+L[YÝ]/gi, "")
+        .replace(/\bESIM\b/gi, "")
+        .replace(/N[ẠA]P\s+G[ÓO]I/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^[\s,]+|[\s,]+$/g, "")
+        .trim();
+      nameParts = t ? [t] : [];
+    }
+    const body = nameParts.join(", ").replace(/\s*,\s*/g, ", ").replace(/^,\s*|,\s*$/g, "").trim();
+    const label = String(typeLabel || "").trim();
+    return (label ? label + " " : "") + body;
+  }
+
   function buildCartFromText(text) {
     const good = [];
     const bad = [];
@@ -2030,6 +2126,10 @@ const ComboLogic = (() => {
       const { lineCore, productNote } = splitLineAndProductNote(line);
       const productNoteFlat = formatProductNoteSingleLine(productNote);
 
+      // v10.9.0: Tên đầy đủ cho Hóa đơn lẻ — GIỮ kbps, ghép các cột (trừ cột loại) bằng ", ".
+      // lineCore dạng: "tên<TAB>loại<TAB>ngày<TAB>giá" hoặc inline "tên ... giá".
+      const invNameBase = buildInvoiceName(lineCore, parts.productType);
+
       // Dòng SIM thường
       if (regular > 0) {
         let regularLine = replaceFinalPrice(lineCore, unitK, regular);
@@ -2042,7 +2142,10 @@ const ComboLogic = (() => {
           productType: parts.productType,
           qty: regular,
           amountK: regularAmount,
+          unitK: unitK,
           isRecharge: false,
+          isPhysical: isPhysical,
+          invName: invNameBase,
           note: rowNote,
         });
       }
@@ -2059,7 +2162,10 @@ const ComboLogic = (() => {
           productType: parts.productType,
           qty: recharge,
           amountK: rechargeAmount,
+          unitK: rechargeUnitK,
           isRecharge: true,
+          isPhysical: isPhysical,
+          invName: buildInvoiceName(lineCore, "NẠP GÓI"),
           note: rowNote,
         });
       }
@@ -2167,6 +2273,8 @@ const ComboLogic = (() => {
     }
     // v10.8.27: Phân bổ giảm dùng effectiveDiscK (có thể âm khi shipVat ON + ship > discount)
     const notes = buildDiscountNotes(parsedItems, effectiveDiscK);
+    // v10.9.0: shares phân bổ giảm cho từng parsedItem (dùng cho Hóa đơn lẻ).
+    const discShares = largestRemainderShares(parsedItems, effectiveDiscK);
     const full = notes && !notes.startsWith("Không có")
       ? bill + "\n\nNotes phân bố giảm giá:\n" + notes
       : bill;
@@ -2177,6 +2285,8 @@ const ComboLogic = (() => {
       billShort,
       notes,
       full,
+      parsedItems,   // v10.9.0: cho Hóa đơn lẻ
+      discShares,    // v10.9.0: share giảm tương ứng từng parsedItem
       summary: {
         totalK,
         discountK: discount.amount,
@@ -10173,6 +10283,461 @@ const App = (() => {
     PackageGuides.init();
   })();
 
+  /* ===== HÓA ĐƠN BÁN LẺ (v10.9.0) ===== */
+  // Tạo ảnh hóa đơn bán lẻ từ giỏ hàng. Đơn giá CHƯA VAT (×10/11), VAT 10% = 1/11 FullVAT.
+  // SIM VẬT LÝ tách thành SIM TRẮNG (Cái) + NẠP GÓI (Gói).
+  const Invoice = (() => {
+    let cfg = null; // load từ hoadonle.json
+    const DEFAULT_CFG = {
+      company: {
+        name: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+        mst: "0318279674",
+        address: "163/18 Đường số 20, Phường An Nhơn, TP HCM, Việt Nam",
+        hotline: "+84 923282790",
+      },
+      simVatLyFullVatK: 25,
+      vatRate: 0.1,
+    };
+    // Góc xoay random cho 2 con dấu (giữ cố định trong 1 lần mở modal, đổi mỗi lần open)
+    let rotStamp1 = 0, rotStamp2 = 0;
+
+    async function loadCfg() {
+      if (cfg) return cfg;
+      try {
+        const res = await fetch("./hoadonle.json", { cache: "no-cache" });
+        if (res.ok) {
+          const d = await res.json();
+          cfg = {
+            company: Object.assign({}, DEFAULT_CFG.company, d.company || {}),
+            simVatLyFullVatK: Number(d.simVatLyFullVatK) || DEFAULT_CFG.simVatLyFullVatK,
+            vatRate: (typeof d.vatRate === "number") ? d.vatRate : DEFAULT_CFG.vatRate,
+          };
+        } else cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+      } catch (e) {
+        console.warn("[Invoice] hoadonle.json không load được:", e.message);
+        cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+      }
+      return cfg;
+    }
+
+    // Làm tròn 3 số lẻ theo đơn vị "k" = làm tròn đến đồng (1k = 1000đ → 3 số lẻ).
+    function round3(k) { return Math.round(k * 1000) / 1000; }
+    // Format tiền VNĐ đầy đủ từ giá trị "k" (nghìn). VD 24.994k → "24.994".
+    // Vì làm tròn 3 số lẻ của k = số nguyên đồng → hiển thị nguyên đồng, group bằng ".".
+    function fmtVnd(k) {
+      const dong = Math.round(k * 1000); // có thể âm về 0 do round
+      return dong.toLocaleString("en-US").replace(/,/g, ".");
+    }
+
+    // Build danh sách dòng hóa đơn từ parsedItems + discShares + cfg.
+    // Mỗi dòng: { name, unit, qty, unitPriceK (đã ×10/11, đã round3), amountK }
+    function buildRows(parsedItems, discShares, c) {
+      const rows = [];
+      const VAT_MULT = 1 - c.vatRate; // 10/11? KHÔNG: ×10/11 nghĩa là /1.1. vatRate 0.1 → mult = 1/1.1
+      // ×10/11 = chia 1.1. Dùng factor = 1/(1+vatRate) khi vatRate là % VAT trên giá chưa thuế.
+      // Ở đây FullVAT = giá đã gồm VAT, đơn giá chưa VAT = FullVAT × 10/11 (với VAT 10%).
+      const factor = 10 / 11; // cố định theo yêu cầu (VAT 10% → 1/11)
+      const simWhiteFullK = c.simVatLyFullVatK; // 25k full VAT
+
+      (parsedItems || []).forEach((it, idx) => {
+        const share = (discShares && discShares[idx]) || 0;
+        const qty = it.qty || 0;
+        if (qty <= 0) return;
+        // Giá sau phân bổ giảm (full VAT) cho TỪNG đơn vị:
+        const perUnitFullK = (it.amountK - share) / qty;
+
+        const isPhysicalSim = it.isPhysical && !it.isRecharge
+          && /sim\s*v[ậa]t\s*l[ýy]/i.test(it.productType || "");
+
+        if (isPhysicalSim) {
+          // Tách 2 dòng: SIM TRẮNG (Cái) + NẠP GÓI (Gói)
+          // SIM TRẮNG: đơn giá chưa VAT = 25 × 10/11
+          const whiteUnitK = round3(simWhiteFullK * factor);
+          // NẠP GÓI: đơn giá chưa VAT = (perUnitFull - 25) × 10/11
+          const rechargeUnitK = round3(Math.max(perUnitFullK - simWhiteFullK, 0) * factor);
+          // Tên: thay "SIM VẬT LÝ" → "NẠP GÓI" cho dòng nạp; SIM TRẮNG riêng
+          const baseName = it.invName.replace(/^SIM\s+V[ẬA]T\s+L[ÝY]\s*/i, "").trim();
+          rows.push({
+            name: "NẠP GÓI " + baseName,
+            unit: "Gói",
+            qty: qty,
+            unitPriceK: rechargeUnitK,
+            amountK: round3(rechargeUnitK * qty),
+            note: it.note || "",
+          });
+          rows.push({
+            name: "SIM TRẮNG " + baseName,
+            unit: "Cái",
+            qty: qty,
+            unitPriceK: whiteUnitK,
+            amountK: round3(whiteUnitK * qty),
+            note: "",
+          });
+        } else {
+          // ESIM / NẠP GÓI / loại khác: 1 dòng, đơn giá = perUnitFull × 10/11
+          const unitK = round3(perUnitFullK * factor);
+          rows.push({
+            name: it.invName,
+            unit: "Gói",
+            qty: qty,
+            unitPriceK: unitK,
+            amountK: round3(unitK * qty),
+            note: it.note || "",
+          });
+        }
+      });
+      return rows;
+    }
+
+    function open() {
+      if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
+      // Random góc xoay 2 dấu (-10..10 độ), khác nhau mỗi lần mở
+      rotStamp1 = (Math.random() * 20 - 10) * Math.PI / 180;
+      rotStamp2 = (Math.random() * 20 - 10) * Math.PI / 180;
+      // Tự đổ thông tin KH từ VAT (nếu có) — chỉ đổ khi ô đang trống
+      Cust2B.syncFromDOM();
+      const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
+      const nameEl = document.getElementById("invCustName");
+      const addrEl = document.getElementById("invCustAddr");
+      if (nameEl && !nameEl.value && (v.name || Cust2B.state.name)) nameEl.value = v.name || Cust2B.state.name || "";
+      if (addrEl && !addrEl.value && v.addr) addrEl.value = v.addr || "";
+      // Uncheck dấu đã thanh toán mỗi lần mở (mặc định)
+      const paidEl = document.getElementById("invStampPaid");
+      if (paidEl) paidEl.checked = false;
+      document.getElementById("invoiceOverlay").classList.add("open");
+      document.body.style.overflow = "hidden";
+      render();
+    }
+    function close() {
+      document.getElementById("invoiceOverlay").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    async function render() {
+      const c = await loadCfg();
+      const canvas = document.getElementById("invoiceCanvas");
+      const statusEl = document.getElementById("invoiceStatus");
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      if (!r.ok || !r.parsedItems || !r.parsedItems.length) {
+        if (statusEl) statusEl.textContent = "❌ Chưa có dòng hợp lệ để xuất hóa đơn.";
+        return;
+      }
+      const rows = buildRows(r.parsedItems, r.discShares, c);
+      const fullVatK = r.summary.fullVatK || 0;
+      // VAT 10% = 1/11 của FullVAT
+      const vatK = round3(fullVatK / 11);
+      // CỘNG = tổng các dòng (theo yêu cầu — có thể lệch vài đồng vs fullVAT)
+      const sumRowsK = rows.reduce((s, x) => s + x.amountK, 0);
+      const congK = round3(sumRowsK + vatK);
+
+      const custName = (document.getElementById("invCustName") || {}).value || "";
+      const custPhone = (document.getElementById("invCustPhone") || {}).value || "";
+      const custAddr = (document.getElementById("invCustAddr") || {}).value || "";
+      const showPaid = (document.getElementById("invStampPaid") || {}).checked;
+
+      await draw(canvas, c, rows, vatK, congK, { custName, custPhone, custAddr, showPaid });
+      if (statusEl) statusEl.textContent = `✅ ${rows.length} dòng · CỘNG: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
+    }
+
+    async function draw(canvas, c, rows, vatK, congK, opt) {
+      const DPR = 2;
+      const W = 1000;
+      const pad = 48;
+      const innerW = W - pad * 2;
+
+      // Pre-load images
+      let logoImg = null, stampCty = null, stampPaid = null;
+      try { logoImg = await loadImage("./logo.png"); } catch (e) {}
+      try { stampCty = await loadImage("./dau-cong-ty.png"); } catch (e) {}
+      if (opt.showPaid) { try { stampPaid = await loadImage("./dau-thanh-toan.png"); } catch (e) {} }
+
+      // ─── Đo chiều cao động ───
+      // Header cty (~115) + tiêu đề (~70) + KH 2 dòng (~78) + bảng (header + rows) + footer (~150)
+      const ctxM = canvas.getContext("2d");
+      ctxM.font = "15px Arial, sans-serif";
+      const colName_w = innerW * 0.42;
+      // Ước lượng số dòng wrap cho mỗi tên
+      let rowHeights = rows.map(rw => {
+        const lines = wrapText(ctxM, rw.name, colName_w - 16);
+        let h = Math.max(lines.length, 1) * 22 + (rw.note ? 18 : 0) + 16;
+        return Math.max(h, 46);
+      });
+      const tableHeaderH = 44;
+      const totalRowsH = rowHeights.reduce((s, h) => s + h, 0);
+      const vatRowH = 40, congRowH = 46;
+      const headerCtyH = 120;
+      const titleH = 76;
+      const custH = 86;
+      const footerH = 160;
+      const H = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
+
+      canvas.width = W * DPR;
+      canvas.height = H * DPR;
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      const ctx = canvas.getContext("2d");
+      ctx.scale(DPR, DPR);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.textBaseline = "alphabetic";
+
+      // BG trắng
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+
+      let y = pad;
+
+      // === Header công ty (trái) + logo (phải) ===
+      // Logo phải trên
+      const logoSize = 92;
+      if (logoImg) ctx.drawImage(logoImg, W - pad - logoSize, y, logoSize, logoSize);
+
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 19px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText(c.company.name, pad, y + 20);
+      ctx.fillStyle = "#374151";
+      ctx.font = "14px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText("MST: " + c.company.mst, pad, y + 44);
+      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, innerW - logoSize - 20);
+      let ay = y + 66;
+      addrLines.forEach(l => { ctx.fillText(l, pad, ay); ay += 19; });
+      ctx.fillText("Hotline: " + c.company.hotline, pad, ay);
+
+      // Con dấu công ty — góc trái, 1 nửa ăn vào bộ chữ (xoay random)
+      if (stampCty) {
+        const sW = 150;
+        const sH = sW * stampCty.height / stampCty.width;
+        ctx.save();
+        // Đặt tâm dấu lệch trái, chồng lên block chữ cty
+        const cx = pad + 64;
+        const cy = y + 58;
+        ctx.translate(cx, cy);
+        ctx.rotate(rotStamp1);
+        ctx.globalAlpha = 0.88;
+        ctx.drawImage(stampCty, -sW / 2, -sH / 2, sW, sH);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+
+      y = pad + headerCtyH;
+
+      // === Tiêu đề ===
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 34px 'Times New Roman', Georgia, serif";
+      ctx.fillText("HOÁ ĐƠN BÁN LẺ", W / 2, y + 38);
+      y += titleH;
+
+      // === Thông tin khách hàng ===
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 15px Arial, sans-serif";
+      const dotFill = (label, value, x, maxX) => {
+        ctx.font = "bold 15px Arial, sans-serif";
+        ctx.fillStyle = "#111827";
+        ctx.fillText(label, x, y + 20);
+        const lblW = ctx.measureText(label).width;
+        ctx.font = "15px Arial, sans-serif";
+        const valX = x + lblW + 6;
+        ctx.fillText(value || "", valX, y + 20);
+        // dotted line
+        const vW = ctx.measureText(value || "").width;
+        ctx.strokeStyle = "#9ca3af";
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(valX + vW + 4, y + 22);
+        ctx.lineTo(maxX, y + 22);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      // Dòng 1: Họ tên (rộng) + ĐT (phải)
+      const phoneColX = pad + innerW * 0.66;
+      dotFill("Họ tên khách hàng:", opt.custName, pad, phoneColX - 16);
+      dotFill("ĐT:", opt.custPhone, phoneColX, pad + innerW);
+      y += 38;
+      dotFill("Địa chỉ:", opt.custAddr, pad, pad + innerW);
+      y += custH - 38;
+
+      // === Bảng ===
+      // Cột: STT | Tên hàng hóa & quy cách | ĐVT | SL | Đơn giá | Thành tiền
+      const cx0 = pad;                          // STT trái
+      const wSTT = 50;
+      const wName = innerW * 0.42;
+      const wUnit = 70;
+      const wQty = 64;
+      const wPrice = (innerW - wSTT - wName - wUnit - wQty) / 2;
+      const wAmount = wPrice;
+      const colX = {
+        stt: cx0,
+        name: cx0 + wSTT,
+        unit: cx0 + wSTT + wName,
+        qty: cx0 + wSTT + wName + wUnit,
+        price: cx0 + wSTT + wName + wUnit + wQty,
+        amount: cx0 + wSTT + wName + wUnit + wQty + wPrice,
+        end: cx0 + innerW,
+      };
+      const tableTop = y;
+
+      // Header bảng
+      const thH = 44;
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillRect(cx0, y, innerW, thH);
+      ctx.strokeStyle = "#374151";
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(cx0, y, innerW, thH);
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 13.5px Arial, sans-serif";
+      ctx.textAlign = "center";
+      const thMid = y + thH / 2 + 5;
+      ctx.fillText("STT", colX.stt + wSTT / 2, thMid);
+      ctx.fillText("Tên hàng hóa / quy cách", colX.name + wName / 2, thMid);
+      ctx.fillText("ĐVT", colX.unit + wUnit / 2, thMid);
+      ctx.fillText("SL", colX.qty + wQty / 2, thMid);
+      ctx.fillText("Đơn giá", colX.price + wPrice / 2, thMid);
+      ctx.fillText("Thành tiền", colX.amount + wAmount / 2, thMid);
+      y += thH;
+
+      // Các dòng
+      ctx.font = "14px Arial, sans-serif";
+      rows.forEach((rw, i) => {
+        const nameLines = wrapText(ctx, rw.name, wName - 16);
+        let rowH = Math.max(nameLines.length, 1) * 22 + (rw.note ? 18 : 0) + 16;
+        rowH = Math.max(rowH, 46);
+        // viền
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx0, y, innerW, rowH);
+        // vạch dọc cột
+        [colX.name, colX.unit, colX.qty, colX.price, colX.amount].forEach(vx => {
+          ctx.beginPath(); ctx.moveTo(vx, y); ctx.lineTo(vx, y + rowH); ctx.stroke();
+        });
+        const midY = y + rowH / 2;
+        ctx.fillStyle = "#111827";
+        ctx.font = "14px Arial, sans-serif";
+        // STT
+        ctx.textAlign = "center";
+        ctx.fillText(String(i + 1), colX.stt + wSTT / 2, midY + 5);
+        // Tên (wrap, canh trái)
+        ctx.textAlign = "left";
+        let ny = y + (rowH - (nameLines.length * 22 + (rw.note ? 18 : 0))) / 2 + 16;
+        nameLines.forEach(l => { ctx.fillText(l, colX.name + 8, ny); ny += 22; });
+        if (rw.note) {
+          ctx.font = "italic 12px Arial, sans-serif";
+          ctx.fillStyle = "#6b7280";
+          ctx.fillText("↳ " + rw.note, colX.name + 8, ny);
+          ctx.fillStyle = "#111827";
+          ctx.font = "14px Arial, sans-serif";
+        }
+        // ĐVT
+        ctx.textAlign = "center";
+        ctx.fillText(rw.unit, colX.unit + wUnit / 2, midY + 5);
+        // SL
+        ctx.fillText(String(rw.qty), colX.qty + wQty / 2, midY + 5);
+        // Đơn giá (phải)
+        ctx.textAlign = "right";
+        ctx.fillText(fmtVnd(rw.unitPriceK), colX.price + wPrice - 8, midY + 5);
+        // Thành tiền (phải)
+        ctx.fillText(fmtVnd(rw.amountK), colX.amount + wAmount - 8, midY + 5);
+        y += rowH;
+      });
+
+      // Dòng VAT 10%
+      const drawTotalRow = (label, valK, h, bold) => {
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx0, y, innerW, h);
+        [colX.name, colX.unit, colX.qty, colX.price, colX.amount].forEach(vx => {
+          ctx.beginPath(); ctx.moveTo(vx, y); ctx.lineTo(vx, y + h); ctx.stroke();
+        });
+        ctx.fillStyle = "#111827";
+        ctx.font = (bold ? "bold " : "") + "15px Arial, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(label, colX.amount - 12, y + h / 2 + 5);
+        ctx.fillText(fmtVnd(valK), colX.amount + wAmount - 8, y + h / 2 + 5);
+        y += h;
+      };
+      drawTotalRow("VAT 10%:", vatK, 40, false);
+      // Dòng CỘNG
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(cx0, y, innerW, 46);
+      ctx.strokeStyle = "#374151";
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(cx0, y, innerW, 46);
+      [colX.amount].forEach(vx => {
+        ctx.beginPath(); ctx.moveTo(vx, y); ctx.lineTo(vx, y + 46); ctx.stroke();
+      });
+      ctx.fillStyle = "#b91c1c";
+      ctx.font = "bold 17px Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("CỘNG:", cx0 + 14, y + 30);
+      ctx.textAlign = "right";
+      ctx.fillText(fmtVnd(congK) + " đ", colX.amount + wAmount - 8, y + 30);
+      y += 46;
+
+      // === Footer ===
+      y += 22;
+      const now = new Date();
+      ctx.fillStyle = "#111827";
+      ctx.font = "italic 14px Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        `Ngày ${now.getDate()} tháng ${now.getMonth() + 1} năm ${now.getFullYear()}`,
+        pad + innerW * 0.72, y + 16
+      );
+      y += 44;
+      ctx.font = "bold 15px Arial, sans-serif";
+      ctx.fillText("Người mua hàng", pad + innerW * 0.24, y);
+      ctx.fillText("Người bán hàng", pad + innerW * 0.76, y);
+      ctx.font = "italic 12.5px Arial, sans-serif";
+      ctx.fillStyle = "#6b7280";
+      ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.24, y + 20);
+      ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.76, y + 20);
+
+      // Con dấu ĐÃ THANH TOÁN — giữa bill (xoay random)
+      if (opt.showPaid && stampPaid) {
+        const sW = 320;
+        const sH = sW * stampPaid.height / stampPaid.width;
+        ctx.save();
+        ctx.translate(W / 2, tableTop + (y - tableTop) * 0.42);
+        ctx.rotate(rotStamp2);
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(stampPaid, -sW / 2, -sH / 2, sW, sH);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    async function download() {
+      const canvas = document.getElementById("invoiceCanvas");
+      if (!canvas || !canvas.width) { alert("Chưa có hóa đơn."); return; }
+      const a = document.createElement("a");
+      a.download = `hoadon_${currentOrderCode || Date.now()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      const st = document.getElementById("invoiceStatus");
+      if (st) st.textContent = "💾 Đã tải ảnh hóa đơn.";
+    }
+    async function copy() {
+      const canvas = document.getElementById("invoiceCanvas");
+      const st = document.getElementById("invoiceStatus");
+      if (!canvas || !canvas.width) { alert("Chưa có hóa đơn."); return; }
+      try {
+        const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+        if (!navigator.clipboard || !navigator.clipboard.write) {
+          if (st) st.textContent = "⚠️ Trình duyệt không hỗ trợ copy ảnh — hãy bấm Tải ảnh.";
+          return;
+        }
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        if (st) st.textContent = "📋 Đã copy ảnh hóa đơn vào clipboard.";
+      } catch (e) {
+        if (st) st.textContent = "⚠️ Copy thất bại: " + e.message + " — hãy bấm Tải ảnh.";
+      }
+    }
+
+    return { open, close, render, download, copy };
+  })();
+
   return {
     addFromText,
     pasteClipboardAndAdd,
@@ -10249,6 +10814,11 @@ const App = (() => {
     qrCustomFormatAmount,
     qrCustomDownload,
     qrCustomCopy,
+    invoiceOpen: () => Invoice.open(),
+    invoiceClose: () => Invoice.close(),
+    invoiceRender: () => Invoice.render(),
+    invoiceDownload: () => Invoice.download(),
+    invoiceCopy: () => Invoice.copy(),
     pickerFilter,
     pickerSelectAll,
     pickerDeselectAll,
