@@ -10,8 +10,8 @@
  - Tích hợp Google Sheet qua: (a) CSV publish để đọc bảng giá + hướng dẫn gói,
    (b) Apps Script Web App cho VAT DB + DRAFTS (online drafts, share giữa máy).
  - File deploy: menu-list-sim-can-mua-combo.html, STK.json, sheets.json,
-   vat-config.json, hoadonle.json, logo.png, dau-cong-ty.png, dau-thanh-toan.png.
-   (vat-sheet.gs paste 1 lần vào Apps Script editor.)
+   vat-config.json, hoadonle.json, logo.png, logoctyngang.png, dau-cong-ty.png,
+   dau-thanh-toan.png. (vat-sheet.gs paste 1 lần vào Apps Script editor.)
 
  PHÂN LOẠI SIM — QUAN TRỌNG (v10.8.10 rule)
  - ESIM: KHÔNG có cột "Ngày" — ngày LUÔN nằm trong tên gói (vd "Maldives 7 Days 5GB").
@@ -76,6 +76,23 @@
 ═══════════════════════════════════════════════════════════════════════════════
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
+
+ v10.9.2 · 28/05/2026 · (GMT+7)
+ - Hóa đơn lẻ: đổi logo header sang `logoctyngang.png` (logo NGANG, user up lên GitHub).
+   Giữ tỉ lệ ảnh, cao 64px, neo CĂNG LỀ PHẢI (W - pad), giới hạn rộng tối đa 320px để
+   tránh tràn/đè text. Báo giá (qrRenderFull) vẫn dùng logo.png vuông như cũ.
+ - File deploy MỚI: logoctyngang.png (đặt cạnh HTML).
+ Prompt: "logo cty ngang dùng logoctyngang.png, căn lề phải vì logo ngang tránh tràn."
+
+ v10.9.1 · 28/05/2026 · (GMT+7)
+ - Hóa đơn lẻ: SIM TRẮNG gộp CHUNG thành 1 dòng duy nhất (tổng SL tất cả SIM VẬT LÝ),
+   tên chỉ "SIM TRẮNG" (không kèm tên gói). NẠP GÓI vẫn riêng từng loại.
+ - Header cty: font nhỏ lại ~2/3 (name 19→13, info 14→9.5px), thụt vào phải (headerTextX = pad+110).
+ - Con dấu cty: chỉ 1/2 đè lên text (tâm dấu tại mép trái block chữ → nửa trái lòi ra lề trái).
+ - Ngày tháng năm: thêm ô input (type=date), mặc định hôm nay, cho sửa. Vẽ căn giữa thẳng
+   hàng "Người bán hàng" (innerW*0.76) thay vì lệch 0.72.
+ Prompt: "SIM TRẮNG gộp chung tên chỉ SIM TRẮNG + header cty nhỏ 2/3 thụt phải + dấu cty
+ chỉ 1/2 đè text + ngày căn giữa thẳng Người bán hàng + ngày cho điền default hôm nay."
 
  v10.9.0 · 28/05/2026 · (GMT+7)
  - Thêm nút "🧾 Hóa đơn lẻ" (cạnh "Xem Báo giá") → modal render ảnh HÓA ĐƠN BÁN LẺ.
@@ -1693,6 +1710,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
             oninput="App.invoiceRender()"
             style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:var(--muted);">Ngày trên hóa đơn:</div>
+        <input id="invDate" type="date"
+          oninput="App.invoiceRender()"
+          style="padding:8px 10px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
         <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
@@ -10333,11 +10356,10 @@ const App = (() => {
     // Mỗi dòng: { name, unit, qty, unitPriceK (đã ×10/11, đã round3), amountK }
     function buildRows(parsedItems, discShares, c) {
       const rows = [];
-      const VAT_MULT = 1 - c.vatRate; // 10/11? KHÔNG: ×10/11 nghĩa là /1.1. vatRate 0.1 → mult = 1/1.1
-      // ×10/11 = chia 1.1. Dùng factor = 1/(1+vatRate) khi vatRate là % VAT trên giá chưa thuế.
-      // Ở đây FullVAT = giá đã gồm VAT, đơn giá chưa VAT = FullVAT × 10/11 (với VAT 10%).
       const factor = 10 / 11; // cố định theo yêu cầu (VAT 10% → 1/11)
       const simWhiteFullK = c.simVatLyFullVatK; // 25k full VAT
+      const whiteUnitK = round3(simWhiteFullK * factor); // đơn giá SIM TRẮNG chưa VAT (cố định)
+      let whiteQty = 0; // tổng SL SIM TRẮNG (gộp tất cả SIM VẬT LÝ)
 
       (parsedItems || []).forEach((it, idx) => {
         const share = (discShares && discShares[idx]) || 0;
@@ -10350,12 +10372,8 @@ const App = (() => {
           && /sim\s*v[ậa]t\s*l[ýy]/i.test(it.productType || "");
 
         if (isPhysicalSim) {
-          // Tách 2 dòng: SIM TRẮNG (Cái) + NẠP GÓI (Gói)
-          // SIM TRẮNG: đơn giá chưa VAT = 25 × 10/11
-          const whiteUnitK = round3(simWhiteFullK * factor);
-          // NẠP GÓI: đơn giá chưa VAT = (perUnitFull - 25) × 10/11
+          // SIM VẬT LÝ → NẠP GÓI (riêng từng loại) + cộng dồn SIM TRẮNG (gộp chung 1 dòng)
           const rechargeUnitK = round3(Math.max(perUnitFullK - simWhiteFullK, 0) * factor);
-          // Tên: thay "SIM VẬT LÝ" → "NẠP GÓI" cho dòng nạp; SIM TRẮNG riêng
           const baseName = it.invName.replace(/^SIM\s+V[ẬA]T\s+L[ÝY]\s*/i, "").trim();
           rows.push({
             name: "NẠP GÓI " + baseName,
@@ -10365,14 +10383,7 @@ const App = (() => {
             amountK: round3(rechargeUnitK * qty),
             note: it.note || "",
           });
-          rows.push({
-            name: "SIM TRẮNG " + baseName,
-            unit: "Cái",
-            qty: qty,
-            unitPriceK: whiteUnitK,
-            amountK: round3(whiteUnitK * qty),
-            note: "",
-          });
+          whiteQty += qty; // gộp vào SIM TRẮNG tổng
         } else {
           // ESIM / NẠP GÓI / loại khác: 1 dòng, đơn giá = perUnitFull × 10/11
           const unitK = round3(perUnitFullK * factor);
@@ -10386,6 +10397,17 @@ const App = (() => {
           });
         }
       });
+      // Dòng SIM TRẮNG gộp chung (1 dòng, tổng SL của tất cả SIM VẬT LÝ), tên chỉ "SIM TRẮNG"
+      if (whiteQty > 0) {
+        rows.push({
+          name: "SIM TRẮNG",
+          unit: "Cái",
+          qty: whiteQty,
+          unitPriceK: whiteUnitK,
+          amountK: round3(whiteUnitK * whiteQty),
+          note: "",
+        });
+      }
       return rows;
     }
 
@@ -10404,6 +10426,14 @@ const App = (() => {
       // Uncheck dấu đã thanh toán mỗi lần mở (mặc định)
       const paidEl = document.getElementById("invStampPaid");
       if (paidEl) paidEl.checked = false;
+      // Ngày mặc định = hôm nay (chỉ set khi ô đang trống)
+      const dateEl = document.getElementById("invDate");
+      if (dateEl && !dateEl.value) {
+        const t = new Date();
+        const mm = String(t.getMonth() + 1).padStart(2, "0");
+        const dd = String(t.getDate()).padStart(2, "0");
+        dateEl.value = `${t.getFullYear()}-${mm}-${dd}`;
+      }
       document.getElementById("invoiceOverlay").classList.add("open");
       document.body.style.overflow = "hidden";
       render();
@@ -10434,8 +10464,14 @@ const App = (() => {
       const custPhone = (document.getElementById("invCustPhone") || {}).value || "";
       const custAddr = (document.getElementById("invCustAddr") || {}).value || "";
       const showPaid = (document.getElementById("invStampPaid") || {}).checked;
+      // Ngày: từ input (yyyy-mm-dd) → "Ngày d tháng m năm yyyy"; fallback hôm nay
+      let dateStr;
+      const dv = (document.getElementById("invDate") || {}).value || "";
+      const dm = dv.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dm) dateStr = `Ngày ${parseInt(dm[3], 10)} tháng ${parseInt(dm[2], 10)} năm ${dm[1]}`;
+      else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
-      await draw(canvas, c, rows, vatK, congK, { custName, custPhone, custAddr, showPaid });
+      await draw(canvas, c, rows, vatK, congK, { custName, custPhone, custAddr, showPaid, dateStr });
       if (statusEl) statusEl.textContent = `✅ ${rows.length} dòng · CỘNG: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
     }
 
@@ -10447,7 +10483,7 @@ const App = (() => {
 
       // Pre-load images
       let logoImg = null, stampCty = null, stampPaid = null;
-      try { logoImg = await loadImage("./logo.png"); } catch (e) {}
+      try { logoImg = await loadImage("./logoctyngang.png"); } catch (e) {}
       try { stampCty = await loadImage("./dau-cong-ty.png"); } catch (e) {}
       if (opt.showPaid) { try { stampPaid = await loadImage("./dau-thanh-toan.png"); } catch (e) {} }
 
@@ -10487,31 +10523,41 @@ const App = (() => {
 
       let y = pad;
 
-      // === Header công ty (trái) + logo (phải) ===
-      // Logo phải trên
-      const logoSize = 92;
-      if (logoImg) ctx.drawImage(logoImg, W - pad - logoSize, y, logoSize, logoSize);
+      // === Header công ty (trái) + logo ngang (phải, căn lề phải) ===
+      // v10.9.2: logo NGANG → giữ tỉ lệ, neo mép phải = W - pad, giới hạn rộng tối đa.
+      if (logoImg) {
+        const logoH = 64;
+        let logoW = logoH * logoImg.width / logoImg.height;
+        const maxLogoW = 320; // tránh tràn / đè text
+        let drawH = logoH;
+        if (logoW > maxLogoW) { drawH = maxLogoW * logoImg.height / logoImg.width; logoW = maxLogoW; }
+        const logoX = W - pad - logoW;          // căn lề phải
+        const logoY = y + (74 - drawH) / 2;      // canh giữa dọc với header
+        ctx.drawImage(logoImg, logoX, logoY, logoW, drawH);
+      }
 
+      // v10.9.1: font nhỏ lại ~2/3, thụt vào phải hơn
+      const headerTextX = pad + 110;
       ctx.textAlign = "left";
       ctx.fillStyle = "#111827";
-      ctx.font = "bold 19px Arial, 'Segoe UI', sans-serif";
-      ctx.fillText(c.company.name, pad, y + 20);
+      ctx.font = "bold 13px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText(c.company.name, headerTextX, y + 14);
       ctx.fillStyle = "#374151";
-      ctx.font = "14px Arial, 'Segoe UI', sans-serif";
-      ctx.fillText("MST: " + c.company.mst, pad, y + 44);
-      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, innerW - logoSize - 20);
-      let ay = y + 66;
-      addrLines.forEach(l => { ctx.fillText(l, pad, ay); ay += 19; });
-      ctx.fillText("Hotline: " + c.company.hotline, pad, ay);
+      ctx.font = "9.5px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText("MST: " + c.company.mst, headerTextX, y + 31);
+      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, W - pad - 12 - headerTextX);
+      let ay = y + 45;
+      addrLines.forEach(l => { ctx.fillText(l, headerTextX, ay); ay += 13; });
+      ctx.fillText("Hotline: " + c.company.hotline, headerTextX, ay);
 
-      // Con dấu công ty — góc trái, 1 nửa ăn vào bộ chữ (xoay random)
+      // Con dấu công ty — chỉ 1/2 đè lên text, nửa còn lại nằm ngoài (lề trái). Xoay random.
       if (stampCty) {
         const sW = 150;
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
-        // Đặt tâm dấu lệch trái, chồng lên block chữ cty
-        const cx = pad + 64;
-        const cy = y + 58;
+        // Tâm dấu đặt tại mép trái block text → nửa trái dấu lòi ra lề trái, nửa phải đè lên chữ
+        const cx = headerTextX;
+        const cy = y + 36;
         ctx.translate(cx, cy);
         ctx.rotate(rotStamp1);
         ctx.globalAlpha = 0.88;
@@ -10677,14 +10723,11 @@ const App = (() => {
 
       // === Footer ===
       y += 22;
-      const now = new Date();
       ctx.fillStyle = "#111827";
       ctx.font = "italic 14px Arial, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(
-        `Ngày ${now.getDate()} tháng ${now.getMonth() + 1} năm ${now.getFullYear()}`,
-        pad + innerW * 0.72, y + 16
-      );
+      // v10.9.1: ngày căn giữa thẳng hàng "Người bán hàng" (0.76), dùng ngày từ input (default hôm nay)
+      ctx.fillText(opt.dateStr, pad + innerW * 0.76, y + 16);
       y += 44;
       ctx.font = "bold 15px Arial, sans-serif";
       ctx.fillText("Người mua hàng", pad + innerW * 0.24, y);
