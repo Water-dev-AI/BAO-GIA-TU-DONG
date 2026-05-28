@@ -76,6 +76,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.41 · 27/05/2026 · 14:05 (GMT+7)
+ - LUÔN show tab bar trong picker modal dù chỉ có 1 tab (yêu cầu). Trước đó <=1 tab
+   thì ẩn → giờ luôn hiện. Nút ℹ️ vì vậy luôn nằm ở tab header (góc dưới phải).
+   Bỏ slot trong filter bar (không cần fallback nữa).
+ Prompt: "chỉ có 1 tab cũng show tab nhé, ko ẩn."
+
  v10.8.40 · 27/05/2026 · 13:50 (GMT+7)
  - Picker modal có 1 bộ giá → tab bar bị ẩn → nút ℹ️ Info trước đó cũng bị mất.
    Fix: thêm slot `pickerInfoBtnSlot` nằm bên phải nút "SIM VẬT LÝ" trong filter bar.
@@ -940,7 +946,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.40 · 27/05/2026 · 13:50
+    Version 10.8.41 · 27/05/2026 · 14:05
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4055,21 +4061,9 @@ const App = (() => {
     const tabBar = document.getElementById("pickerTabBar");
     const descEl = document.getElementById("pickerTabDesc");
     const infoSlot = document.getElementById("pickerInfoBtnSlot");
-    // v10.8.40: Khi chỉ 1 tab thì tab bar bị ẩn → render nút ℹ️ vào slot
-    // bên phải nút "SIM VẬT LÝ" trong filter bar.
+    // v10.8.41: LUÔN show tab bar dù chỉ 1 tab (theo yêu cầu). Nút ℹ️ luôn ở
+    // tab header (góc dưới phải). Bỏ slot trong filter bar.
     if (infoSlot) infoSlot.innerHTML = "";
-    if (pickerTables.length <= 1) {
-      tabBar.style.display = "none";
-      if (descEl) descEl.style.display = "none";
-      // Vẫn check tab[0] có infoText không → inject vào slot
-      if (infoSlot && pickerTables.length === 1) {
-        const t0 = pickerTables[0];
-        if (t0.infoText && PkgInfo.has(t0.infoText)) {
-          infoSlot.innerHTML = `<button type="button" onclick="App.pkgInfoOpenForTab(0)" title="Xem APN / nhà mạng / timezone" style="margin:0 0 0 6px;padding:5px 10px;font-size:12px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;cursor:pointer;font-family:inherit;line-height:1.3;">ℹ️ Info</button>`;
-        }
-      }
-      return;
-    }
     tabBar.style.display = "flex";
     tabBar.innerHTML = pickerTables.map((t, i) => {
       const isActive = i === pickerActiveTab;
