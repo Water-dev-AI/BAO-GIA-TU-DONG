@@ -77,6 +77,18 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.7 · 28/05/2026 · (GMT+7)
+ - Fix đúng ý "+ phí ship": phân biệt ô ship RỖNG vs nhập 0. Thêm opts.shipEntered
+   (true khi #shipFeeK.value !== ""). Có SIM vật lý <10 cái: ô rỗng → "+ phí ship";
+   nhập 0 → KHÔNG hiện (đã chốt miễn ship). v10.9.6 trước đó hiện cả khi nhập 0 — sai.
+ Prompt: "không nhập → hiện +phí ship; nhập 0 → mất chữ +phí ship."
+
+ v10.9.6 · 28/05/2026 · (GMT+7)
+ - Dấu ĐÃ THANH TOÁN: quay random -30..30° (trước -45..45).
+ - Fix mất "+ phí ship" trong Bill khách (live) khi CÓ SIM VẬT LÝ + <10 cái + chưa nhập
+   phí ship. Thêm nhánh: regularPhysicalQty > 0 (mà chưa free ship, chưa nhập phí) → "+ phí ship".
+ Prompt: "dấu thanh toán -30..30 + lỗi mất '+ phí ship' khi có SIM vật lý <10 cái."
+
  v10.9.5 · 28/05/2026 · (GMT+7)
  - Dấu ĐÃ THANH TOÁN: xoay random -45..45° (trước -10..10), nhỏ còn 2/3 (ảnh mới lớn hơn),
    dời xuống DƯỚI CÙNG nằm giữa "Người mua hàng" và "Người bán hàng". footerH 160→230.
@@ -1016,7 +1028,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.5 · 28/05/2026
+    Version 10.9.7 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2250,18 +2262,21 @@ const ComboLogic = (() => {
     // Verify: totalK - effectiveDiscK = totalK - D + S + V = FullVAT khi tick ✓
     const effectiveDiscK = shipVat ? (discount.amount - shipFeeK - shipVatExtraK) : discount.amount;
 
-    // v10.8.27: shipText
+    // shipText
     //   - shipFeeK > 0: "+ Xk (phí ship)" [+ "+ Xk*50%" nếu shipVat]
     //   - shipFeeK = 0 + ≥10 SIM VL: "- free ship"
-    //   - shipFeeK = 0 + <10 SIM VL: bỏ luôn (không hiển thị)
+    //   - shipFeeK = 0 + <10 SIM VL (có SIM vật lý): "+ phí ship" (nhắc nhập phí)
     let shipText = "";
     if (shipFeeK > 0) {
       shipText = " + " + fmtK(shipFeeK) + " (phí ship)";
       if (shipVat) shipText += " + " + fmtK(shipFeeK) + "*50%";
     } else if (regularPhysicalQty > 0 && totalQtyForShip >= 10) {
       shipText = " - free ship";
+    } else if (regularPhysicalQty > 0 && opts.shipEntered !== true) {
+      // v10.9.7: có SIM vật lý <10 cái + CHƯA nhập phí (ô rỗng) → hiện "+ phí ship".
+      // Nếu user nhập 0 → shipEntered=true → KHÔNG hiện (đã chốt miễn phí).
+      shipText = " + phí ship";
     }
-    // shipFeeK = 0 + <10 SIM VL → không hiển thị gì (bỏ "+ phí ship" cũ)
 
     const summaryLines = [];
     if (discount.amount) {
@@ -3521,6 +3536,7 @@ const App = (() => {
     }
     return {
       shipFeeK: getShipFeeK(),
+      shipEntered: (() => { const el = document.getElementById("shipFeeK"); return !!(el && el.value !== ""); })(),
       shipVat: getShipVat(),
       orderCode: currentOrderCode || "",
       manualDiscountK: computeManualDiscountK(rawTotalK),
@@ -10437,7 +10453,7 @@ const App = (() => {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
       // Random góc xoay 2 dấu (-10..10 độ), khác nhau mỗi lần mở
       rotStamp1 = (Math.random() * 20 - 10) * Math.PI / 180;
-      rotStamp2 = (Math.random() * 90 - 45) * Math.PI / 180;
+      rotStamp2 = (Math.random() * 60 - 30) * Math.PI / 180;
       // Tự đổ thông tin KH từ VAT (nếu có) — chỉ đổ khi ô đang trống
       Cust2B.syncFromDOM();
       const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
