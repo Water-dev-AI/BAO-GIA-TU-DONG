@@ -77,6 +77,16 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.3 · 28/05/2026 · (GMT+7)
+ - Fix modal Hóa đơn lẻ bị che footer (nút Tải/Copy/Đóng ẩn 1/2): bọc thân modal bằng
+   `.picker-body` (cuộn riêng, footer cố định). Bỏ max-height inner canvas wrap.
+ - Bấm "Tải ảnh" hoặc "Copy ảnh" thành công → ĐÓNG popup luôn (gọi close()).
+ - Con dấu cty TO hơn (150→200px), lệch phải, chỉ góc 1/4 dưới-phải đè lên text;
+   neo sát đỉnh header (không cắt). Tăng headerCtyH 120→200, đẩy khối header xuống.
+ - Text header cty TO LẠI như cũ (name 19px, info 14px, headerTextX = pad).
+ Prompt: "nút dưới ẩn mất 1/2 + bấm xong đóng popup + dấu cty to gấp đôi sang phải chỉ
+ đè 1/4 dưới phải text + text header to lại như cũ."
+
  v10.9.2 · 28/05/2026 · (GMT+7)
  - Hóa đơn lẻ: đổi logo header sang `logoctyngang.png` (logo NGANG, user up lên GitHub).
    Giữ tỉ lệ ảnh, cao 64px, neo CĂNG LỀ PHẢI (W - pad), giới hạn rộng tối đa 320px để
@@ -994,7 +1004,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.42 · 27/05/2026 · 14:15
+    Version 10.9.3 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1690,7 +1700,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <h3 style="margin:0;flex:1;">🧾 Hóa đơn bán lẻ</h3>
       <button onclick="App.invoiceClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+    <div class="picker-body" style="padding:16px;display:flex;flex-direction:column;gap:14px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div style="grid-column:1 / -1;">
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Họ tên khách hàng</div>
@@ -1721,7 +1731,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
         <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
       </label>
-      <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow-y:auto;">
+      <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;">
         <canvas id="invoiceCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
       </div>
       <div id="invoiceStatus" class="status" style="font-size:12.5px;"></div>
@@ -10501,7 +10511,7 @@ const App = (() => {
       const tableHeaderH = 44;
       const totalRowsH = rowHeights.reduce((s, h) => s + h, 0);
       const vatRowH = 40, congRowH = 46;
-      const headerCtyH = 120;
+      const headerCtyH = 200;
       const titleH = 76;
       const custH = 86;
       const footerH = 160;
@@ -10521,7 +10531,8 @@ const App = (() => {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, W, H);
 
-      let y = pad;
+      // v10.9.3: đẩy khối header xuống để con dấu lớn (tràn lên trên) không bị cắt đỉnh canvas.
+      let y = pad + 95;
 
       // === Header công ty (trái) + logo ngang (phải, căn lề phải) ===
       // v10.9.2: logo NGANG → giữ tỉ lệ, neo mép phải = W - pad, giới hạn rộng tối đa.
@@ -10536,31 +10547,32 @@ const App = (() => {
         ctx.drawImage(logoImg, logoX, logoY, logoW, drawH);
       }
 
-      // v10.9.1: font nhỏ lại ~2/3, thụt vào phải hơn
-      const headerTextX = pad + 110;
+      // v10.9.3: font header to lại như cũ
+      const headerTextX = pad + 130;
       ctx.textAlign = "left";
       ctx.fillStyle = "#111827";
-      ctx.font = "bold 13px Arial, 'Segoe UI', sans-serif";
-      ctx.fillText(c.company.name, headerTextX, y + 14);
+      ctx.font = "bold 19px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText(c.company.name, headerTextX, y + 20);
       ctx.fillStyle = "#374151";
-      ctx.font = "9.5px Arial, 'Segoe UI', sans-serif";
-      ctx.fillText("MST: " + c.company.mst, headerTextX, y + 31);
-      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, W - pad - 12 - headerTextX);
-      let ay = y + 45;
-      addrLines.forEach(l => { ctx.fillText(l, headerTextX, ay); ay += 13; });
+      ctx.font = "14px Arial, 'Segoe UI', sans-serif";
+      ctx.fillText("MST: " + c.company.mst, headerTextX, y + 44);
+      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, W - pad - 12 - headerTextX - 330);
+      let ay = y + 66;
+      addrLines.forEach(l => { ctx.fillText(l, headerTextX, ay); ay += 19; });
       ctx.fillText("Hotline: " + c.company.hotline, headerTextX, ay);
 
-      // Con dấu công ty — chỉ 1/2 đè lên text, nửa còn lại nằm ngoài (lề trái). Xoay random.
+      // Con dấu công ty — TO (gấp đôi), lệch phải, CHỈ góc 1/4 dưới-phải của dấu đè lên text.
+      // Phần lớn dấu nằm phía trên + bên trái khối chữ; chỉ góc dưới-phải chạm chữ.
       if (stampCty) {
-        const sW = 150;
+        const sW = 200; // gấp ~đôi 150 trước (đã neo gọn trong header)
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
-        // Tâm dấu đặt tại mép trái block text → nửa trái dấu lòi ra lề trái, nửa phải đè lên chữ
-        const cx = headerTextX;
-        const cy = y + 36;
+        // Neo dấu sát đỉnh vùng header, lệch phải. Tâm dấu:
+        const cx = sW / 2;   // dấu sát lề trái (trái = 0), chỉ mép phải chạm đầu chữ
+        const cy = pad + 8 + sH / 2;
         ctx.translate(cx, cy);
         ctx.rotate(rotStamp1);
-        ctx.globalAlpha = 0.88;
+        ctx.globalAlpha = 0.9;
         ctx.drawImage(stampCty, -sW / 2, -sH / 2, sW, sH);
         ctx.restore();
         ctx.globalAlpha = 1;
@@ -10758,8 +10770,8 @@ const App = (() => {
       a.download = `hoadon_${currentOrderCode || Date.now()}.png`;
       a.href = canvas.toDataURL("image/png");
       a.click();
-      const st = document.getElementById("invoiceStatus");
-      if (st) st.textContent = "💾 Đã tải ảnh hóa đơn.";
+      // v10.9.3: đóng popup luôn sau khi tải
+      close();
     }
     async function copy() {
       const canvas = document.getElementById("invoiceCanvas");
@@ -10772,7 +10784,8 @@ const App = (() => {
           return;
         }
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        if (st) st.textContent = "📋 Đã copy ảnh hóa đơn vào clipboard.";
+        // v10.9.3: đóng popup luôn sau khi copy thành công
+        close();
       } catch (e) {
         if (st) st.textContent = "⚠️ Copy thất bại: " + e.message + " — hãy bấm Tải ảnh.";
       }
