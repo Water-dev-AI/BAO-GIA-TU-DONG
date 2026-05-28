@@ -76,6 +76,23 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.8.40 · 27/05/2026 · 13:50 (GMT+7)
+ - Picker modal có 1 bộ giá → tab bar bị ẩn → nút ℹ️ Info trước đó cũng bị mất.
+   Fix: thêm slot `pickerInfoBtnSlot` nằm bên phải nút "SIM VẬT LÝ" trong filter bar.
+   Khi chỉ có 1 tab → render nút ℹ️ Info vào slot này.
+ Prompt: "icon ℹ️ nằm riêng phía bên phải nút bấm chọn phân loại SIM VẬT LÝ
+ (cho trường hợp chỉ có 1 bộ giá, tab bar bị ẩn)."
+
+ v10.8.39 · 27/05/2026 · 13:30 (GMT+7)
+ - Tag "✅ Đã lấy" và "⚡ Đã nạp" giờ chỉ tính khi line trong ô mã match pattern
+   `b\d{2,}` (chữ "b" + ≥2 số viết liền). Trước đó: bất kỳ data nào trong ô đều
+   trigger tag → bị sai khi user gõ note tự do vào ô.
+ - Áp dụng cho cả schema mới `codes.groups` và legacy `{esim, physical}`.
+ - `esimCount` / `physicalCount` chỉ đếm dòng match pattern (note tự do bị bỏ qua
+   khỏi count, không hiện trong tooltip).
+ Prompt: "Tag đã lấy và đã nạp chỉ tính khi có dạng b00... — bắt buộc có 'b' và
+ ít nhất 2 số viết liền."
+
  v10.8.38 · 27/05/2026 · 13:10 (GMT+7)
  - Fix DRC navigation mũi tên ‹ › không hoạt động: `render()` luôn override
    `state.leftMonth`/`rightMonth` từ `state.start`/`end` → click nav bị revert.
@@ -923,7 +940,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.8.38 · 27/05/2026 · 13:10
+    Version 10.8.40 · 27/05/2026 · 13:50
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1300,6 +1317,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button id="fltAll"      class="light" onclick="App.pickerSetTypeFilter('ALL')"     style="margin:0;padding:6px 14px;font-size:12px;">Cả 2</button>
       <button id="fltEsim"     class="light" onclick="App.pickerSetTypeFilter('ESIM')"    style="margin:0;padding:6px 14px;font-size:12px;">ESIM</button>
       <button id="fltPhysical" class="light" onclick="App.pickerSetTypeFilter('PHYSICAL')" style="margin:0;padding:6px 14px;font-size:12px;">SIM VẬT LÝ</button>
+      <span id="pickerInfoBtnSlot"></span>
       <span id="pickerFilterStats" style="color:var(--muted);font-size:12px;margin-left:auto;"></span>
     </div>
     <div class="picker-body">
@@ -4036,9 +4054,20 @@ const App = (() => {
   function pickerRenderTabs() {
     const tabBar = document.getElementById("pickerTabBar");
     const descEl = document.getElementById("pickerTabDesc");
+    const infoSlot = document.getElementById("pickerInfoBtnSlot");
+    // v10.8.40: Khi chỉ 1 tab thì tab bar bị ẩn → render nút ℹ️ vào slot
+    // bên phải nút "SIM VẬT LÝ" trong filter bar.
+    if (infoSlot) infoSlot.innerHTML = "";
     if (pickerTables.length <= 1) {
       tabBar.style.display = "none";
       if (descEl) descEl.style.display = "none";
+      // Vẫn check tab[0] có infoText không → inject vào slot
+      if (infoSlot && pickerTables.length === 1) {
+        const t0 = pickerTables[0];
+        if (t0.infoText && PkgInfo.has(t0.infoText)) {
+          infoSlot.innerHTML = `<button type="button" onclick="App.pkgInfoOpenForTab(0)" title="Xem APN / nhà mạng / timezone" style="margin:0 0 0 6px;padding:5px 10px;font-size:12px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;cursor:pointer;font-family:inherit;line-height:1.3;">ℹ️ Info</button>`;
+        }
+      }
       return;
     }
     tabBar.style.display = "flex";
@@ -5624,20 +5653,29 @@ const App = (() => {
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
         : "";
       // v10.8.26: Tag mới — "Đã lấy" (có mã eSIM), "Đã nạp" (có mã SIM VL), "Đã nhập sổ" (đã copy payload).
-      // Bỏ useCodeBadge + đổi schema codes sang groups.
+      // v10.8.39: Chỉ tính là mã (cho tag) khi line match pattern `b\d{2,}` (b + ≥2 số liền).
+      // Note tự do (không phải mã) sẽ không trigger badge.
+      const CODE_RE = /\bb\d{2,}/i;
       let hasEsimCode = false, hasPhysicalCode = false;
       let esimCount = 0, physicalCount = 0;
       const groups = (d.codes && Array.isArray(d.codes.groups)) ? d.codes.groups : [];
       groups.forEach(g => {
         const lines = String(g.code || "").split(/\n+/).map(x => x.trim()).filter(Boolean);
-        if (!lines.length) return;
-        if (g.type === "esim") { hasEsimCode = true; esimCount += lines.length; }
-        else if (g.type === "physical") { hasPhysicalCode = true; physicalCount += lines.length; }
+        const codeLines = lines.filter(l => CODE_RE.test(l));
+        if (!codeLines.length) return;
+        if (g.type === "esim") { hasEsimCode = true; esimCount += codeLines.length; }
+        else if (g.type === "physical") { hasPhysicalCode = true; physicalCount += codeLines.length; }
       });
       // Migrate cũ fallback: nếu chưa có groups nhưng có esim/physical legacy
       if (!groups.length && d.codes) {
-        if (d.codes.esim && d.codes.esim.trim()) { hasEsimCode = true; esimCount = d.codes.esim.split(/\n+/).filter(x => x.trim()).length; }
-        if (d.codes.physical && d.codes.physical.trim()) { hasPhysicalCode = true; physicalCount = d.codes.physical.split(/\n+/).filter(x => x.trim()).length; }
+        if (d.codes.esim) {
+          const cs = d.codes.esim.split(/\n+/).map(x => x.trim()).filter(l => CODE_RE.test(l));
+          if (cs.length) { hasEsimCode = true; esimCount = cs.length; }
+        }
+        if (d.codes.physical) {
+          const cs = d.codes.physical.split(/\n+/).map(x => x.trim()).filter(l => CODE_RE.test(l));
+          if (cs.length) { hasPhysicalCode = true; physicalCount = cs.length; }
+        }
       }
       const tookBadge = hasEsimCode
         ? `<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #86efac;" title="eSIM: ${esimCount} mã">✅ Đã lấy</span>`
