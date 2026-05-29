@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.24 · 29/05/2026 · (GMT+7)
+ - Thêm nút "🔗" trong picker modal (cạnh nút 🔄 xoay) — mở link Google Sheet bảng giá
+   hiện tại trong tab mới.
+
  v10.9.23 · 29/05/2026 · (GMT+7)
  - Thêm favicon (file favicon.png 256x256) thay cho logo địa cầu mặc định của browser.
    Cần upload favicon.png lên cạnh HTML (cùng folder).
@@ -1138,7 +1142,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.23 · 29/05/2026
+    Version 10.9.24 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1494,6 +1498,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
       <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
       <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
+      <button class="light" onclick="App.pickerOpenSheetUrl()" style="margin:0;" title="Mở bảng giá này trong tab mới">🔗</button>
       <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
     <div id="pickerTabBar" style="padding:10px 14px;display:flex;flex-wrap:nowrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;"></div>
@@ -4468,6 +4473,16 @@ const App = (() => {
       csvCache.delete(_csvUrl);
     }
     await slOpen(currentPickerSheetIdx, true);
+  }
+
+  // v10.9.24: Mở link Google Sheet của bảng giá đang xem trong picker.
+  function pickerOpenSheetUrl() {
+    if (currentPickerSheetIdx < 0) return;
+    const list = slLoadAll();
+    const item = list[currentPickerSheetIdx];
+    if (item && item.url) {
+      window.open(item.url, "_blank", "noopener");
+    }
   }
 
   function pickerRenderTabs() {
@@ -11182,6 +11197,7 @@ const App = (() => {
     pickerToggleCopyNote,
     pickerSwitchTab,
     pickerRefresh,
+    pickerOpenSheetUrl,
     pickerSetTypeFilter,
     draftSaveOpen,
     doSaveNewDraft,
