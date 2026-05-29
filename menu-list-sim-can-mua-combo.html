@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.25 · 29/05/2026 · (GMT+7)
+ - FIX bug mã eSIM/SIM VL "lan" sang ô mới: trong _syncCodesGroupsToRuns, khi cart có thêm
+   run mới cùng type với run cũ (vd cũ 2 esim, thêm 2 esim nữa ở dưới), fallback "tìm entry
+   cũ cùng type" copy code cũ vào run mới → ô mã run mới bị điền sẵn mã của run trên.
+   Đã BỎ fallback — chỉ giữ code theo đúng POSITION. Run mới ô mã rỗng như đáng phải.
+
  v10.9.24 · 29/05/2026 · (GMT+7)
  - Thêm nút "🔗" trong picker modal (cạnh nút 🔄 xoay) — mở link Google Sheet bảng giá
    hiện tại trong tab mới.
@@ -1142,7 +1148,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.24 · 29/05/2026
+    Version 10.9.25 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3830,17 +3836,15 @@ const App = (() => {
     _ensureCodesGroups(d);
     const runs = _codeableRuns(d);
     const oldGroups = d.codes.groups;
-    // Build new groups theo runs hiện tại, cố gắng giữ code cũ theo position
+    // v10.9.25: Build new groups theo runs hiện tại — chỉ giữ code cũ THEO ĐÚNG POSITION.
+    // Bỏ fallback "tìm entry cùng type chưa dùng" — gây bug: thêm run esim mới ở dưới,
+    // nó "thừa kế" code của run esim cũ ở trên. Run mới phải có code rỗng.
     const newGroups = runs.map((r, i) => {
-      // Tìm code cũ cùng type ở position gần nhất (i)
       let code = "";
       if (oldGroups[i] && oldGroups[i].type === r.type) {
         code = oldGroups[i].code || "";
-      } else {
-        // Fallback: tìm bất kỳ entry cũ cùng type chưa dùng
-        const cand = oldGroups.find((g, j) => g && g.type === r.type && (g.code || "").trim());
-        if (cand) code = cand.code || "";
       }
+      // KHÔNG fallback sang oldGroups khác type/position → tránh code "lan" sang run mới
       return { type: r.type, code };
     });
     d.codes.groups = newGroups;
