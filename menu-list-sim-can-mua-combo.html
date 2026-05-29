@@ -77,6 +77,23 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.15 · 28/05/2026 · (GMT+7)
+ - Thanh loading luôn HIỆN khi csUpdate chạy (kể cả auto-background) — như cũ, không ẩn
+   nữa. Silent mode chỉ khác label: "⏳ Tự cập nhật..." vs "⏳ Đang cập nhật...".
+ - TTL 24h → 12h. Sau 12h tự cập nhật ở nền khi mở tab.
+
+ v10.9.14 · 28/05/2026 · (GMT+7)
+ - GỘP HOÀN TOÀN cơ chế tải sheet: chỉ còn 1 nút "🔄 Cập nhật giá" (góc card "Danh sách
+   bảng giá"). Tải toàn bộ ~40 sheet → dùng chung cho cả PriceIndex (cảnh báo giá lệch),
+   CountrySearch (tìm theo nước), csvCache (mở pill instant), _slPreloadCachedIds (pill ✅).
+ - GỠ slPreloadFavorites (tự chạy 15 sheet ưu tiên khi mở tab) + slRefreshAll. Pill ✅ giờ
+   set bởi CountrySearch.update/hydrate. TTL cảnh báo 30 ngày của CountrySearch → BỎ.
+ - Auto-background: mở tab + data ≥24h cũ → csUpdate(silent=true) chạy ngầm (không hiện
+   progress bar, đổi label nút). <24h → không tải lại (giữ data localStorage).
+ - GỠ UI cũ: slPreloadBar HTML, badge "🌍 Tìm theo nước ⚠️/✅", text 30-ngày, nút Xoá data.
+ Prompt: "bỏ TTL 30 ngày, bỏ preload favorites, 1 nút Cập nhật giá tải all sheet 1 lần/ngày
+ (auto background sau 12h), data index nước dùng chung."
+
  v10.9.12 · 28/05/2026 · (GMT+7)
  - FIX Safari iPad/iPhone vẫn lỗi "not allowed by user agent" khi copy QR/ảnh báo giá:
    v10.9.8 mới sửa draftView*, BỎ SÓT qrCopyImage / qrCopyQuick / qrCopyFullQuick (nút copy
@@ -1060,7 +1077,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.12 · 28/05/2026
+    Version 10.9.15 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1121,18 +1138,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <h2 style="margin:0;">📋 Danh sách bảng giá</h2>
-        <button onclick="App.slRefreshAll()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Clear cache + reload tất cả bảng giá">🔄 Cập nhật giá</button>
+        <button id="slCapNhatGiaBtn" onclick="App.csUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h)">🔄 Cập nhật giá</button>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
-        Bấm pills (🟢 = đã preload, mở instant) hoặc tìm kiếm để mở bảng giá chọn gói.
+        Bấm pills hoặc tìm kiếm (theo tên bảng giá hoặc tên nước) để mở bảng giá chọn gói.
       </div>
-      <!-- v10.8.33: Country index — tìm bảng giá theo nội dung sheet (tên nước) -->
-      <div id="csIndexBar" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;padding:8px 10px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-size:12px;">
-        <span id="csStatusBadge" style="font-weight:600;">🌍 Tìm theo nước</span>
-        <span id="csStatusText" style="color:var(--muted);">(chưa cập nhật — nhập tên nước trên ô tìm kiếm để dùng)</span>
-        <button id="csUpdateBtn" onclick="App.csUpdate()" style="margin:0 0 0 auto;padding:5px 10px;font-size:11.5px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;cursor:pointer;font-family:inherit;" title="Tải nội dung tất cả 40 bảng giá để search theo nước. Tải lâu (~30-60s), vài ngày hãy cập nhật một lần.">🌍 Cập nhật nước</button>
-        <button id="csClearBtn" onclick="App.csClear()" style="margin:0;padding:5px 9px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;display:none;" title="Xoá data tìm theo nước">✕ Xoá data</button>
-      </div>
+      <!-- v10.9.13: Progress bar tải data (1 nút duy nhất "Cập nhật giá", chia sẻ cho cả tìm theo nước + cảnh báo giá) -->
       <div id="csProgress" style="display:none;margin-bottom:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px;">
           <span id="csProgressLabel">⏳ Đang tải...</span>
@@ -1143,16 +1154,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         </div>
       </div>
 
-      <!-- Progress bar pre-load (chỉ hiện khi đang load) -->
-      <div id="slPreloadBar" style="display:none;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px;">
-          <span id="slPreloadLabel">⏳ Đang tải bảng giá nhanh...</span>
-          <span id="slPreloadCount">0 / 0</span>
-        </div>
-        <div style="background:#eef2f7;border-radius:4px;height:6px;overflow:hidden;">
-          <div id="slPreloadFill" style="background:var(--blue);height:100%;width:0%;transition:width 0.3s;"></div>
-        </div>
-      </div>
+      <!-- v10.9.14: slPreloadBar cũ đã GỠ — chỉ còn csProgress (dùng chung) -->
 
       <!-- Search box + dropdown overlay -->
       <div style="position:relative;">
@@ -4720,81 +4722,20 @@ const App = (() => {
 
   /* ─── PRE-LOAD bảng giá ưu tiên (v10.4) ──────────────
      Khi mở app:
-     - Load các bảng có preset ID trong FAVORITE_COUNTRIES (~15 bảng).
-     - Tuần tự (không parallel) để tránh đụng rate limit Google Sheets.
-     - Cache vào csvCache (Map runtime, dùng chung với slOpen).
-     - Hiện progress bar dưới h2.
-     - Các bảng khác lazy load khi user click.
+     - Lazy load khi user click pill (slOpen tự fetch + cache).
+     - v10.9.14: preload favorites cũ đã GỠ. Toàn bộ sheet được tải bởi csUpdate (1 lần/ngày).
   */
-  async function slPreloadFavorites() {
-    const list = slLoadAll();
-    // Filter: chỉ preset có trong FAVORITE_COUNTRIES + có URL
-    const targets = FAVORITE_COUNTRIES
-      .map(f => list.find(x => x.presetId === f.id))
-      .filter(item => item && item.url);
 
-    if (!targets.length) return;
+  // v10.9.14: gỡ slPreloadFavorites + slRefreshAll — thay bằng csUpdate (1 nút duy nhất).
 
-    const bar = document.getElementById("slPreloadBar");
-    const fill = document.getElementById("slPreloadFill");
-    const count = document.getElementById("slPreloadCount");
-    const label = document.getElementById("slPreloadLabel");
-    if (bar) bar.style.display = "block";
-    if (count) count.textContent = `0 / ${targets.length}`;
-
-    let done = 0;
-    for (const item of targets) {
-      try {
-        const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
-        if (!csvUrl) { done++; continue; }
-        if (csvCache.has(csvUrl)) {
-          _slPreloadCachedIds.add(item.presetId);
-          done++;
-        } else {
-          if (label) label.textContent = `⏳ Đang tải: ${item.name}`;
-          const csvText = await gsFetch(csvUrl);
-          csvCache.set(csvUrl, { csvText, fetchedAt: Date.now() });
-          _slPreloadCachedIds.add(item.presetId);
-          // v10.9.9: nạp giá đúng vào PriceIndex ngay khi preload
-          try { gsParseTables(csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
-          done++;
-        }
-      } catch (e) {
-        console.warn("[Preload] Fail " + item.name + ":", e.message);
-        done++;
-      }
-      // Update UI
-      if (count) count.textContent = `${done} / ${targets.length}`;
-      if (fill) fill.style.width = `${Math.round(done / targets.length * 100)}%`;
-      // Re-render favorites để show dot xanh cho preset đã cache
-      slRenderFavorites();
-    }
-
-    // Done — hide bar sau 1.5s
-    if (label) label.textContent = `✅ Đã preload ${done}/${targets.length} bảng giá`;
-    setTimeout(() => {
-      if (bar) bar.style.display = "none";
-    }, 1500);
-  }
-
-  // Refresh: clear cache + reload favorites
-  async function slRefreshAll() {
-    if (!confirm("Clear cache hiện có và tải lại tất cả bảng giá ưu tiên?")) return;
-    csvCache.clear();
-    _slPreloadCachedIds.clear();
-    slRenderFavorites();
-    await slPreloadFavorites();
-    document.getElementById("slStatus").textContent = "✅ Đã refresh tất cả bảng giá ưu tiên.";
-  }
-
-  // ─── v10.8.33: CountrySearch — index nội dung 40 sheet để search theo nước ───
-  //   Storage key: combo_bill_country_index_v1
-  //     { byId: { [presetId]: { name, csvText, indexedAt } }, savedAt }
-  //   Lifetime: cảnh báo sau 30 ngày (KHÔNG tự xoá).
-  //   Multi-keyword: "han quoc, nhat ban" → AND, mỗi keyword expand qua alias map.
+  // ─── v10.9.13: CountrySearch (sheet cache + price index 24h, dùng chung) ───
+  //   Storage key: combo_bill_country_index_v2
+  //     { byId: { [presetId]: { name, csvText, normText, indexedAt } }, savedAt }
+  //   TTL: 24h. Quá hạn → auto background update khi mở tab (không chặn UI).
+  //   PriceIndex được hydrate từ csvText khi load (cho cảnh báo giá lệch).
   const CountrySearch = (() => {
-    const STORAGE_KEY = "combo_bill_country_index_v1";
-    const WARN_MS = 30 * 24 * 3600 * 1000; // 30 ngày
+    const STORAGE_KEY = "combo_bill_country_index_v2";
+    const STALE_MS = 12 * 3600 * 1000; // v10.9.15: 12h (trước là 24h)
     // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
     //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
     //   `short` (code 2-3 char) chỉ match khi user gõ chính xác code đó.
@@ -4909,10 +4850,10 @@ const App = (() => {
       const d = _load();
       return d ? (d.savedAt || 0) : 0;
     }
-    function isExpired() {
+    function isStale() {
       const at = getSavedAt();
-      if (!at) return false;
-      return (Date.now() - at) > WARN_MS;
+      if (!at) return true; // chưa có data → coi như stale (cần update)
+      return (Date.now() - at) > STALE_MS;
     }
     function getStats() {
       const d = _load();
@@ -5010,9 +4951,14 @@ const App = (() => {
           const normText = ComboLogic.norm(csvText || "");
           newById[item.presetId] = {
             name: item.name,
+            csvText,      // v10.9.13: lưu raw để hydrate PriceIndex sau reload
             normText,
             indexedAt: Date.now(),
           };
+          // v10.9.13: nạp PriceIndex ngay để cảnh báo giá lệch hoạt động
+          try { gsParseTables(csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
+          // v10.9.14: đánh dấu pills "đã preload" để slRender hiện ✅
+          try { _slPreloadCachedIds.add(item.presetId); } catch (e) {}
         } catch (e) {
           console.warn("[CountryIndex] Fail " + item.name + ":", e.message);
         }
@@ -5024,61 +4970,72 @@ const App = (() => {
       return { ok: true, count: Object.keys(newById).length, total: targets.length };
     }
 
-    return { isLoaded, isExpired, getStats, getSavedAt, clear, search, parseQuery, update };
+    // v10.9.13: hydrate csvCache + PriceIndex từ storage (gọi 1 lần khi init).
+    // Cho phép cảnh báo giá lệch hoạt động ngay khi mở tab mà chưa cần fetch mới.
+    function hydrate() {
+      const d = _load();
+      if (!d || !d.byId) return;
+      const list = (typeof slLoadAll === "function") ? slLoadAll() : [];
+      const byPresetId = new Map(list.map(x => [x.presetId, x]));
+      for (const [pid, entry] of Object.entries(d.byId)) {
+        if (!entry || !entry.csvText) continue;
+        const item = byPresetId.get(pid);
+        if (!item || !item.url) continue;
+        const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+        if (csvUrl && typeof csvCache !== "undefined" && !csvCache.has(csvUrl)) {
+          csvCache.set(csvUrl, { csvText: entry.csvText, fetchedAt: entry.indexedAt || d.savedAt });
+        }
+        try { gsParseTables(entry.csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
+        // v10.9.14: đánh dấu pills "đã preload" ngay khi hydrate
+        try { _slPreloadCachedIds.add(pid); } catch (e) {}
+      }
+    }
+
+    return { isLoaded, isStale, getStats, getSavedAt, clear, search, parseQuery, update, hydrate };
   })();
 
   // UI handlers for CountrySearch
   function csUpdateBadgeUI() {
-    const badge = document.getElementById("csStatusBadge");
-    const txt = document.getElementById("csStatusText");
-    const clearBtn = document.getElementById("csClearBtn");
-    const updateBtn = document.getElementById("csUpdateBtn");
-    if (!badge || !txt) return;
+    // v10.9.13: badge/text 30-ngày đã gỡ. Chỉ còn nút "🔄 Cập nhật giá" — đổi label theo trạng thái stale.
+    const btn = document.getElementById("slCapNhatGiaBtn");
+    if (!btn) return;
     if (CountrySearch.isLoaded()) {
       const s = CountrySearch.getStats();
-      const date = new Date(s.savedAt);
-      const ddmm = String(date.getDate()).padStart(2, "0") + "/" + String(date.getMonth() + 1).padStart(2, "0");
-      const expired = CountrySearch.isExpired();
-      badge.textContent = expired ? "🌍 Tìm theo nước ⚠️" : "🌍 Tìm theo nước ✅";
-      badge.style.color = expired ? "#b45309" : "#15803d";
-      if (expired) {
-        txt.innerHTML = `<span style="color:#b45309;font-weight:500;">Đã quá 30 ngày — cập nhật lại để chính xác (data cũ vẫn dùng được).</span>`;
-      } else {
-        txt.textContent = `(đã cập nhật ${s.count} bảng giá lúc ${ddmm})`;
-      }
-      if (clearBtn) clearBtn.style.display = "inline-block";
-      if (updateBtn) updateBtn.textContent = "🔄 Cập nhật lại";
+      const ddmm = (() => { const d = new Date(s.savedAt); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); })();
+      btn.title = `Đã cập nhật ${s.count} bảng giá lúc ${ddmm}. Tự cập nhật ở nền sau 12h. Bấm để cập nhật ngay.`;
     } else {
-      badge.textContent = "🌍 Tìm theo nước";
-      badge.style.color = "";
-      txt.innerHTML = `<span style="color:var(--muted);">(chưa cập nhật — nhập tên nước trên ô tìm kiếm để dùng. <i>Tải lâu (~30-60s), vài ngày cập nhật 1 lần.</i>)</span>`;
-      if (clearBtn) clearBtn.style.display = "none";
-      if (updateBtn) updateBtn.textContent = "🌍 Cập nhật nước";
+      btn.title = "Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h).";
     }
   }
-  async function csUpdate() {
+  // silent = true → chạy ngầm khi mở tab (vẫn HIỆN progress bar, chỉ khác label).
+  async function csUpdate(silent) {
     const bar = document.getElementById("csProgress");
     const fill = document.getElementById("csProgressFill");
     const count = document.getElementById("csProgressCount");
     const label = document.getElementById("csProgressLabel");
+    const btn = document.getElementById("slCapNhatGiaBtn");
+    if (btn) { btn.disabled = true; btn.textContent = silent ? "⏳ Tự cập nhật..." : "⏳ Đang cập nhật..."; }
     if (bar) bar.style.display = "block";
-    const r = await CountrySearch.update((done, total, name) => {
-      if (label) label.textContent = `⏳ Đang index: ${name}`;
-      if (count) count.textContent = `${done} / ${total}`;
-      if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
-    });
-    if (label) label.textContent = `✅ Đã index ${r.count || 0}/${r.total || 0} bảng giá`;
-    setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
-    csUpdateBadgeUI();
-    // Re-render search dropdown nếu có kw
-    if (typeof slRenderDropdown === "function") slRenderDropdown();
+    if (label) label.textContent = silent ? "⏳ Tự cập nhật ở nền (12h/lần)..." : "⏳ Đang tải bảng giá...";
+    try {
+      const r = await CountrySearch.update((done, total, name) => {
+        if (label) label.textContent = (silent ? "⏳ Tự cập nhật: " : "⏳ Đang tải: ") + name;
+        if (count) count.textContent = `${done} / ${total}`;
+        if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
+      });
+      if (label) label.textContent = `✅ Đã tải ${r.count || 0}/${r.total || 0} bảng giá`;
+      setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
+      csUpdateBadgeUI();
+      if (typeof slRenderFavorites === "function") slRenderFavorites();
+      if (typeof slRenderDropdown === "function") slRenderDropdown();
+    } catch (e) {
+      console.error("[csUpdate]", e);
+      if (label) label.textContent = "❌ Lỗi: " + e.message;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Cập nhật giá"; }
+    }
   }
-  function csClear() {
-    if (!confirm("Xoá data tìm theo nước? (Bấm Cập nhật nước để tải lại sau.)")) return;
-    CountrySearch.clear();
-    csUpdateBadgeUI();
-    if (typeof slRenderDropdown === "function") slRenderDropdown();
-  }
+  // v10.9.13: bỏ csClear (không còn lý do clear riêng — cứ bấm "Cập nhật giá" để tải mới).
 
   /* ===== DRAFTS (đơn nháp) ===== */
   const DRAFT_KEY = "combo_bill_drafts_v3"; // v3: local-only (v10.2), không còn online
@@ -8192,9 +8149,12 @@ const App = (() => {
     if (presets.length) {
       slRender();
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
-      // v10.4: Sau khi có preset → preload các bảng giá trong FAVORITE_COUNTRIES
-      // Async, không block UI. Có progress bar riêng.
-      slPreloadFavorites();
+      // v10.9.13: hydrate cache giá + country index từ localStorage (data đã tải lần trước, <24h)
+      try { CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
+      // Nếu data đã cũ (>24h) hoặc chưa có → tự tải lại NỀN (không chặn UI).
+      if (CountrySearch.isStale()) {
+        setTimeout(() => { csUpdate(true); }, 800);
+      }
     }
   });
 
@@ -11013,7 +10973,7 @@ const App = (() => {
     slFavoriteSearch,
     slPillClick,
     slDropdownPick,
-    slRefreshAll,
+    slRefreshAll: () => csUpdate(false), // v10.9.14: alias backward-compat, gọi csUpdate
     slRestorePresets,
     updateShipFee,
     toggleShipVat,
@@ -11026,7 +10986,7 @@ const App = (() => {
     drcCopyResult: () => DateRangeCalc.copyResult(),
     // v10.8.33: CountrySearch
     csUpdate,
-    csClear,
+    // v10.9.14: csClear đã bỏ
     // v10.8.35
     pkgInfoOpen: (text) => PkgInfo.open(text),
     pkgInfoOpenForTab: (idx) => {
