@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.18 · 28/05/2026 · (GMT+7)
+ - Nút "📋 Copy Bill khách" / "📱 Copy Bill (gọn)": hiện toast nhỏ "✅ Đã copy" bên TRÁI
+   nút (tự ẩn 1.8s) ngoài status bar — báo nhanh user biết đã copy thành công.
+ - Nút "🎨 Xem QR TT" / "🖼️ Xem Báo giá" giờ TOGGLE: bấm lần 1 mở cột, bấm lần 2 đóng
+   (thay vì phải bấm nút "✕ Đóng" riêng — vẫn giữ nút Đóng để dùng song song).
+
  v10.9.17 · 28/05/2026 · (GMT+7)
  - Tag dropdown trong section khách (cust2bTagSelect) đổi từ native &lt;select&gt; (không tô
    màu được trên đa số browser) sang custom dropdown: button tô màu theo tag hiện tại + menu
@@ -1087,7 +1093,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.17 · 28/05/2026
+    Version 10.9.18 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1249,8 +1255,8 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <span class="mini-label">💸 Giảm (%, ≤15)</span>
         <input id="manualDiscPct" class="mini" type="number" min="0" max="15" step="0.1" value="" placeholder="—" oninput="App.onManualDiscChange('pct')" />
         <span class="spacer"></span>
-        <button class="blue" onclick="App.calcAndCopyBill()" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
-        <button class="blue" onclick="App.calcAndCopyBillShort()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
+        <button class="blue" onclick="App.calcAndCopyBill(event)" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
+        <button class="blue" onclick="App.calcAndCopyBillShort(event)" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">
         Manual giảm giá <b>đè</b> công thức bậc thang. Nhập 1 trong 2 ô (k hoặc %). % giới hạn 0–15.
@@ -1491,6 +1497,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 <style>
 @keyframes slSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 @keyframes priceBlink { 0%,100%{background:transparent} 50%{background:#fee2e2} }
+@keyframes toastFadeIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
 table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-out infinite; border-radius:5px; }
 .vat-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #cfd5df; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:240px; overflow-y:auto; margin-top:2px; }
 .vat-dropdown.open { display:block; }
@@ -3868,20 +3875,47 @@ const App = (() => {
     showStatus("✅ Đã chốt combo và copy FULL: bill + notes phân bố giảm giá.");
   }
 
-  // Copy Bill khách → copy thẳng (không popup, không hỏi save).
-  async function calcAndCopyBill() {
-    const result = calcOnly();
-    const ok = await copyText(result.bill);
-    if (ok) showStatus("✅ Đã copy Bill khách.");
-    else showStatus("⚠️ Copy thất bại.");
+  // v10.9.18: Hiện toast nhỏ cạnh nút (trái), tự ẩn sau 1.8s.
+  function flashToastNearBtn(btn, text, color) {
+    if (!btn) return;
+    const old = btn.parentNode.querySelector(".btn-toast-mini");
+    if (old) old.remove();
+    const t = document.createElement("span");
+    t.className = "btn-toast-mini";
+    t.textContent = text;
+    t.style.cssText = `display:inline-block;margin-right:6px;padding:4px 9px;font-size:11.5px;border-radius:6px;` +
+      `background:${color || "#dcfce7"};color:${color === "#fee2e2" ? "#b91c1c" : "#166534"};font-weight:600;vertical-align:middle;` +
+      `animation:toastFadeIn .18s ease-out;`;
+    btn.parentNode.insertBefore(t, btn);
+    setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, 1800);
   }
 
-  async function calcAndCopyBillShort() {
+  // Copy Bill khách → copy thẳng (không popup, không hỏi save).
+  async function calcAndCopyBill(ev) {
+    const result = calcOnly();
+    const ok = await copyText(result.bill);
+    const btn = ev && ev.currentTarget;
+    if (ok) {
+      flashToastNearBtn(btn, "✅ Đã copy");
+      showStatus("✅ Đã copy Bill khách.");
+    } else {
+      flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
+      showStatus("⚠️ Copy thất bại.");
+    }
+  }
+
+  async function calcAndCopyBillShort(ev) {
     const result = calcOnly();
     const text = result.billShort || result.bill;
     const ok = await copyText(text);
-    if (ok) showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
-    else showStatus("⚠️ Copy thất bại.");
+    const btn = ev && ev.currentTarget;
+    if (ok) {
+      flashToastNearBtn(btn, "✅ Đã copy");
+      showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
+    } else {
+      flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
+      showStatus("⚠️ Copy thất bại.");
+    }
   }
 
   async function calcAndCopyNotes() {
@@ -7512,12 +7546,17 @@ const App = (() => {
     return { result, finalPayK, amountVnd, qrUrl };
   }
 
-  // Bấm 🎨 QR TT: chỉ hiện cột QR simple (ẩn cột báo giá nếu đang mở)
-  // v10.7.5: Bấm Xem QR TT → đóng cột báo giá full (nếu đang mở) → chỉ hiện QR.
+  // v10.9.18: Bấm 🎨 QR TT → toggle: chưa mở thì mở, đang mở thì đóng.
+  function _qrColIsVisible(id) {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    // "" hoặc bất kỳ value khác "none" → đang hiện (vì CSS default block)
+    return el.style.display !== "none";
+  }
   async function qrGenerate() {
+    if (_qrColIsVisible("qrSimpleCol")) { qrCloseSimple(); return; }
     const s = qrGetState();
     if (!s) return;
-    // Đóng cột báo giá full nếu đang mở
     document.getElementById("qrFullCol").style.display = "none";
     document.getElementById("qrResultWrap").style.display = "block";
     document.getElementById("qrSimpleCol").style.display = "";
@@ -7526,11 +7565,11 @@ const App = (() => {
     qrShowStatus(`✅ QR ${ComboLogic.fmtK(s.finalPayK)} — Mã ĐH: ${currentOrderCode}`);
   }
 
-  // v10.7.5: Bấm Xem Báo giá → đóng cột QR (nếu đang mở) → chỉ hiện báo giá.
+  // v10.9.18: Bấm 🖼️ Xem Báo giá → toggle: chưa mở thì mở, đang mở thì đóng.
   async function qrGenerateFull() {
+    if (_qrColIsVisible("qrFullCol")) { qrCloseFull(); return; }
     const s = qrGetState();
     if (!s) return;
-    // Đóng cột QR simple nếu đang mở
     document.getElementById("qrSimpleCol").style.display = "none";
     document.getElementById("qrResultWrap").style.display = "block";
     document.getElementById("qrFullCol").style.display = "";
