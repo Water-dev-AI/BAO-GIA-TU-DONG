@@ -77,6 +77,20 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.21 · 28/05/2026 · (GMT+7)
+ - Nút "📋 Copy text" trong picker modal (chọn gói) cũng hiện toast nhỏ "✅ Đã copy N gói"
+   bên trái nút (giống Copy Bill). Dùng flashToastNearBtn + capture btn trước await.
+
+ v10.9.20 · 28/05/2026 · (GMT+7)
+ - Mobile (≤880px): tên gói trong giỏ giới hạn 1 dòng + ellipsis "⋯" (tránh hàng quá cao
+   khi tên dài bị wrap). Tap vào tên để TOGGLE mở rộng xem full text. Bản desktop (>880px)
+   giữ nguyên hành vi cũ (wrap tự do, không cần tap).
+
+ v10.9.19 · 28/05/2026 · (GMT+7)
+ - Fix toast "✅ Đã copy" không hiện trên 2 nút Copy Bill: do capture ev.currentTarget SAU
+   await copyText() — browser đã clear currentTarget khi event handler return, btn=null →
+   flashToastNearBtn early-return. Đổi capture btn TRƯỚC await.
+
  v10.9.18 · 28/05/2026 · (GMT+7)
  - Nút "📋 Copy Bill khách" / "📱 Copy Bill (gọn)": hiện toast nhỏ "✅ Đã copy" bên TRÁI
    nút (tự ẩn 1.8s) ngoài status bar — báo nhanh user biết đã copy thành công.
@@ -623,6 +637,26 @@
   }
   @media (max-width: 880px) {
     .cart-grid { grid-template-columns: 1fr; }
+    /* v10.9.20: Mobile — tên gói trong giỏ giới hạn 1 dòng + ellipsis (tránh hàng cao).
+       Tap (click) tdName → toggle class .expanded để mở rộng xem full tên. */
+    table.cart-table td.td-pkg {
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    table.cart-table td.td-pkg.expanded {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+    table.cart-table td.td-pkg::after {
+      content: " ⋯";
+      font-size: 10px;
+      color: var(--muted);
+    }
+    table.cart-table td.td-pkg.expanded::after { content: ""; }
   }
   .cart-grid > .cart-grid-left { min-width: 0; }
   .cart-grid > .cart-grid-right { min-width: 0; }
@@ -1093,7 +1127,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.18 · 28/05/2026
+    Version 10.9.21 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1478,7 +1512,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     </div>
     <div class="picker-footer">
       <div class="picker-sel-count" id="pickerSelCount">Chưa chọn gói nào</div>
-      <button class="blue" onclick="App.pickerCopyText()" style="margin:0;" title="Copy text các gói đã tick (hoặc tất cả nếu chưa tick), không kèm cột #">📋 Copy text</button>
+      <button class="blue" onclick="App.pickerCopyText(event)" style="margin:0;" title="Copy text các gói đã tick (hoặc tất cả nếu chưa tick), không kèm cột #">📋 Copy text</button>
       <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;cursor:pointer;user-select:none;" title="Khi tick: copy kèm note (nếu gói có note). Khi bỏ tick: chỉ copy Tên/Loại/Ngày/Giá."><input type="checkbox" id="pickerCopyNoteChk" checked onchange="App.pickerToggleCopyNote()" style="margin:0;cursor:pointer;"> Copy note</label>
       <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
       <button class="light" onclick="App.pickerClose()">Huỷ</button>
@@ -3392,6 +3426,12 @@ const App = (() => {
 
       const tdName = document.createElement("td");
       tdName.className = "td-pkg";
+      // v10.9.20: Mobile-only — tap tên gói để toggle full text (CSS chỉ áp dụng ≤880px).
+      tdName.addEventListener("click", (ev) => {
+        // chỉ toggle khi tap vào vùng text, không phải nút trong cell
+        if (ev.target.closest("button")) return;
+        tdName.classList.toggle("expanded");
+      });
       const nameDiv = document.createElement("div");
       nameDiv.className = "pkg-text";
       // v10.6: tên gói + icon copy ngay sau (cùng dòng inline)
@@ -3892,9 +3932,9 @@ const App = (() => {
 
   // Copy Bill khách → copy thẳng (không popup, không hỏi save).
   async function calcAndCopyBill(ev) {
+    const btn = ev && ev.currentTarget; // v10.9.19: capture TRƯỚC await (browser clears currentTarget sau)
     const result = calcOnly();
     const ok = await copyText(result.bill);
-    const btn = ev && ev.currentTarget;
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill khách.");
@@ -3905,10 +3945,10 @@ const App = (() => {
   }
 
   async function calcAndCopyBillShort(ev) {
+    const btn = ev && ev.currentTarget;
     const result = calcOnly();
     const text = result.billShort || result.bill;
     const ok = await copyText(text);
-    const btn = ev && ev.currentTarget;
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
@@ -4695,7 +4735,8 @@ const App = (() => {
   // v10.5: Copy text các gói đã tick (hoặc toàn bộ gói đang hiển thị nếu chưa tick).
   // Format: Tên\tLoại\tNgày\tGiá[\tNote]\n — không kèm cột # và buttons.
   // v10.8.15: Có checkbox "Copy note" — nếu tick (default ON) + gói có note → append note vào cell 5.
-  async function pickerCopyText() {
+  async function pickerCopyText(ev) {
+    const btn = ev && ev.currentTarget; // v10.9.21: capture trước await
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) { document.getElementById("slStatus").textContent = "⚠️ Picker rỗng."; return; }
     // Lấy items để copy: nếu có tick → chỉ tick (cross-tab); nếu không tick → toàn bộ items đang HIỂN THỊ (sau filter) ở tab hiện tại
@@ -4734,6 +4775,7 @@ const App = (() => {
       await navigator.clipboard.writeText(text);
       const noteMsg = includeNote && withNoteCount ? ` (kèm ${withNoteCount} note)` : "";
       document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói${noteMsg} vào clipboard.`;
+      flashToastNearBtn(btn, `✅ Đã copy ${rows.length} gói`);
     } catch (e) {
       // Fallback: textarea
       const ta = document.createElement("textarea");
@@ -4743,6 +4785,7 @@ const App = (() => {
       try { document.execCommand("copy"); } catch {}
       ta.remove();
       document.getElementById("slStatus").textContent = `✅ Đã copy ${rows.length} gói (fallback).`;
+      flashToastNearBtn(btn, `✅ Đã copy ${rows.length} gói`);
     }
   }
 
