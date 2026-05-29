@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.23 · 29/05/2026 · (GMT+7)
+ - Thêm favicon (file favicon.png 256x256) thay cho logo địa cầu mặc định của browser.
+   Cần upload favicon.png lên cạnh HTML (cùng folder).
+
  v10.9.22 · 28/05/2026 · (GMT+7)
  - Khôi phục rule cũ: dòng "(FullVAT là: X, đã/không bao gồm phí ship)" CHỈ hiện khi đơn
    CÓ SIM VẬT LÝ (regularPhysicalQty > 0). Đơn chỉ ESIM/nạp gói → không liên quan ship →
@@ -558,6 +562,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Combo Bill eSIM/SIM</title>
+<link rel="icon" type="image/png" href="./favicon.png" />
+<link rel="apple-touch-icon" href="./favicon.png" />
 <style>
   :root {
     --bg: #f4f6f8;
@@ -1132,7 +1138,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.22 · 28/05/2026
+    Version 10.9.23 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
