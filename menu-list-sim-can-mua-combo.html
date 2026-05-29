@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.17 · 28/05/2026 · (GMT+7)
+ - Tag dropdown trong section khách (cust2bTagSelect) đổi từ native &lt;select&gt; (không tô
+   màu được trên đa số browser) sang custom dropdown: button tô màu theo tag hiện tại + menu
+   các option cũng tô màu, khớp y màu pill tag hiển thị trên tên đã lưu (DRAFT_TAGS bg/color).
+
  v10.9.16 · 28/05/2026 · (GMT+7)
  - Fix nút "Cập nhật giá" bấm xong báo 41/41 ngay (reuse cache, không tải mới). Thêm tham số
    force vào CountrySearch.update(): manual (silent=false) → force fetch mới; auto background
@@ -1082,7 +1087,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.16 · 28/05/2026
+    Version 10.9.17 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1255,13 +1260,15 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <div style="border-top:1px dashed var(--line);margin-top:14px;padding-top:12px;">
         <!-- Hàng 1: Tag dropdown + Tên khách + checkbox Xuất VAT -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <select id="cust2bTagSelect" onchange="App.cust2bSelectTagFromDropdown(this.value)"
-            style="padding:9px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer;min-width:110px;">
-            <option value="ZALO">ZALO</option>
-            <option value="ZALO_OA">ZALO OA</option>
-            <option value="FB">FB</option>
-            <option value="KHAC">KHÁC</option>
-          </select>
+          <!-- v10.9.17: Tag dropdown CUSTOM (tô màu theo DRAFT_TAGS, khớp màu pill trên tên đã lưu) -->
+          <div id="cust2bTagDropdown" style="position:relative;">
+            <button id="cust2bTagBtn" type="button" onclick="App.cust2bTagDropdownToggle()"
+              style="padding:7px 26px 7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer;min-width:110px;font-weight:700;text-align:left;position:relative;">
+              ZALO
+              <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#666;">▼</span>
+            </button>
+            <div id="cust2bTagMenu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:50;min-width:130px;padding:4px;"></div>
+          </div>
           <input id="cust2bName" type="text"
             placeholder="VD: Anh Minh / Chị Hoàn... (để trống — sẽ hỏi khi lưu)"
             oninput="App.cust2bOnChange()"
@@ -5137,9 +5144,8 @@ const App = (() => {
         // Giữ grid layout khi hiện (display:grid), ẩn khi không
         vatBox.style.display = isCompany ? "grid" : "none";
       }
-      // Tag dropdown
-      const sel = document.getElementById("cust2bTagSelect");
-      if (sel) sel.value = s.tag || "ZALO";
+      // v10.9.17: Tag dropdown CUSTOM (tô màu) — không còn native select
+      cust2bRenderTagDropdown(s.tag || "ZALO");
       const customWrap = document.getElementById("cust2bCustomTagWrap");
       if (customWrap) customWrap.style.display = s.tag === "KHAC" ? "" : "none";
     },
@@ -5696,6 +5702,49 @@ const App = (() => {
     liveRecalc();
     vatAutoFillClose();
     showStatus(`✅ Đã điền ${found.length} field: ${found.join(", ")}. Kiểm tra lại trước khi lưu.`);
+  }
+
+  // v10.9.17: Custom tag dropdown tô màu (thay native select).
+  function cust2bRenderTagDropdown(currentTag) {
+    const btn = document.getElementById("cust2bTagBtn");
+    const menu = document.getElementById("cust2bTagMenu");
+    if (!btn || !menu) return;
+    const cur = DRAFT_TAGS.find(t => t.id === currentTag) || DRAFT_TAGS[0];
+    // Button: tô màu theo tag hiện tại
+    btn.style.background = cur.bg;
+    btn.style.color = cur.color;
+    btn.style.borderColor = cur.color;
+    btn.innerHTML = `${cur.label}<span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:${cur.color};">▼</span>`;
+    // Menu: render options tô màu
+    menu.innerHTML = "";
+    DRAFT_TAGS.forEach(t => {
+      const opt = document.createElement("div");
+      opt.style.cssText = `padding:7px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;margin:2px 0;background:${t.bg};color:${t.color};`;
+      opt.textContent = t.label;
+      opt.onmouseenter = () => { opt.style.outline = `2px solid ${t.color}`; };
+      opt.onmouseleave = () => { opt.style.outline = "none"; };
+      opt.onclick = (ev) => { ev.stopPropagation(); cust2bSelectTagFromDropdown(t.id); cust2bTagDropdownClose(); };
+      menu.appendChild(opt);
+    });
+  }
+  function cust2bTagDropdownToggle() {
+    const menu = document.getElementById("cust2bTagMenu");
+    if (!menu) return;
+    if (menu.style.display === "none" || !menu.style.display) {
+      menu.style.display = "block";
+      setTimeout(() => document.addEventListener("click", _cust2bTagDocClick, true), 0);
+    } else {
+      cust2bTagDropdownClose();
+    }
+  }
+  function cust2bTagDropdownClose() {
+    const menu = document.getElementById("cust2bTagMenu");
+    if (menu) menu.style.display = "none";
+    document.removeEventListener("click", _cust2bTagDocClick, true);
+  }
+  function _cust2bTagDocClick(ev) {
+    const dd = document.getElementById("cust2bTagDropdown");
+    if (dd && !dd.contains(ev.target)) cust2bTagDropdownClose();
   }
 
   // v10.1: tag chuyển sang dropdown <select>
@@ -11069,6 +11118,7 @@ const App = (() => {
     draftViewImport,
     cust2bToggleVat,
     cust2bSelectTagFromDropdown,
+    cust2bTagDropdownToggle,
     vatImageOpen,
     vatImageProcess,
     vatAutoFillOpen,
