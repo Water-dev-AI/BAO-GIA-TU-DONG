@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.16 · 28/05/2026 · (GMT+7)
+ - Fix nút "Cập nhật giá" bấm xong báo 41/41 ngay (reuse cache, không tải mới). Thêm tham số
+   force vào CountrySearch.update(): manual (silent=false) → force fetch mới; auto background
+   (silent=true) → vẫn reuse cache như cũ.
+
  v10.9.15 · 28/05/2026 · (GMT+7)
  - Thanh loading luôn HIỆN khi csUpdate chạy (kể cả auto-background) — như cũ, không ẩn
    nữa. Silent mode chỉ khác label: "⏳ Tự cập nhật..." vs "⏳ Đang cập nhật...".
@@ -1077,7 +1082,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.15 · 28/05/2026
+    Version 10.9.16 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4925,8 +4930,9 @@ const App = (() => {
       return out;
     }
 
-    // Update index: fetch CSV của tất cả 40 bảng giá preset, lưu normalized text
-    async function update(onProgress) {
+    // Update index: fetch CSV của tất cả ~40 bảng giá preset, lưu normalized text.
+    // force=true → bỏ qua cache, luôn fetch mới (dùng khi user bấm "Cập nhật giá").
+    async function update(onProgress, force) {
       const list = (typeof slLoadAll === "function") ? slLoadAll() : [];
       const targets = list.filter(item => item.presetId && item.url);
       if (!targets.length) {
@@ -4939,8 +4945,8 @@ const App = (() => {
           const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
           if (!csvUrl) { done++; continue; }
           let csvText = "";
-          // Reuse cache nếu có
-          if (typeof csvCache !== "undefined" && csvCache.has(csvUrl)) {
+          // Reuse cache nếu có (trừ khi force)
+          if (!force && typeof csvCache !== "undefined" && csvCache.has(csvUrl)) {
             csvText = csvCache.get(csvUrl).csvText;
           } else {
             csvText = await gsFetch(csvUrl);
@@ -5022,7 +5028,7 @@ const App = (() => {
         if (label) label.textContent = (silent ? "⏳ Tự cập nhật: " : "⏳ Đang tải: ") + name;
         if (count) count.textContent = `${done} / ${total}`;
         if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
-      });
+      }, !silent);  // manual (silent=false) → force tải lại; auto background → reuse cache
       if (label) label.textContent = `✅ Đã tải ${r.count || 0}/${r.total || 0} bảng giá`;
       setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
       csUpdateBadgeUI();
