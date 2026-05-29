@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.22 · 28/05/2026 · (GMT+7)
+ - Khôi phục rule cũ: dòng "(FullVAT là: X, đã/không bao gồm phí ship)" CHỈ hiện khi đơn
+   CÓ SIM VẬT LÝ (regularPhysicalQty > 0). Đơn chỉ ESIM/nạp gói → không liên quan ship →
+   bỏ note. v10.9.8 đã sai khi hiện cả khi không có sim vật lý.
+
  v10.9.21 · 28/05/2026 · (GMT+7)
  - Nút "📋 Copy text" trong picker modal (chọn gói) cũng hiện toast nhỏ "✅ Đã copy N gói"
    bên trái nút (giống Copy Bill). Dùng flashToastNearBtn + capture btn trước await.
@@ -1127,7 +1132,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.21 · 28/05/2026
+    Version 10.9.22 · 28/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2379,9 +2384,10 @@ const ComboLogic = (() => {
     if (shipFeeK > 0) {
       summaryLines.push("Tổng thanh toán: " + fmtK(finalPayK));
     }
-    // v10.9.8: Dòng note FullVAT hiện khi có VAT (vatInfo), KỂ CẢ khi chưa điền phí ship.
+    // v10.9.22: Dòng note FullVAT ship CHỈ hiện khi đơn có SIM VẬT LÝ (khôi phục rule cũ).
+    // Không có SIM vật lý → không liên quan ship → bỏ note.
     const hasVatInfo = vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email);
-    if (hasVatInfo) {
+    if (hasVatInfo && regularPhysicalQty > 0) {
       if (shipVat && shipFeeK > 0) {
         summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", đã bao gồm phí ship)");
       } else {
