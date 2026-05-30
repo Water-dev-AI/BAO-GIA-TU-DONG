@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.28 · 29/05/2026 · (GMT+7)
+ - Section 1 thay 2 nút: "📋 Dán clipboard + thêm" + "Copy dòng chuẩn" → "➕ Bổ sung vào
+   giỏ hiện tại" (force mode "add" trong addFromText, giữ mã đơn + VAT + tên cũ, không lấy
+   từ text). "Xoá giỏ" → "🗑️ Xoá text" (chỉ xoá ô paste box, không động giỏ).
+ - addFromText nhận tham số opts.forceMode để bypass prompt _askPasteMode.
+
  v10.9.27 · 29/05/2026 · (GMT+7)
  - Fix ảnh báo giá full bị cắt cụt dòng "Địa chỉ:" trong block VAT info: drawTabbedLine
    nhánh single-cell chỉ fillText không wrap → text dài tràn mép phải. Thêm wrap cho 4 dòng
@@ -1160,7 +1166,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.27 · 29/05/2026
+    Version 10.9.28 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1183,9 +1189,8 @@ Mainland China A, 30 Days, 50GB, 128kbps	ESIM	299k
 Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
             <div>
               <button onclick="App.addFromText()">➕ Thêm vào giỏ</button>
-              <button class="blue" onclick="App.pasteClipboardAndAdd()">📋 Dán clipboard + thêm</button>
-              <button class="light" onclick="App.copyLinesOnly()">Copy dòng chuẩn</button>
-              <button class="red" onclick="App.clearCart()">Xoá giỏ</button>
+              <button class="blue" onclick="App.appendToCurrentCart()" title="Thêm các sản phẩm trong text VÀO giỏ hiện tại — giữ mã đơn hiện tại, KHÔNG lấy mã từ text">➕ Bổ sung vào giỏ hiện tại</button>
+              <button class="red" onclick="App.clearPasteBox()" title="Xoá toàn bộ text trong ô paste ở trên">🗑️ Xoá text</button>
             </div>
             <div id="status" class="status"></div>
           </div>
@@ -3070,7 +3075,8 @@ const App = (() => {
 
   // v10.7.5: addFromText giờ dùng smart parser. Nếu detect Bill structure
   // (có Tạm tính / VAT / Mã đơn) → restore cả Cust2B + orderCode.
-  async function addFromText() {
+  async function addFromText(opts) {
+    opts = opts || {};
     const text = $("pasteBox").value;
     if (!text || !text.trim()) {
       showStatus("❌ Chưa có text để thêm.");
@@ -3082,9 +3088,12 @@ const App = (() => {
       return;
     }
 
-    // Nếu giỏ có gói → hỏi Xoá+mới / Cộng / Huỷ
+    // v10.9.28: opts.forceMode="add" → bỏ qua prompt, luôn cộng vào giỏ hiện tại (KHÔNG replace,
+    // KHÔNG lấy mã/VAT từ text). Dùng cho nút "Bổ sung vào giỏ hiện tại".
     let mode = "add";
-    if (cart.length > 0) {
+    if (opts.forceMode === "add") {
+      mode = "add";
+    } else if (cart.length > 0) {
       const choice = await _askPasteMode(parsed.packages.length, parsed.hasBillStructure);
       if (choice === "cancel") {
         showStatus("⏸ Đã huỷ.");
@@ -3165,6 +3174,22 @@ const App = (() => {
     _updateSaveBarUI();
     const extraMsg = restoredFields.length ? " (đã restore: " + restoredFields.join(" + ") + ")" : "";
     showStatus(`✅ Đã ${mode === "replace" ? "tạo đơn mới với" : "thêm"} ${added} dòng${extraMsg}.`);
+  }
+
+  // v10.9.28: Bổ sung sản phẩm vào giỏ HIỆN TẠI, giữ mã đơn + VAT + tên cũ.
+  async function appendToCurrentCart() {
+    if (cart.length === 0) {
+      // Giỏ rỗng → giống addFromText (sẽ replace tự nhiên)
+      return addFromText();
+    }
+    return addFromText({ forceMode: "add" });
+  }
+
+  // v10.9.28: Xoá toàn bộ text trong ô paste (không động giỏ).
+  function clearPasteBox() {
+    const box = $("pasteBox");
+    if (box) { box.value = ""; box.focus(); }
+    showStatus("🗑️ Đã xoá text trong ô paste.");
   }
 
   // Hỏi user mode khi paste có giỏ hiện tại không rỗng
@@ -11150,6 +11175,8 @@ const App = (() => {
   return {
     addFromText,
     pasteClipboardAndAdd,
+    appendToCurrentCart,
+    clearPasteBox,
     calcOnly,
     calcAndCopyFull,
     calcAndCopyBill,
