@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.26 · 29/05/2026 · (GMT+7)
+ - Placeholder ô tên khách: thêm hint "...hoặc điền mã b00.... vào luôn để nhập sổ thẳng."
+ - Luồng "Nhập sổ trực tiếp" từ ô tên (sheetPayloadCopyDirect + sheetPayloadOpen modal):
+   nếu tên match /^b\d{2,}/i (b + ≥2 số liền, vd b00/b12/b99) → BỎ tagPrefix [Z]/[OA]/[F]/[K],
+   gửi nguyên mã sang sheet. Luồng nhập sổ từ ĐƠN NHÁP đã lưu giữ NGUYÊN (vẫn có tagPrefix).
+
  v10.9.25 · 29/05/2026 · (GMT+7)
  - FIX bug mã eSIM/SIM VL "lan" sang ô mới: trong _syncCodesGroupsToRuns, khi cart có thêm
    run mới cùng type với run cũ (vd cũ 2 esim, thêm 2 esim nữa ở dưới), fallback "tìm entry
@@ -1148,7 +1154,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.25 · 29/05/2026
+    Version 10.9.26 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1331,7 +1337,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
             <div id="cust2bTagMenu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:50;min-width:130px;padding:4px;"></div>
           </div>
           <input id="cust2bName" type="text"
-            placeholder="VD: Anh Minh / Chị Hoàn... (để trống — sẽ hỏi khi lưu)"
+            placeholder="VD: Anh Minh / Chị Hoàn... (để trống — sẽ hỏi khi lưu) hoặc điền mã b00.... vào luôn để nhập sổ thẳng."
             oninput="App.cust2bOnChange()"
             style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;" />
           <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:#92400e;cursor:pointer;user-select:none;background:#fef3c7;padding:7px 10px;border-radius:8px;border:1px solid #fcd34d;">
@@ -9178,7 +9184,9 @@ const App = (() => {
         groupByType: _getGroupToggle(),
       });
       const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
-      const tagPrefix = cust.name && cust.tag ? (mapTagPrefix[cust.tag] || "") : "";
+      // v10.9.26: nếu tên là mã nhập sổ "b\d\d..." (b + ≥2 số liền) → bỏ tagPrefix, gửi nguyên mã
+      const _isBookCode = cust.name && /^b\d{2,}/i.test(cust.name.trim());
+      const tagPrefix = (cust.name && cust.tag && !_isBookCode) ? (mapTagPrefix[cust.tag] || "") : "";
       const payload = {
         v: 1,
         kind: "simglobe_sheet_v1",
@@ -9357,7 +9365,9 @@ const App = (() => {
 
     // Map tag draft → spTag prefix
     const mapTagPrefix = { ZALO: "[Z]", ZALO_OA: "[OA]", FB: "[F]", KHAC: "[K]" };
-    const tagPrefix = cust.name && cust.tag ? (mapTagPrefix[cust.tag] || "") : "";
+    // v10.9.26: nếu tên là mã nhập sổ "b\d\d..." → bỏ tagPrefix
+    const _isBookCode = cust.name && /^b\d{2,}/i.test(cust.name.trim());
+    const tagPrefix = (cust.name && cust.tag && !_isBookCode) ? (mapTagPrefix[cust.tag] || "") : "";
 
     const payload = {
       v: 1,
