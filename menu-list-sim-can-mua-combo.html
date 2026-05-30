@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.27 · 29/05/2026 · (GMT+7)
+ - Fix ảnh báo giá full bị cắt cụt dòng "Địa chỉ:" trong block VAT info: drawTabbedLine
+   nhánh single-cell chỉ fillText không wrap → text dài tràn mép phải. Thêm wrap cho 4 dòng
+   "MST:/Tên Công ty:/Địa chỉ:/Email:" — các dòng wrap indent thẳng hàng giá trị. Đồng thời
+   tăng billNeedH (chiều cao canvas) khi VAT line dài để không đè dòng dưới.
+
  v10.9.26 · 29/05/2026 · (GMT+7)
  - Placeholder ô tên khách: thêm hint "...hoặc điền mã b00.... vào luôn để nhập sổ thẳng."
  - Luồng "Nhập sổ trực tiếp" từ ô tên (sheetPayloadCopyDirect + sheetPayloadOpen modal):
@@ -1154,7 +1160,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.26 · 29/05/2026
+    Version 10.9.27 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7825,11 +7831,15 @@ const App = (() => {
     // v10.8.11: Note dài (   ↳ ...) có thể wrap thành nhiều dòng — ước lượng thêm extra lineH:
     //   Note > 70 chars: +1 line, > 140 chars: +2 lines
     let extraNoteLines = 0;
+    // v10.9.27: ước lượng wrap cho dòng VAT (Địa chỉ thường dài). ~90 chars/dòng.
+    const _vatRe = /^(MST:|Tên Công ty:|Địa chỉ:|Email:)\s+/;
     for (const ln of billLines) {
       if (ln.startsWith("   ↳")) {
         const cleanLen = ln.replace(/^\s*↳\s*/, "").length;
         if (cleanLen > 140) extraNoteLines += 2;
         else if (cleanLen > 70) extraNoteLines += 1;
+      } else if (_vatRe.test(ln) && ln.length > 90) {
+        extraNoteLines += Math.ceil((ln.length - 90) / 90);
       }
     }
     const billNeedH = (billLines.length + extraNoteLines) * lineH + 16; // 16 = padding nội bộ
@@ -7918,6 +7928,22 @@ const App = (() => {
       ctx.font = font;
       ctx.fillStyle = color;
       if (cells.length === 1) {
+        // v10.9.27: Wrap dòng VAT info ("MST:", "Tên Công ty:", "Địa chỉ:", "Email:") nếu quá dài
+        // (đặc biệt Địa chỉ thường dài bị cắt cụt mép phải). Indent các dòng wrap thẳng hàng giá trị.
+        const vatLabelMatch = line.match(/^(MST:|Tên Công ty:|Địa chỉ:|Email:)(\s+)(.*)$/);
+        const maxW = W - padding * 2 - 8;
+        if (vatLabelMatch && ctx.measureText(line).width > maxW) {
+          const label = vatLabelMatch[1] + vatLabelMatch[2];
+          const value = vatLabelMatch[3];
+          const labelW = ctx.measureText(label).width;
+          const wrapped = wrapText(ctx, value, maxW - labelW);
+          for (let i = 0; i < wrapped.length; i++) {
+            if (i === 0) ctx.fillText(label + wrapped[i], padding, y);
+            else ctx.fillText(wrapped[i], padding + labelW, y);
+            if (i < wrapped.length - 1) y += lineH;
+          }
+          return;
+        }
         ctx.fillText(line, padding, y);
         return;
       }
