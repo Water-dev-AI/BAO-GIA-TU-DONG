@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.32 · 29/05/2026 · (GMT+7)
+ - Fix DRC nhảy tháng khi chọn ngày: pickDate gọi _syncMonthsFromDates() → ép leftMonth =
+   tháng của start, rightMonth = leftMonth+1. Khi user xem lịch PHẢI và click → start lưu
+   ngày tháng phải → 2 lịch nhảy về [phải-1, phải] làm user mất tháng đang xem. Đã BỎ sync
+   trong pickDate — giữ nguyên view tháng hiện tại. Smart pick (v10.9.30) vẫn hoạt động:
+   bấm 2 điểm bất kỳ (cùng lịch hay khác) → tự thành start + end.
+
  v10.9.31 · 29/05/2026 · (GMT+7)
  - Khôi phục ràng buộc rightMonth > leftMonth (v10.9.30 bỏ nhầm). 2 lịch vẫn hiển thị 2
    tháng khác nhau để xem được nhiều ngày hơn. Smart pick (v10.9.30) đã đủ để chọn cả
@@ -1183,7 +1190,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.31 · 29/05/2026
+    Version 10.9.32 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -10604,7 +10611,8 @@ const App = (() => {
           document.getElementById("drcEndInput").value = "";
         }
       }
-      _syncMonthsFromDates();
+      // v10.9.32: KHÔNG sync leftMonth/rightMonth sau khi pick — giữ nguyên view hiện tại.
+      // User đã click trên lịch đang hiển thị, không cần ép tháng nhảy.
       render();
     }
 
