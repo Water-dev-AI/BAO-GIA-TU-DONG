@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.29 · 29/05/2026 · (GMT+7)
+ - Fix search ngày trong picker modal: tên gói có leading zero (vd "Taiwan, 05 Days, 10GB")
+   search "5 ngày" không ra. Thêm "0*" vào regex match days → "05 Days" / "005 Days" đều
+   match search 5. Vẫn không match 15/25/50 (số dài hơn vì prefix [^\\d]).
+
  v10.9.28 · 29/05/2026 · (GMT+7)
  - Section 1 thay 2 nút: "📋 Dán clipboard + thêm" + "Copy dòng chuẩn" → "➕ Bổ sung vào
    giỏ hiện tại" (force mode "add" trong addFromText, giữ mã đơn + VAT + tên cũ, không lấy
@@ -1166,7 +1171,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.28 · 29/05/2026
+    Version 10.9.29 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4621,11 +4626,12 @@ const App = (() => {
     const colMatch = daysCol.match(/\d+/);
     const colNum = colMatch ? parseInt(colMatch[0], 10) : null;
     if (colNum !== null && daysList.includes(colNum)) return true;
-    // 2) Match tên: regex \b<num>\s*(day|days|d|ngày|ngay)\b
+    // 2) Match tên: regex cho phép leading zero (vd "05 Days" = 5 Days), nhưng KHÔNG match
+    //    số dài hơn (vd search "5" không match "15"/"25"). Pattern: (start|non-digit)0*<num>(day|days|d|ngày|ngay).
     const name = String(p.name || item.line || "").toLowerCase();
     for (const n of daysList) {
-      // \b không hoạt động tốt với unicode/vietnamese → dùng lookahead/lookbehind
-      const re = new RegExp(`(?:^|[^\\d])${n}\\s*(day|days|d|ngày|ngay)(?:[^a-z\\u00C0-\\u1EF9]|$)`, "i");
+      // v10.9.29: cho phép 0* prefix → "05 Days" match search "5"; vẫn không match "15" vì sau 1 không phải 0*5 mà là 5 trực tiếp với prefix là chữ số "1".
+      const re = new RegExp(`(?:^|[^\\d])0*${n}\\s*(day|days|d|ngày|ngay)(?:[^a-z\\u00C0-\\u1EF9]|$)`, "i");
       if (re.test(name)) return true;
     }
     return false;
