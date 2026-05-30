@@ -77,6 +77,18 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.31 · 29/05/2026 · (GMT+7)
+ - Khôi phục ràng buộc rightMonth > leftMonth (v10.9.30 bỏ nhầm). 2 lịch vẫn hiển thị 2
+   tháng khác nhau để xem được nhiều ngày hơn. Smart pick (v10.9.30) đã đủ để chọn cả
+   start/end trong cùng 1 tháng — không liên quan đến constraint hiển thị.
+
+ v10.9.30 · 29/05/2026 · (GMT+7)
+ - Fix DRC widget "Tính số ngày" không cho chọn cả ngày đi + ngày về trong CÙNG 1 tháng:
+   trước đó lịch trái chỉ set start, lịch phải chỉ set end + ràng buộc rightMonth > leftMonth.
+   v10.9.30 đổi sang SMART PICK: click bất kỳ lịch nào (trái/phải) đều set start hoặc end
+   theo state hiện tại (rỗng→start, đã có start→end, đã đủ→reset start). Bỏ ràng buộc tháng
+   khác nhau → 2 lịch có thể cùng tháng. Auto-swap nếu user chọn ngày trước start.
+
  v10.9.29 · 29/05/2026 · (GMT+7)
  - Fix search ngày trong picker modal: tên gói có leading zero (vd "Taiwan, 05 Days, 10GB")
    search "5 ngày" không ra. Thêm "0*" vào regex match days → "05 Days" / "005 Days" đều
@@ -1171,7 +1183,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.29 · 29/05/2026
+    Version 10.9.31 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -10418,10 +10430,8 @@ const App = (() => {
         const nextLeft = new Date(mon.getFullYear(), mon.getMonth() + 1, 1);
         canNext = nextLeft.getTime() < state.rightMonth.getTime();
       } else {
-        // Prev của right phải > left → tức right - 1 > left → right > left + 1
-        // → cho prev khi right.prev() > left
+        // Prev của right phải > left
         const prevRight = new Date(mon.getFullYear(), mon.getMonth() - 1, 1);
-        // canPrev cho right
         var canPrevRight = prevRight.getTime() > state.leftMonth.getTime();
       }
       const canPrevFinal = sideKey === "left" ? canPrev : canPrevRight;
@@ -10492,7 +10502,9 @@ const App = (() => {
     function render() {
       // v10.8.38: KHÔNG auto-sync leftMonth/rightMonth từ state.start/end mỗi lần render.
       // Logic sync giờ chuyển vào _syncMonthsFromDates() — gọi explicit khi pickDate/onInput.
-      // Constraint vẫn enforce: rightMonth > leftMonth.
+      // v10.9.31: GIỮ ràng buộc rightMonth > leftMonth (hiển thị 2 tháng khác nhau, xem nhiều
+      // ngày hơn). Cho phép pick trùng tháng đã được fix ở pickDate smart (v10.9.30), không
+      // liên quan đến constraint hiển thị.
       if (state.rightMonth.getTime() <= state.leftMonth.getTime()) {
         state.rightMonth = new Date(state.leftMonth.getFullYear(), state.leftMonth.getMonth() + 1, 1);
       }
@@ -10537,49 +10549,32 @@ const App = (() => {
     function pickDate(yr, mo, day, sideHint) {
       const d = new Date(yr, mo, day);
       d.setHours(0, 0, 0, 0);
-      // Xác định set vào start hay end:
-      // - Nếu sideHint là "popup": dùng state.popupOpen
-      // - Nếu sideHint là "left": set start
-      // - Nếu sideHint là "right": set end
+      // v10.9.30: Smart pick — bất kỳ lịch nào (trái/phải/popup) đều có thể chọn start HOẶC end:
+      //  - Click ngày khi state rỗng → set start.
+      //  - Click ngày khi có start, chưa có end → set end. Nếu < start → swap để start luôn ≤ end.
+      //  - Click ngày khi có ĐỦ cả 2 → reset: set start = ngày mới, end = null.
+      //  - Popup vẫn dùng state.popupOpen như cũ để tôn trọng ô input đang focus.
       let target = sideHint;
       if (sideHint === "popup") target = state.popupOpen;
-      if (target === "start") {
-        state.start = d;
-        const sIn = document.getElementById("drcStartInput");
-        if (sIn) sIn.value = fmtInput(d);
-        // Nếu end < start → clear end
-        if (state.end && state.end.getTime() < d.getTime()) {
-          state.end = null;
-          const eIn = document.getElementById("drcEndInput");
-          if (eIn) eIn.value = "";
-        }
-      } else if (target === "end") {
-        // Nếu end < start → swap (user pick ngày về sớm hơn ngày đi)
-        if (state.start && d.getTime() < state.start.getTime()) {
-          // Swap: ngày được pick thành start, start cũ thành end
-          state.end = state.start;
-          state.start = d;
-          document.getElementById("drcStartInput").value = fmtInput(state.start);
-          document.getElementById("drcEndInput").value = fmtInput(state.end);
-        } else {
-          state.end = d;
-          const eIn = document.getElementById("drcEndInput");
-          if (eIn) eIn.value = fmtInput(d);
-        }
-      } else {
-        // sideHint là "left"/"right" từ click vào lịch chính
-        if (sideHint === "left") {
-          // click vào lịch trái → set start
+
+      if (target === "popup") {
+        // fallback an toàn — không nên xảy ra
+        target = "start";
+      }
+
+      // Nếu là popup (target đã resolve thành start/end), giữ hành vi như cũ.
+      const isFromPopup = sideHint === "popup";
+      if (isFromPopup) {
+        if (target === "start") {
           state.start = d;
           document.getElementById("drcStartInput").value = fmtInput(d);
           if (state.end && state.end.getTime() < d.getTime()) {
             state.end = null;
             document.getElementById("drcEndInput").value = "";
           }
-        } else if (sideHint === "right") {
+        } else { // end
           if (state.start && d.getTime() < state.start.getTime()) {
-            state.end = state.start;
-            state.start = d;
+            state.end = state.start; state.start = d;
             document.getElementById("drcStartInput").value = fmtInput(state.start);
             document.getElementById("drcEndInput").value = fmtInput(state.end);
           } else {
@@ -10587,13 +10582,29 @@ const App = (() => {
             document.getElementById("drcEndInput").value = fmtInput(d);
           }
         }
+      } else {
+        // Click vào lịch chính (trái/phải) → smart pick theo state hiện tại
+        if (!state.start) {
+          state.start = d;
+          document.getElementById("drcStartInput").value = fmtInput(d);
+        } else if (!state.end) {
+          if (d.getTime() < state.start.getTime()) {
+            // swap để start ≤ end
+            state.end = state.start; state.start = d;
+            document.getElementById("drcStartInput").value = fmtInput(state.start);
+            document.getElementById("drcEndInput").value = fmtInput(state.end);
+          } else {
+            state.end = d;
+            document.getElementById("drcEndInput").value = fmtInput(d);
+          }
+        } else {
+          // Đã có cả 2 → reset: bắt đầu range mới
+          state.start = d; state.end = null;
+          document.getElementById("drcStartInput").value = fmtInput(d);
+          document.getElementById("drcEndInput").value = "";
+        }
       }
-      // Đóng popup nếu đang mở
-      if (state.popupOpen) {
-        state.popupOpen = null;
-        state.popupMonth = null;
-      }
-      _syncMonthsFromDates(); // v10.8.38
+      _syncMonthsFromDates();
       render();
     }
 
