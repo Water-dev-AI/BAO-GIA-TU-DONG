@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.33 · 29/05/2026 · (GMT+7)
+ - Picker modal "✅ Thêm vào giỏ" giữ THỨ TỰ gói theo picker (trên xuống dưới, cross-tab),
+   bỏ sort ABC theo tên cũ. Sort theo (tabIdx, itemIdx).
+
  v10.9.32 · 29/05/2026 · (GMT+7)
  - Fix DRC nhảy tháng khi chọn ngày: pickDate gọi _syncMonthsFromDates() → ép leftMonth =
    tháng của start, rightMonth = leftMonth+1. Khi user xem lịch PHẢI và click → start lưu
@@ -1190,7 +1194,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.32 · 29/05/2026
+    Version 10.9.33 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4806,20 +4810,24 @@ const App = (() => {
 
   function pickerConfirm() {
     if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
+    // v10.9.33: Giữ THỨ TỰ trong picker modal (không sort ABC theo tên).
+    // Sort theo (tabIdx, itemIdx) — tức thứ tự gói hiển thị trên picker từ trên xuống.
+    const keys = Array.from(pickerChecked).sort((a, b) => {
+      const [aT, aI] = a.split("_").map(Number);
+      const [bT, bI] = b.split("_").map(Number);
+      return aT !== bT ? aT - bT : aI - bI;
+    });
     const selected = [];
-    pickerChecked.forEach(key => {
+    keys.forEach(key => {
       const [tabIdx, itemIdx] = key.split("_").map(Number);
       const tbl = pickerTables[tabIdx];
       if (tbl && tbl.items[itemIdx]) {
-        // Mapping NƯỚC chuyển sang Apps Script (suy từ tên gói qua tab MAPPING).
-        // App KHÔNG gắn country vào cart item nữa.
         selected.push({
           line: tbl.items[itemIdx].line,
           qty: tbl.items[itemIdx].qty || 1,
         });
       }
     });
-    selected.sort((a, b) => a.line.localeCompare(b.line));
     const added = addItems(selected);
     document.getElementById("slStatus").textContent = "Da them " + added + " goi vao gio!";
     pickerClose();
