@@ -77,6 +77,23 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.38 · 29/05/2026 · (GMT+7)
+ - Bỏ chữ D và H khỏi alphabet random của mã đơn → tránh tạo mã kiểu "DH2905DH12" gây
+   nhầm lẫn khi parse. Còn 34 ký tự × 4 = 1.3M tổ hợp, trùng ~0.18%/ngày (gần như không
+   đổi). Regex parse mã hiện tại bắt đúng cả format có/không có DH bên trong (lazy match
+   tới \b), nhưng phòng xa cho cả lỗi parse ở chỗ khác (vd Apps Script).
+
+ v10.9.37 · 29/05/2026 · (GMT+7)
+ - Đổi 4 số random sau ddMM → 4 ký tự BASE36 UPPERCASE [0-9A-Z] để tránh trùng cross-device
+   (nhiều người cùng xài tool, 70 đơn/ngày). 4 base36 = 1.6M tổ hợp (~0.15%/ngày, tốt hơn
+   nhiều so với 4 số = 10K tổ hợp ~21% trùng). VD: DH3105A7K2.
+ - Update 3 regex parse mã đơn từ text (orderCodeAltRe / orderCodeStandaloneRe / user-typed
+   check) chấp nhận DH + [A-Z0-9]{6,12} thay vì \d → tương thích cả format cũ chỉ số và mới.
+
+ v10.9.36 · 29/05/2026 · (GMT+7)
+ - Đổi format mã đơn: trước "DH" + 8 số timestamp → nay "DH" + ddMM (ngày/tháng GMT+7) +
+   4 số random. VD ngày 31/05 → "DH31051234". Dễ tra ngày báo đơn từ mã.
+
  v10.9.35 · 29/05/2026 · (GMT+7)
  - Bỏ console.log debug v10.9.34.
  - Thêm text "Cập nhật lần cuối: dd/mm/yyyy HH:MM (GMT+7)" bên trái nút "🔄 Cập nhật giá".
@@ -1203,7 +1220,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.35 · 29/05/2026
+    Version 10.9.38 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2607,8 +2624,8 @@ const App = (() => {
     // Cart vừa thực sự đổi → tự đóng kết quả QR/Báo giá để tránh hiển thị stale
     // (mã đơn cũ + tổng tiền cũ trên ảnh trong khi giỏ đã thay)
     try { _qrAutoCloseOnCartChange(); } catch (e) { /* DOM chưa sẵn sàng → skip */ }
-    // Mã user tự gõ → giữ nguyên
-    if (currentOrderCode && !/^DH\d{8}$/.test(currentOrderCode)) return;
+    // Mã user tự gõ (không match format auto-gen DH + 8 ký tự base36) → giữ nguyên
+    if (currentOrderCode && !/^DH[0-9A-Z]{8}$/i.test(currentOrderCode)) return;
     // Cart rỗng → giữ mã hiện tại, không regen
     if (!cart.length) return;
     regenOrderCode();
@@ -2724,9 +2741,10 @@ const App = (() => {
     //   - "SHOP GỬI BÁO GIÁ ĐƠN HÀNG: DH12345678"
     // → tìm pattern DH + 6-12 chữ số trong dòng có keyword "đơn hàng" / "báo giá" / "mã đơn"
     const orderCodeRe = /^(mã đơn hàng|ma don hang|mã đơn|ma don)\s*:\s*(\S+)/i;
-    const orderCodeAltRe = /(?:báo giá|bao gia|đơn hàng|don hang|order\s*id|order\s*no)[^a-z\d]*?(DH\d{6,12})\b/i;
-    // v10.8.3: Dòng standalone chỉ có mã đơn (vd "DH11790956" đứng 1 mình)
-    const orderCodeStandaloneRe = /^(DH\d{6,12})\s*$/i;
+    // v10.9.37: chấp nhận DH + 6-12 ký tự alphanumeric [A-Z0-9] (format mới + format cũ chỉ số).
+    const orderCodeAltRe = /(?:báo giá|bao gia|đơn hàng|don hang|order\s*id|order\s*no)[^a-z\d]*?(DH[A-Z0-9]{6,12})\b/i;
+    // Dòng standalone chỉ có mã đơn (vd "DH31051234" hoặc "DH3105A7K2" đứng 1 mình)
+    const orderCodeStandaloneRe = /^(DH[A-Z0-9]{6,12})\s*$/i;
     const noteContinuationRe = /^\s*(?:↳|ⓘ|►|▶|>)/; // dòng note prefix thật sự
     // v10.8.7: Dòng separator (--- / ***) → skip hoàn toàn, không phải note
     const separatorRe = /^\s*[-*=_~]{3,}\s*$/;
@@ -7646,10 +7664,18 @@ const App = (() => {
   }
 
   function genOrderCode() {
-    // Timestamp-based 8 digits: lấy 8 số cuối của Date.now() + random suffix nếu cần
-    // Date.now() ~ 13 digits. Lấy 8 số cuối = đảm bảo unique trong cùng giây + biến thiên rộng.
-    const t = String(Date.now()).slice(-8);
-    return "DH" + t;
+    // v10.9.37: format DH + ddMM (GMT+7) + 4 ký tự BASE36 UPPERCASE [0-9A-Z].
+    // VD: 31/05 → "DH3105A7K2". 4 base36 ≈ 1.6M tổ hợp → tránh trùng cross-device (~0.15%/ngày).
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit"
+    }).formatToParts(new Date()).reduce((a, p) => (a[p.type] = p.value, a), {});
+    const ddmm = parts.day + parts.month;
+    // v10.9.38: BỎ D và H khỏi alphabet random để tránh tạo mã có "DH" giữa (vd DH2905DH12)
+    // gây nhầm lẫn khi parse text. 34 ký tự còn lại × 4 = 1.3M tổ hợp, tỉ lệ trùng ~0.18%/ngày.
+    const CHARS = "0123456789ABCEFGIJKLMNOPQRSTUVWXYZ";
+    let rand = "";
+    for (let i = 0; i < 4; i++) rand += CHARS[Math.floor(Math.random() * CHARS.length)];
+    return "DH" + ddmm + rand;
   }
 
   function regenOrderCode() {
