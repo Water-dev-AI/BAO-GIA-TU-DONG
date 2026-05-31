@@ -77,6 +77,15 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.35 · 29/05/2026 · (GMT+7)
+ - Bỏ console.log debug v10.9.34.
+ - Thêm text "Cập nhật lần cuối: dd/mm/yyyy HH:MM (GMT+7)" bên trái nút "🔄 Cập nhật giá".
+   Dùng Intl.DateTimeFormat timezone Asia/Bangkok để đảm bảo đúng GMT+7 dù máy ở múi khác.
+
+ v10.9.34 · 29/05/2026 · (GMT+7)
+ - Thêm console.log debug auto-update CountrySearch khi mở tab: hiển thị số bảng giá, tuổi
+   data (giờ), stale check, có trigger update không. Mở DevTools Console để xem.
+
  v10.9.33 · 29/05/2026 · (GMT+7)
  - Picker modal "✅ Thêm vào giỏ" giữ THỨ TỰ gói theo picker (trên xuống dưới, cross-tab),
    bỏ sort ABC theo tên cũ. Sort theo (tabIdx, itemIdx).
@@ -1194,7 +1203,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.33 · 29/05/2026
+    Version 10.9.35 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1254,6 +1263,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <h2 style="margin:0;">📋 Danh sách bảng giá</h2>
+        <span id="slUpdateInfo" style="font-size:11.5px;color:var(--muted);margin-right:8px;"></span>
         <button id="slCapNhatGiaBtn" onclick="App.csUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h)">🔄 Cập nhật giá</button>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
@@ -5187,14 +5197,24 @@ const App = (() => {
 
   // UI handlers for CountrySearch
   function csUpdateBadgeUI() {
-    // v10.9.13: badge/text 30-ngày đã gỡ. Chỉ còn nút "🔄 Cập nhật giá" — đổi label theo trạng thái stale.
     const btn = document.getElementById("slCapNhatGiaBtn");
+    const info = document.getElementById("slUpdateInfo");
     if (!btn) return;
     if (CountrySearch.isLoaded()) {
       const s = CountrySearch.getStats();
-      const ddmm = (() => { const d = new Date(s.savedAt); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); })();
-      btn.title = `Đã cập nhật ${s.count} bảng giá lúc ${ddmm}. Tự cập nhật ở nền sau 12h. Bấm để cập nhật ngay.`;
+      // v10.9.35: hiển thị ngày + giờ cập nhật ở GMT+7 cạnh nút
+      const fmtGMT7 = (ms) => {
+        const d = new Date(ms);
+        // Format theo timezone Asia/Bangkok (GMT+7, không DST)
+        const opts = { timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false };
+        const parts = new Intl.DateTimeFormat("en-GB", opts).formatToParts(d).reduce((a, p) => (a[p.type] = p.value, a), {});
+        return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+      };
+      const stamp = fmtGMT7(s.savedAt);
+      if (info) info.textContent = `Cập nhật lần cuối: ${stamp} (GMT+7)`;
+      btn.title = `Đã cập nhật ${s.count} bảng giá lúc ${stamp} (GMT+7). Tự cập nhật ở nền sau 12h. Bấm để cập nhật ngay.`;
     } else {
+      if (info) info.textContent = "Chưa cập nhật lần nào";
       btn.title = "Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h).";
     }
   }
@@ -8409,7 +8429,7 @@ const App = (() => {
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
       // v10.9.13: hydrate cache giá + country index từ localStorage (data đã tải lần trước, <24h)
       try { CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
-      // Nếu data đã cũ (>24h) hoặc chưa có → tự tải lại NỀN (không chặn UI).
+      csUpdateBadgeUI();
       if (CountrySearch.isStale()) {
         setTimeout(() => { csUpdate(true); }, 800);
       }
