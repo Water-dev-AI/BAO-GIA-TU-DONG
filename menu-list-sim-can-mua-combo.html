@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.39 · 29/05/2026 · (GMT+7)
+ - Fix: paste text có "Tổng:..." nhưng không có mã đơn (vd chỉ "ESIM... 329k\\n----\\nTổng:
+   329k + phí ship") → addFromText replace mode để orderCode rỗng → preview/QR hiện "SHOP
+   GỬI BÁO GIÁ Ạ:" thay vì "SHOP GỬI BÁO GIÁ ĐƠN HÀNG: DHxxx". Tự regenOrderCode khi
+   hasBillStructure mà parsed.orderCode rỗng.
+
  v10.9.38 · 29/05/2026 · (GMT+7)
  - Bỏ chữ D và H khỏi alphabet random của mã đơn → tránh tạo mã kiểu "DH2905DH12" gây
    nhầm lẫn khi parse. Còn 34 ký tự × 4 = 1.3M tổ hợp, trùng ~0.18%/ngày (gần như không
@@ -1220,7 +1226,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.38 · 29/05/2026
+    Version 10.9.39 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3198,6 +3204,12 @@ const App = (() => {
         // v10.8.8: Snapshot cart sig NGAY sau khi set mã đơn từ text → liveRecalc()
         _lastCartSig = _cartSig();
         restoredFields.push("mã đơn " + parsed.orderCode);
+      } else {
+        // v10.9.39: Bill structure (có "Tổng:") nhưng KHÔNG có mã đơn trong text → tự gen mã mới.
+        // Tránh trường hợp QR/preview hiển thị "SHOP GỬI BÁO GIÁ Ạ:" do orderCode rỗng.
+        regenOrderCode();
+        _lastCartSig = _cartSig();
+        restoredFields.push("mã đơn mới " + currentOrderCode);
       }
       // v10.8.27: Restore "Giảm giá riêng: -Xk" từ text
       if (parsed.manualDiscK > 0) {
