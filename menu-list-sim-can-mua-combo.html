@@ -77,8 +77,16 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.45 · 29/05/2026 · (GMT+7)
+ - LỖI NGHIÊM TRỌNG: nhập sổ "ship vào VAT" sai tổng. buildSheetPayloadItems() phân bổ
+   discount.amount (350k) thay vì effectiveDiscK (= discount − shipFee − shipVatExtra) như
+   calc() làm cho bill khách. Hậu quả: items payload có Σ = remainK (7281k) thay vì
+   fullVATK (7304k) → tổng trên Google Sheet sai, giảm giá note hiển thị KHÁC với phân bổ
+   trên sheet. Đã đồng bộ logic: payload tính effectiveDiscK = shipVat ON ? (disc - ship -
+   shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
+
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.44") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.45") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1247,7 +1255,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.44
+    Version 10.9.45
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -9486,7 +9494,17 @@ const App = (() => {
     const discount = manualK > 0
       ? { amount: Math.min(manualK, totalK), label: "Giảm giá thủ công" }
       : ComboLogic.discountFor(totalK);
-    const shares = ComboLogic.largestRemainderShares(items, discount.amount);
+    // v10.9.45: BUG FIX — phân bổ effectiveDiscK (= discount − shipFee − shipVatExtra) khớp với
+    // bill hiển thị. Trước đó dùng discount.amount → items chỉ có "giảm gốc", thiếu shipFee
+    // (và shipVat) khi nhập sổ → tổng sheet = remainK thay vì finalPayK = fullVATK.
+    const shipFeeK = Math.max(0, parseInt((document.getElementById("shipFeeK") || {}).value, 10) || 0);
+    const shipVatChk = document.getElementById("shipVatToggle");
+    const shipVat = !!(shipVatChk && shipVatChk.checked) && shipFeeK > 0;
+    const shipVatExtraK = shipVat ? Math.round(shipFeeK * 0.5) : 0;
+    const effectiveDiscK = shipVat
+      ? (discount.amount - shipFeeK - shipVatExtraK)
+      : discount.amount;
+    const shares = ComboLogic.largestRemainderShares(items, effectiveDiscK);
     return items.map((it, idx) => ({ ...it, discountAllocK: shares[idx] || 0 }));
   }
 
