@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.41 · 29/05/2026 · (GMT+7)
+ - Thêm console.log debug auto-update flow tại init (presets count, age, stale, trigger).
+ Mở DevTools Console khi reload → xem chuỗi log để biết chính xác trigger được hay không.
+
  v10.9.40 · 29/05/2026 · (GMT+7)
  - FIX auto-update sau 12h không thực sự tải data mới: csUpdate(silent=true) truyền
    force=!silent → force=false → CountrySearch.update REUSE csvCache (đã hydrate từ
@@ -1233,7 +1237,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.40 · 29/05/2026
+    Version 10.9.41 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -8469,16 +8473,30 @@ const App = (() => {
   slRender();
   loadSheetPresets().then(presets => {
     presetSheets = presets;
+    console.log("[init] presets loaded:", presets.length);
     if (presets.length) {
       slRender();
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
-      // v10.9.13: hydrate cache giá + country index từ localStorage (data đã tải lần trước, <24h)
       try { CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
       csUpdateBadgeUI();
-      if (CountrySearch.isStale()) {
-        setTimeout(() => { csUpdate(true); }, 800);
+      const stats = CountrySearch.getStats();
+      const ageH = stats.savedAt ? ((Date.now() - stats.savedAt) / 3600000).toFixed(2) : "n/a";
+      const stale = CountrySearch.isStale();
+      console.log(`[init] CountrySearch: count=${stats.count}, age=${ageH}h, stale=${stale}, STALE_MS=12h`);
+      if (stale) {
+        console.log("[init] → trigger csUpdate(true) ngầm sau 800ms");
+        setTimeout(() => {
+          console.log("[init] csUpdate(true) starting...");
+          csUpdate(true);
+        }, 800);
+      } else {
+        console.log("[init] data còn fresh, skip auto-update");
       }
+    } else {
+      console.warn("[init] presets EMPTY → skip auto-update flow entirely");
     }
+  }).catch(err => {
+    console.error("[init] loadSheetPresets FAILED:", err);
   });
 
   // v10.4.2: Document click — đóng dropdown khi user click ra ngoài ô search/dropdown
