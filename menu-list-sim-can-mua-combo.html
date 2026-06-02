@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.44 · 29/05/2026 · (GMT+7)
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.44") để tránh sai/quên cập
+   nhật ngày. Changelog history vẫn giữ ngày để truy vết.
+
+ v10.9.43 · 29/05/2026 · (GMT+7)
+ - Khôi phục STALE_MS = 12h. Bỏ console.log debug.
+
  v10.9.42 · 29/05/2026 · (GMT+7)
  - TẠM giảm STALE_MS 12h → 1h để test auto-update. Sau khi xác nhận OK, đổi lại 12h.
 
@@ -1240,7 +1247,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.42 · 29/05/2026
+    Version 10.9.44
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4979,7 +4986,7 @@ const App = (() => {
   //   PriceIndex được hydrate từ csvText khi load (cho cảnh báo giá lệch).
   const CountrySearch = (() => {
     const STORAGE_KEY = "combo_bill_country_index_v2";
-    const STALE_MS = 1 * 3600 * 1000; // v10.9.42: TẠM 1h để test (sau test đổi lại 12h)
+    const STALE_MS = 12 * 3600 * 1000; // 12h
     // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
     //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
     //   `short` (code 2-3 char) chỉ match khi user gõ chính xác code đó.
@@ -8476,30 +8483,15 @@ const App = (() => {
   slRender();
   loadSheetPresets().then(presets => {
     presetSheets = presets;
-    console.log("[init] presets loaded:", presets.length);
     if (presets.length) {
       slRender();
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
       try { CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
       csUpdateBadgeUI();
-      const stats = CountrySearch.getStats();
-      const ageH = stats.savedAt ? ((Date.now() - stats.savedAt) / 3600000).toFixed(2) : "n/a";
-      const stale = CountrySearch.isStale();
-      console.log(`[init] CountrySearch: count=${stats.count}, age=${ageH}h, stale=${stale}, STALE_MS=1h (TEST)`);
-      if (stale) {
-        console.log("[init] → trigger csUpdate(true) ngầm sau 800ms");
-        setTimeout(() => {
-          console.log("[init] csUpdate(true) starting...");
-          csUpdate(true);
-        }, 800);
-      } else {
-        console.log("[init] data còn fresh, skip auto-update");
+      if (CountrySearch.isStale()) {
+        setTimeout(() => { csUpdate(true); }, 800);
       }
-    } else {
-      console.warn("[init] presets EMPTY → skip auto-update flow entirely");
     }
-  }).catch(err => {
-    console.error("[init] loadSheetPresets FAILED:", err);
   });
 
   // v10.4.2: Document click — đóng dropdown khi user click ra ngoài ô search/dropdown
