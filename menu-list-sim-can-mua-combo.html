@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.40 · 29/05/2026 · (GMT+7)
+ - FIX auto-update sau 12h không thực sự tải data mới: csUpdate(silent=true) truyền
+   force=!silent → force=false → CountrySearch.update REUSE csvCache (đã hydrate từ
+   localStorage) → savedAt được set mới nhưng data y nguyên cũ. User thấy "Cập nhật lần
+   cuối: ..." nhưng giá vẫn cũ. Đã đổi: csUpdate luôn truyền force=true (cả manual và
+   silent>12h). Logic đúng: TTL đến hạn → bắt buộc fetch mới, không reuse.
+
  v10.9.39 · 29/05/2026 · (GMT+7)
  - Fix: paste text có "Tổng:..." nhưng không có mã đơn (vd chỉ "ESIM... 329k\\n----\\nTổng:
    329k + phí ship") → addFromText replace mode để orderCode rỗng → preview/QR hiện "SHOP
@@ -1226,7 +1233,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.39 · 29/05/2026
+    Version 10.9.40 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5263,7 +5270,7 @@ const App = (() => {
         if (label) label.textContent = (silent ? "⏳ Tự cập nhật: " : "⏳ Đang tải: ") + name;
         if (count) count.textContent = `${done} / ${total}`;
         if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
-      }, !silent);  // manual (silent=false) → force tải lại; auto background → reuse cache
+      }, true);  // v10.9.40: LUÔN force fetch mới (cả manual + silent>12h) — đó là điểm của TTL
       if (label) label.textContent = `✅ Đã tải ${r.count || 0}/${r.total || 0} bảng giá`;
       setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
       csUpdateBadgeUI();
