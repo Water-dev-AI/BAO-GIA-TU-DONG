@@ -77,6 +77,9 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.42 · 29/05/2026 · (GMT+7)
+ - TẠM giảm STALE_MS 12h → 1h để test auto-update. Sau khi xác nhận OK, đổi lại 12h.
+
  v10.9.41 · 29/05/2026 · (GMT+7)
  - Thêm console.log debug auto-update flow tại init (presets count, age, stale, trigger).
  Mở DevTools Console khi reload → xem chuỗi log để biết chính xác trigger được hay không.
@@ -1237,7 +1240,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.41 · 29/05/2026
+    Version 10.9.42 · 29/05/2026
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4976,7 +4979,7 @@ const App = (() => {
   //   PriceIndex được hydrate từ csvText khi load (cho cảnh báo giá lệch).
   const CountrySearch = (() => {
     const STORAGE_KEY = "combo_bill_country_index_v2";
-    const STALE_MS = 12 * 3600 * 1000; // v10.9.15: 12h (trước là 24h)
+    const STALE_MS = 1 * 3600 * 1000; // v10.9.42: TẠM 1h để test (sau test đổi lại 12h)
     // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
     //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
     //   `short` (code 2-3 char) chỉ match khi user gõ chính xác code đó.
@@ -8482,7 +8485,7 @@ const App = (() => {
       const stats = CountrySearch.getStats();
       const ageH = stats.savedAt ? ((Date.now() - stats.savedAt) / 3600000).toFixed(2) : "n/a";
       const stale = CountrySearch.isStale();
-      console.log(`[init] CountrySearch: count=${stats.count}, age=${ageH}h, stale=${stale}, STALE_MS=12h`);
+      console.log(`[init] CountrySearch: count=${stats.count}, age=${ageH}h, stale=${stale}, STALE_MS=1h (TEST)`);
       if (stale) {
         console.log("[init] → trigger csUpdate(true) ngầm sau 800ms");
         setTimeout(() => {
