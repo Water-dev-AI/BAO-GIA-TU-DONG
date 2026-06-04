@@ -77,6 +77,19 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.47 · 29/05/2026 · (GMT+7)
+ - Rollback v10.9.46 phần stockTip (giữ hành vi cũ — fix nhầm).
+ - Fix THỰC SỰ: 12 modal popup đóng nhầm khi quét text trong modal mà mouseup lỡ ra overlay.
+   Trước đó: onclick="if(event.target===this)close()" → click event fire trên overlay
+   bất kể mousedown ở đâu → đóng. Giờ: chuyển sang data-overlay-close + global handler
+   mousedown+mouseup tracking → CHỈ đóng khi cả mousedown VÀ mouseup đều trên overlay
+   (click thực sự ngoài modal), drag-ra-ngoài không còn đóng.
+
+ v10.9.46 · 29/05/2026 · (GMT+7)
+ - Picker modal: chuyển tab gói GIỮ lại lọc text + lọc ngày (trước đó reset gây bất tiện).
+ - Tooltip "Gói thừa tồn kho" (pkgOverflowTip): bỏ tự đóng khi rê chuột ra ngoài. Giờ chỉ
+   đóng khi CLICK ngoài tooltip + ngoài trigger. Hover ra/vào thoải mái không bị mất tip.
+
  v10.9.45 · 29/05/2026 · (GMT+7)
  - LỖI NGHIÊM TRỌNG: nhập sổ "ship vào VAT" sai tổng. buildSheetPayloadItems() phân bổ
    discount.amount (350k) thay vì effectiveDiscK (= discount − shipFee − shipVatExtra) như
@@ -86,7 +99,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.45") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.47") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1255,7 +1268,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.45
+    Version 10.9.47
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1597,7 +1610,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 </div>
 
 <!-- Picker modal -->
-<div class="picker-overlay" id="pickerOverlay" onclick="if(event.target===this)App.pickerClose()">
+<div class="picker-overlay" id="pickerOverlay" data-overlay-close="App.pickerClose()">
   <div class="picker-modal">
     <div class="picker-header">
       <h3 id="pickerTitle">Chọn gói</h3>
@@ -1699,7 +1712,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </style>
 
 <!-- Modal Lưu đơn nháp -->
-<div class="picker-overlay" id="draftSaveOverlay" onclick="if(event.target===this)App.draftSaveClose()">
+<div class="picker-overlay" id="draftSaveOverlay" data-overlay-close="App.draftSaveClose()">
   <div class="picker-modal" style="width:min(96vw, 520px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;" id="draftSaveTitle">💾 Lưu đơn nháp</h3>
@@ -1731,7 +1744,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal Share link -->
-<div class="picker-overlay" id="draftShareOverlay" onclick="if(event.target===this)App.draftShareClose()">
+<div class="picker-overlay" id="draftShareOverlay" data-overlay-close="App.draftShareClose()">
   <div class="picker-modal" style="width:min(96vw, 640px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">🔗 Link chia sẻ đơn nháp</h3>
@@ -1754,7 +1767,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal Confirm import từ link -->
-<div class="picker-overlay" id="draftImportOverlay" onclick="if(event.target===this)App.draftImportClose()">
+<div class="picker-overlay" id="draftImportOverlay" data-overlay-close="App.draftImportClose()">
   <div class="picker-modal" style="width:min(96vw, 520px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">📥 Import đơn nháp từ link</h3>
@@ -1779,7 +1792,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 <div id="pkgOverflowTip" class="pkg-overflow-tip"></div>
 
 <!-- v10.8.21: Modal xem ảnh hướng dẫn gói -->
-<div id="pkgGuideOverlay" class="pkg-guide-overlay" onclick="if(event.target===this)App.pkgGuideClose()">
+<div id="pkgGuideOverlay" class="pkg-guide-overlay" data-overlay-close="App.pkgGuideClose()">
   <div class="pkg-guide-modal">
     <div class="pkg-guide-header">
       <h4 id="pkgGuideTitle">Hướng dẫn gói</h4>
@@ -1798,7 +1811,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- v10.8.35: SerialScanner modal -->
-<div id="serialScanModal" class="picker-overlay" style="display:none;z-index:2000;" onclick="if(event.target===this)App.serialScanClose()">
+<div id="serialScanModal" class="picker-overlay" style="display:none;z-index:2000;" data-overlay-close="App.serialScanClose()">
   <div class="picker-modal" style="width:min(96vw, 980px);max-height:92vh;display:flex;flex-direction:column;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;font-size:15px;">📷 Bắt seri SIM từ ảnh (QR + barcode)</h3>
@@ -1834,7 +1847,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- v10.8.35: PkgInfo modal (APN/timezone + nhà mạng) -->
-<div id="pkgInfoModal" class="picker-overlay" style="display:none;z-index:1500;" onclick="if(event.target===this)App.pkgInfoClose()">
+<div id="pkgInfoModal" class="picker-overlay" style="display:none;z-index:1500;" data-overlay-close="App.pkgInfoClose()">
   <div class="picker-modal" style="width:min(96vw, 540px);max-height:85vh;display:flex;flex-direction:column;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;font-size:15px;">📡 Thông tin gói (APN / nhà mạng)</h3>
@@ -1844,7 +1857,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
   </div>
 </div>
 
-<div class="picker-overlay" id="vatAutoFillOverlay" onclick="if(event.target===this)App.vatAutoFillClose()">
+<div class="picker-overlay" id="vatAutoFillOverlay" data-overlay-close="App.vatAutoFillClose()">
   <div class="picker-modal" style="width:min(96vw, 600px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">📝 VAT tự điền từ text</h3>
@@ -1876,7 +1889,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal Xem đơn nháp (read-only, không thay giỏ hiện tại) -->
-<div class="picker-overlay" id="draftViewOverlay" onclick="if(event.target===this)App.draftViewClose()">
+<div class="picker-overlay" id="draftViewOverlay" data-overlay-close="App.draftViewClose()">
   <div class="picker-modal" style="width:min(96vw, 780px);max-height:90vh;display:flex;flex-direction:column;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;" id="draftViewTitle">👁 Xem đơn nháp</h3>
@@ -1902,7 +1915,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal QR Custom -->
-<div class="picker-overlay" id="qrCustomOverlay" onclick="if(event.target===this)App.qrCustomClose()">
+<div class="picker-overlay" id="qrCustomOverlay" data-overlay-close="App.qrCustomClose()">
   <div class="picker-modal" style="width:min(96vw, 560px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">⚡ QR thanh toán nhanh</h3>
@@ -1936,7 +1949,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal Hóa đơn bán lẻ (v10.9.0) -->
-<div class="picker-overlay" id="invoiceOverlay" onclick="if(event.target===this)App.invoiceClose()">
+<div class="picker-overlay" id="invoiceOverlay" data-overlay-close="App.invoiceClose()">
   <div class="picker-modal" style="width:min(96vw, 920px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">🧾 Hóa đơn bán lẻ</h3>
@@ -1987,7 +2000,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 </div>
 
 <!-- Modal Sheet Payload -->
-<div class="picker-overlay" id="sheetPayloadOverlay" onclick="if(event.target===this)App.sheetPayloadClose()">
+<div class="picker-overlay" id="sheetPayloadOverlay" data-overlay-close="App.sheetPayloadClose()">
   <div class="picker-modal" style="width:min(96vw,720px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">📤 Tạo payload Google Sheet</h3>
@@ -4679,11 +4692,7 @@ const App = (() => {
 
   function pickerSwitchTab(i) {
     pickerActiveTab = i;
-    pickerSearchKw = "";
-    pickerDaysFilter = []; // v10.5: reset filter ngày khi đổi tab
-    document.getElementById("pickerSearch").value = "";
-    const dfInp = document.getElementById("pickerDaysFilter");
-    if (dfInp) dfInp.value = "";
+    // v10.9.46: GIỮ lọc text + lọc ngày khi đổi tab (trước đó reset gây bất tiện).
     pickerRenderTabs();
     pickerRender();
   }
@@ -9154,6 +9163,28 @@ const App = (() => {
       if (tipEl && _tipHideTimer) { clearTimeout(_tipHideTimer); _tipHideTimer = null; }
     } catch (err) { /* swallow */ }
   });
+  // v10.9.47: Modal overlay đóng khi click vùng đen — CHỈ khi mousedown VÀ mouseup ĐỀU
+  // xảy ra trên overlay (không phải drag từ trong modal kéo ra). Trước đó dùng onclick=
+  // "if(event.target===this)..." gây bug: quét text trong modal mà mouseup lỡ ra overlay
+  // → modal đóng nhầm. Giờ tracking mousedown target để filter.
+  let _overlayMousedownEl = null;
+  document.addEventListener("mousedown", (e) => {
+    const t = e.target;
+    if (t && t.dataset && t.dataset.overlayClose) {
+      _overlayMousedownEl = t;
+    } else {
+      _overlayMousedownEl = null;
+    }
+  }, true);
+  document.addEventListener("mouseup", (e) => {
+    const t = e.target;
+    if (!t || !t.dataset || !t.dataset.overlayClose) { _overlayMousedownEl = null; return; }
+    // Chỉ đóng khi mousedown VÀ mouseup cùng trên overlay này (không phải drag từ trong ra)
+    if (_overlayMousedownEl === t) {
+      try { (new Function(t.dataset.overlayClose))(); } catch (err) { console.warn("overlay close fail:", err); }
+    }
+    _overlayMousedownEl = null;
+  }, true);
   document.addEventListener("mouseout", (e) => {
     try {
       const target = e.target;
