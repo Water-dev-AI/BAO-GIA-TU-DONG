@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.48 · 29/05/2026 · (GMT+7)
+ - Ảnh báo giá full: thêm hàng tiêu đề cột (Tên gói | Loại | Ngày | Giá) màu muted ngay
+   trước dòng sản phẩm đầu tiên, có đường kẻ dưới. Cột Ngày tự ẩn nếu bill không có dòng
+   nào điền Ngày (vd đơn chỉ có ESIM). billNeedH tăng thêm 1.2 lineH cho tiêu đề.
+
  v10.9.47 · 29/05/2026 · (GMT+7)
  - Rollback v10.9.46 phần stockTip (giữ hành vi cũ — fix nhầm).
  - Fix THỰC SỰ: 12 modal popup đóng nhầm khi quét text trong modal mà mouseup lỡ ra overlay.
@@ -99,7 +104,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.47") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.48") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1268,7 +1273,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.47
+    Version 10.9.48
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7996,7 +8001,7 @@ const App = (() => {
         extraNoteLines += Math.ceil((ln.length - 90) / 90);
       }
     }
-    const billNeedH = (billLines.length + extraNoteLines) * lineH + 16; // 16 = padding nội bộ
+    const billNeedH = (billLines.length + extraNoteLines) * lineH + 16 + lineH * 1.2; // +1.2 lineH cho hàng tiêu đề cột
     // H tối thiểu = layout cũ (1200) để ảnh ít dòng vẫn vuông
     const MIN_H = 1200;
     const requiredH = padding + headerH + sepGap + billNeedH + sepGap2 + bottomH + padding;
@@ -8126,7 +8131,38 @@ const App = (() => {
       ctx.textAlign = "left";
     }
 
+    // v10.9.48: Detect xem bill có cột Ngày không (ESIM thường để cột ngày trống).
+    // Nếu không có dòng nào có cell[2] (ngày) non-empty → ẩn cột Ngày khỏi tiêu đề.
+    const _hasDaysCol = billLines.some(ln => {
+      const c = ln.split("\t");
+      return c.length >= 3 && c[2].replace(/\d+k|\*\d+/g, "").trim().length > 0;
+    });
+
+    let _tableHeaderDrawn = false; // chỉ vẽ 1 lần
+
     billLines.forEach(line => {
+      // v10.9.48: Vẽ tiêu đề cột (Tên gói | Loại | Ngày? | Giá) ngay trước dòng sản phẩm đầu tiên.
+      if (!_tableHeaderDrawn && line.split("\t").length >= 2 && !line.startsWith("---") && !line.startsWith("SHOP")) {
+        _tableHeaderDrawn = true;
+        const prevFont = ctx.font, prevFill = ctx.fillStyle;
+        ctx.font = `bold ${Math.max(12, fontPx - 2)}px 'Segoe UI', Arial, sans-serif`;
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "left";
+        ctx.fillText("Tên gói", padding, y);
+        ctx.fillText("Loại", colTypeX, y);
+        if (_hasDaysCol) ctx.fillText("Ngày", colDaysX, y);
+        ctx.textAlign = "right";
+        ctx.fillText("Giá", colPriceR, y);
+        ctx.textAlign = "left";
+        // kẻ đường dưới tiêu đề
+        y += lineH - 4;
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(W - padding, y); ctx.stroke();
+        y += 6;
+        ctx.font = prevFont; ctx.fillStyle = prevFill;
+      }
+
       if (line.startsWith("SHOP GỬI")) {
         ctx.font = fontHeader;
         ctx.fillStyle = "#1f2937";
