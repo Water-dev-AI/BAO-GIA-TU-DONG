@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.49 · 29/05/2026 · (GMT+7)
+ - Xoá đơn nháp đơn lẻ: bỏ confirm(), thay bằng toast 0.7s tối nền (không cho bấm gì),
+   hiển thị tên đơn vừa xoá.
+ - Xoá hàng loạt: thêm checkbox bên phải ✕ mỗi đơn, batch bar hiện khi chọn ≥1 ("Đã chọn
+   N đơn" + nút "Xoá các đơn đã chọn" + "Bỏ chọn tất cả"). Xoá batch CÓ confirm.
+
  v10.9.48 · 29/05/2026 · (GMT+7)
  - Ảnh báo giá full: thêm hàng tiêu đề cột (Tên gói | Loại | Ngày | Giá) màu muted ngay
    trước dòng sản phẩm đầu tiên, có đường kẻ dưới. Cột Ngày tự ẩn nếu bill không có dòng
@@ -104,7 +110,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.48") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.49") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1273,7 +1279,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.48
+    Version 10.9.49
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1679,6 +1685,25 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 @keyframes slSpin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 @keyframes priceBlink { 0%,100%{background:transparent} 50%{background:#fee2e2} }
 @keyframes toastFadeIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
+/* v10.9.49: Draft delete toast overlay */
+#draftDeleteToast {
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.45);
+  align-items:center;justify-content:center;
+}
+#draftDeleteToast.show { display:flex; }
+#draftDeleteToastMsg {
+  background:#1e293b;color:#fff;padding:16px 28px;border-radius:12px;
+  font-size:15px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.4);
+  text-align:center;
+}
+/* Batch delete toolbar */
+#draftBatchBar {
+  display:none;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;
+  border-radius:8px;margin-bottom:8px;
+}
+#draftBatchBar.show { display:flex; }
 table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-out infinite; border-radius:5px; }
 .vat-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #cfd5df; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:240px; overflow-y:auto; margin-top:2px; }
 .vat-dropdown.open { display:block; }
@@ -6239,7 +6264,15 @@ const App = (() => {
     // Sort mới nhất lên trên (theo updatedAt nếu có, fallback createdAt)
     filtered.sort((a, b) => ((b.updatedAt || b.createdAt) || 0) - ((a.updatedAt || a.createdAt) || 0));
 
-    wrap.innerHTML = filtered.map(d => {
+    // v10.9.49: Batch bar (hiện khi có chọn)
+    const batchBarHtml = `
+      <div id="draftBatchBar" class="${_draftSelected.size ? 'show' : ''}">
+        <span style="font-size:13px;font-weight:600;color:#b91c1c;">Đã chọn ${_draftSelected.size} đơn</span>
+        <button onclick="App.draftBatchDelete()" style="padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ Xoá các đơn đã chọn</button>
+        <button onclick="App.draftBatchClear()" style="padding:6px 10px;background:#eef2f7;color:#444;border:none;border-radius:7px;font-size:12px;cursor:pointer;">Bỏ chọn tất cả</button>
+      </div>`;
+
+    wrap.innerHTML = batchBarHtml + filtered.map(d => {
       const itemCount = (d.cart || []).length;
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
@@ -6304,9 +6337,66 @@ const App = (() => {
           <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
           <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}')">🔗 Share</button>
           <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}')" title="Xoá đơn">✕</button>
+          <input type="checkbox" class="draft-sel-chk" data-id="${d.id}" onchange="App.draftBatchToggle('${d.id}', this.checked)"
+            title="Chọn để xoá hàng loạt"
+            style="width:16px;height:16px;cursor:pointer;accent-color:#dc2626;" />
         </div>
       `;
     }).join("");
+    // Restore checkbox checked state
+    _draftSelected.forEach(id => {
+      const chk = wrap.querySelector(`.draft-sel-chk[data-id="${id}"]`);
+      if (chk) chk.checked = true;
+    });
+  }
+
+  // v10.9.49: Set lưu các id đang chọn để xoá batch
+  const _draftSelected = new Set();
+
+  function draftBatchToggle(id, checked) {
+    if (checked) _draftSelected.add(id);
+    else _draftSelected.delete(id);
+    // Update batch bar
+    const bar = document.getElementById("draftBatchBar");
+    if (bar) {
+      bar.className = _draftSelected.size ? "show" : "";
+      const cnt = bar.querySelector("span");
+      if (cnt) cnt.textContent = `Đã chọn ${_draftSelected.size} đơn`;
+    }
+  }
+
+  function draftBatchClear() {
+    _draftSelected.clear();
+    draftRender();
+  }
+
+  async function draftBatchDelete() {
+    if (!_draftSelected.size) return;
+    if (!confirm(`Xoá ${_draftSelected.size} đơn đã chọn? Không thể hoàn tác.`)) return;
+    const ids = Array.from(_draftSelected);
+    for (const id of ids) {
+      await DraftStore.remove(id);
+      if (draftEditingId === id) draftEditingId = null;
+    }
+    _draftSelected.clear();
+    draftRender();
+    _updateSaveBarUI();
+    showStatus(`✅ Đã xoá ${ids.length} đơn nháp.`);
+  }
+
+  // v10.9.49: Toast xoá đơn đơn lẻ — tối nền 0.7s, không cho bấm
+  function _showDraftDeleteToast(name) {
+    return new Promise(resolve => {
+      const toast = document.getElementById("draftDeleteToast");
+      const msg = document.getElementById("draftDeleteToastMsg");
+      if (!toast || !msg) { resolve(); return; }
+      msg.textContent = `🗑️ Đã xoá đơn "${name}"`;
+      toast.classList.add("show");
+      setTimeout(() => {
+        toast.classList.remove("show");
+        resolve();
+      }, 700);
+    });
   }
 
   async function draftCopyOrderCode(id) {
@@ -7298,13 +7388,13 @@ const App = (() => {
   async function draftDelete(id) {
     const d = DraftStore.getById(id);
     if (!d) return;
-    if (!confirm(`Xoá đơn nháp "${d.name}"?`)) return;
+    // v10.9.49: bỏ confirm, show toast 0.7s tối nền
     const r = await DraftStore.remove(id);
     if (draftEditingId === id) draftEditingId = null;
+    _draftSelected.delete(id);
     draftRender();
     _updateSaveBarUI();
-    if (r && r.ok) showStatus(`✅ Đã xoá "${d.name}".`);
-    else showStatus(`⚠️ Xoá thất bại.`);
+    await _showDraftDeleteToast(d.name);
   }
 
   // --- Share link (encode draft vào URL hash) ---
@@ -11511,6 +11601,9 @@ const App = (() => {
     cust2bPickVat,
     draftsManualRefresh,
     draftDelete,
+    draftBatchToggle,
+    draftBatchDelete,
+    draftBatchClear,
     draftShare,
     draftShareClose,
     draftShareCopy,
@@ -11532,5 +11625,7 @@ const App = (() => {
   };
 })();
 </script>
+<!-- v10.9.49: Draft delete toast -->
+<div id="draftDeleteToast"><div id="draftDeleteToastMsg"></div></div>
 </body>
 </html>
