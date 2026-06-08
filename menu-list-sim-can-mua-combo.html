@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.51 · 29/05/2026 · (GMT+7)
+ - Hóa đơn lẻ: chữ ký + dấu ĐÃ THANH TOÁN trở lại nằm NGAY SAU bảng (không đẩy đáy như
+   v10.9.50). Khổ vẫn A4 dọc; nếu content > 1 trang A4 → H = ceil(pages)×A4_H, vẽ đường
+   đứt ranh giới trang + "Trang n/N" góc phải-dưới mỗi trang.
+
  v10.9.50 · 29/05/2026 · (GMT+7)
  - Hóa đơn lẻ: chuyển canvas từ chiều cao động (ảnh vuông/ngắn) sang DỌC A4 chuẩn (tỉ lệ
    1:1.414, W=1000 → H min=1414). Nội dung dài hơn A4 thì H giãn theo (không cắt). Footer
@@ -115,7 +120,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.50") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.51") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1284,7 +1289,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.50
+    Version 10.9.51
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -11187,10 +11192,11 @@ const App = (() => {
       const custH = 86;
       const footerH = 230;
       const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
-      // v10.9.50: Ảnh dọc chuẩn A4 (tỉ lệ 1:1.414). H tối thiểu = W×1.414; nếu nội dung dài hơn
-      // thì H = nội dung (không cắt). Phần dư dưới là khoảng trắng như tờ giấy A4.
+      // v10.9.51: Khổ dọc A4 (1:1.414). Nếu content > 1 trang → chia nhiều trang A4 xếp dọc,
+      // đánh dấu ranh giới + số trang. H = số trang × A4_H.
       const A4_H = Math.round(W * 297 / 210); // 1414 với W=1000
-      const H = Math.max(A4_H, contentH);
+      const pageCount = Math.max(1, Math.ceil(contentH / A4_H));
+      const H = pageCount * A4_H;
 
       canvas.width = W * DPR;
       canvas.height = H * DPR;
@@ -11408,8 +11414,8 @@ const App = (() => {
       ctx.fillText(fmtVnd(congK) + " đ", colX.amount + wAmount - 8, y + 30);
       y += 46;
 
-      // === Footer === (v10.9.50: đẩy xuống ĐÁY trang A4 để đúng layout in)
-      y = H - footerH + 30;
+      // === Footer === (v10.9.51: nằm ngay sau bảng, KHÔNG đẩy xuống đáy)
+      y += 22;
       ctx.fillStyle = "#111827";
       ctx.font = "italic 14px Arial, sans-serif";
       ctx.textAlign = "center";
@@ -11434,6 +11440,31 @@ const App = (() => {
         ctx.drawImage(stampPaid, -sW / 2, -sH / 2, sW, sH);
         ctx.restore();
         ctx.globalAlpha = 1;
+      }
+
+      // v10.9.51: Đánh dấu ranh giới trang + số trang (chỉ khi >1 trang A4)
+      if (pageCount > 1) {
+        for (let p = 0; p < pageCount; p++) {
+          const pageBottom = (p + 1) * A4_H;
+          // Đường kẻ đứt ranh giới trang (trừ trang cuối)
+          if (p < pageCount - 1) {
+            ctx.save();
+            ctx.strokeStyle = "#cbd5e1";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.moveTo(0, pageBottom);
+            ctx.lineTo(W, pageBottom);
+            ctx.stroke();
+            ctx.restore();
+          }
+          // Số trang ở góc phải-dưới mỗi trang
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "12px Arial, sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText(`Trang ${p + 1}/${pageCount}`, W - pad, pageBottom - 16);
+          ctx.textAlign = "left";
+        }
       }
     }
 
