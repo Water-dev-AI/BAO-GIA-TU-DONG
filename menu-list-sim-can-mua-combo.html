@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.50 · 29/05/2026 · (GMT+7)
+ - Hóa đơn lẻ: chuyển canvas từ chiều cao động (ảnh vuông/ngắn) sang DỌC A4 chuẩn (tỉ lệ
+   1:1.414, W=1000 → H min=1414). Nội dung dài hơn A4 thì H giãn theo (không cắt). Footer
+   (ngày + chữ ký + dấu ĐÃ THANH TOÁN) đẩy xuống ĐÁY trang để in A4 đúng layout.
+
  v10.9.49 · 29/05/2026 · (GMT+7)
  - Xoá đơn nháp đơn lẻ: bỏ confirm(), thay bằng toast 0.7s tối nền (không cho bấm gì),
    hiển thị tên đơn vừa xoá.
@@ -110,7 +115,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.49") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.50") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1279,7 +1284,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.49
+    Version 10.9.50
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -11181,7 +11186,11 @@ const App = (() => {
       const titleH = 76;
       const custH = 86;
       const footerH = 230;
-      const H = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
+      const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
+      // v10.9.50: Ảnh dọc chuẩn A4 (tỉ lệ 1:1.414). H tối thiểu = W×1.414; nếu nội dung dài hơn
+      // thì H = nội dung (không cắt). Phần dư dưới là khoảng trắng như tờ giấy A4.
+      const A4_H = Math.round(W * 297 / 210); // 1414 với W=1000
+      const H = Math.max(A4_H, contentH);
 
       canvas.width = W * DPR;
       canvas.height = H * DPR;
@@ -11399,12 +11408,11 @@ const App = (() => {
       ctx.fillText(fmtVnd(congK) + " đ", colX.amount + wAmount - 8, y + 30);
       y += 46;
 
-      // === Footer ===
-      y += 22;
+      // === Footer === (v10.9.50: đẩy xuống ĐÁY trang A4 để đúng layout in)
+      y = H - footerH + 30;
       ctx.fillStyle = "#111827";
       ctx.font = "italic 14px Arial, sans-serif";
       ctx.textAlign = "center";
-      // v10.9.1: ngày căn giữa thẳng hàng "Người bán hàng" (0.76), dùng ngày từ input (default hôm nay)
       ctx.fillText(opt.dateStr, pad + innerW * 0.76, y + 16);
       y += 44;
       ctx.font = "bold 15px Arial, sans-serif";
