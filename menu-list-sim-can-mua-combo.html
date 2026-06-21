@@ -77,6 +77,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.53 · 29/05/2026 · (GMT+7)
+ - VAT lưu sẵn: dedup theo MST + EMAIL thay vì chỉ MST. Cùng công ty (cùng MST) nhưng KHÁC
+   email = khách khác → lưu RIÊNG, không replace entry cũ. Sửa cả app (vatSaveToSheet +
+   delete filter) và Apps Script vat-sheet.gs (_findVatRow nhận thêm email; upsert/delete
+   truyền email). ⚠️ CẦN cập nhật vat-sheet.gs trên Google Apps Script editor.
+ - Modal "📝 VAT tự điền từ text": preview giờ là 4 ô INPUT sửa được (MST/Tên/Địa chỉ/Email)
+   — bấm "Phân tích thử" ra 4 ô, sửa tay nếu parse sai, rồi "Điền vào VAT" lấy giá trị đã sửa.
+
  v10.9.52 · 29/05/2026 · (GMT+7)
  - FIX nhập sổ TỪ ĐƠN NHÁP mất giảm giá riêng/ship trên vài máy (máy khác lại OK).
    Nguyên nhân: buildSheetPayloadItems() đọc discount/ship/shipVat từ DOM (#shipFeeK,
@@ -5963,23 +5971,42 @@ const App = (() => {
       return;
     }
     const r = _parseVatTextFromOcr(text);
-    const row = (label, val) => val
-      ? `<div><b>${label}:</b> <span style="color:#0e7c3a;">${escapeHtml(val)}</span></div>`
-      : `<div><b>${label}:</b> <span style="color:#9ca3af;">(không nhận diện được)</span></div>`;
+    // v10.9.53: preview cho EDIT trực tiếp — 4 ô input sửa được trước khi điền vào VAT.
+    const field = (label, id, val, isArea) => {
+      const v = escapeHtml(val || "");
+      const inputEl = isArea
+        ? `<textarea id="${id}" rows="2" style="width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid #93c5fd;border-radius:6px;font-family:inherit;font-size:12.5px;resize:vertical;">${v}</textarea>`
+        : `<input id="${id}" type="text" value="${v}" style="width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid #93c5fd;border-radius:6px;font-family:inherit;font-size:12.5px;" />`;
+      return `<div style="margin-bottom:7px;"><b style="display:block;margin-bottom:2px;color:#1e40af;">${label}:</b>${inputEl}</div>`;
+    };
     prev.style.display = "block";
-    prev.innerHTML = [
-      row("MST", r.mst),
-      row("Tên CTY", r.name),
-      row("Địa chỉ", r.addr),
-      row("Email", r.email),
-    ].join("");
+    prev.innerHTML =
+      `<div style="font-size:11.5px;color:#1e40af;margin-bottom:8px;">✏️ Có thể sửa trực tiếp 4 ô dưới trước khi điền:</div>` +
+      field("MST", "vatEditMst", r.mst, false) +
+      field("Tên CTY", "vatEditName", r.name, false) +
+      field("Địa chỉ", "vatEditAddr", r.addr, true) +
+      field("Email", "vatEditEmail", r.email, false);
+  }
+  // Đọc kết quả VAT: ưu tiên ô edit trong preview (nếu user đã phân tích), fallback parse text.
+  function _getVatAutoResult() {
+    const mEl = document.getElementById("vatEditMst");
+    if (mEl) {
+      return {
+        mst: (document.getElementById("vatEditMst").value || "").trim(),
+        name: (document.getElementById("vatEditName").value || "").trim(),
+        addr: (document.getElementById("vatEditAddr").value || "").trim(),
+        email: (document.getElementById("vatEditEmail").value || "").trim(),
+      };
+    }
+    const inp = document.getElementById("vatAutoFillInput");
+    return _parseVatTextFromOcr((inp && inp.value || "").trim());
   }
   function vatAutoFillSubmit() {
     const inp = document.getElementById("vatAutoFillInput");
     if (!inp) return;
     const text = (inp.value || "").trim();
     if (!text) { alert("Vui lòng paste text trước."); return; }
-    const r = _parseVatTextFromOcr(text);
+    const r = _getVatAutoResult();
     const found = [];
     if (r.mst) found.push("MST");
     if (r.name) found.push("Tên CTY");
@@ -10046,11 +10073,12 @@ const App = (() => {
       const res = await fetch(cfg.webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "delete", mst: m.mst, ten: m.ten }),
+        body: JSON.stringify({ action: "delete", mst: m.mst, ten: m.ten, email: m.email || "" }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "unknown");
-      vatList = vatList.filter(v => !(v.mst === m.mst && v.ten === m.ten));
+      const _delEm = (m.email || "").trim().toLowerCase();
+      vatList = vatList.filter(v => !(v.mst === m.mst && v.ten === m.ten && String(v.email || "").trim().toLowerCase() === _delEm));
       vatCacheSave(vatList);
       ["mst", "name", "email"].forEach(f => {
         const dd = document.getElementById("vatDropdown_" + f);
@@ -10090,8 +10118,10 @@ const App = (() => {
       const data = await res.json();
       console.log("[VAT] Response:", data);
       if (data.ok) {
+        const _em = (info.email || "").trim().toLowerCase();
         const idx = vatList.findIndex(v =>
-          (info.mst && v.mst === info.mst) || (!info.mst && v.ten === info.name)
+          ((info.mst && v.mst === info.mst) || (!info.mst && v.ten === info.name)) &&
+          (String(v.email || "").trim().toLowerCase() === _em)
         );
         const entry = {
           mst: info.mst || "", ten: info.name || "",
