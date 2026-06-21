@@ -77,6 +77,16 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.52 · 29/05/2026 · (GMT+7)
+ - FIX nhập sổ TỪ ĐƠN NHÁP mất giảm giá riêng/ship trên vài máy (máy khác lại OK).
+   Nguyên nhân: buildSheetPayloadItems() đọc discount/ship/shipVat từ DOM (#shipFeeK,
+   #shipVatToggle, computeManualDiscountK) — nhưng nhập sổ từ draft chỉ swap `cart`, DOM
+   vẫn là đơn ĐANG MỞ. Máy bạn không lỗi vì DOM còn giữ giá trị đơn vừa mở; máy khác DOM
+   trống → mất extras. Đã thêm tham số extrasOverride: draftViewCopyPayload truyền d.extras
+   {shipFeeK, manualDiscK, manualDiscPct, shipVat}. Nhập sổ trực tiếp (sheetPayloadCopyDirect/
+   Regenerate) vẫn đọc DOM (đúng cho đơn đang mở). Fix này áp dụng đồng thời cho cả 4 case:
+   phí ship, ship vào VAT, ship không VAT, giảm giá tiền & %.
+
  v10.9.51 · 29/05/2026 · (GMT+7)
  - Hóa đơn lẻ: chữ ký + dấu ĐÃ THANH TOÁN trở lại nằm NGAY SAU bảng (không đẩy đáy như
    v10.9.50). Khổ vẫn A4 dọc; nếu content > 1 trang A4 → H = ceil(pages)×A4_H, vẽ đường
@@ -120,7 +130,7 @@
    shipVatExtra) : disc.amount — KHỚP chính xác với note "Phân bổ giảm giá" của bill.
 
  v10.9.44 · 29/05/2026 · (GMT+7)
- - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.51") để tránh sai/quên cập
+ - Bỏ ngày khỏi text version hiển thị (chỉ còn "Version 10.9.52") để tránh sai/quên cập
    nhật ngày. Changelog history vẫn giữ ngày để truy vết.
 
  v10.9.43 · 29/05/2026 · (GMT+7)
@@ -1289,7 +1299,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.51
+    Version 10.9.52
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -6901,7 +6911,7 @@ const App = (() => {
       const savedOrderCode = currentOrderCode;
       cart = JSON.parse(JSON.stringify(d.cart));
       if (d.orderCode) currentOrderCode = d.orderCode;
-      const items = buildSheetPayloadItems();
+      const items = buildSheetPayloadItems(d.extras || {});
       cart = savedCart;
       if (!items.length) {
         currentOrderCode = savedOrderCode;
@@ -9612,7 +9622,7 @@ const App = (() => {
 
   // Build payload items: parse từng cart line, gom thành item, phân bổ discount.
   // Logic giống ComboLogic.calc() nhưng giữ lại từng item rời (không gộp thành bill).
-  function buildSheetPayloadItems() {
+  function buildSheetPayloadItems(extrasOverride) {
     const items = [];
     for (const cartItem of cart) {
       const line = String(cartItem.line || "");
@@ -9657,16 +9667,31 @@ const App = (() => {
     }
 
     const totalK = items.reduce((s, it) => s + it.amountK, 0);
-    const manualK = computeManualDiscountK(totalK);
+    // v10.9.52: BUG FIX — khi nhập sổ TỪ ĐƠN NHÁP, extras (giảm giá riêng + ship + shipVat)
+    // phải lấy từ d.extras (override), KHÔNG đọc DOM (DOM là của đơn đang mở khác → mất giảm
+    // giá riêng/ship trên vài máy). Nếu không có override → đọc DOM như cũ (nhập sổ trực tiếp).
+    let manualK, shipFeeK, shipVat;
+    if (extrasOverride) {
+      const ex = extrasOverride;
+      // manual discount: ưu tiên manualDiscK (tiền) > manualDiscPct (%)
+      if (ex.manualDiscK > 0) {
+        manualK = ex.manualDiscK;
+      } else if (ex.manualDiscPct > 0) {
+        manualK = Math.round(totalK * Math.min(ex.manualDiscPct, 15) / 100);
+      } else {
+        manualK = 0;
+      }
+      shipFeeK = Math.max(0, parseInt(ex.shipFeeK, 10) || 0);
+      shipVat = ex.shipVat === true && shipFeeK > 0;
+    } else {
+      manualK = computeManualDiscountK(totalK);
+      shipFeeK = Math.max(0, parseInt((document.getElementById("shipFeeK") || {}).value, 10) || 0);
+      const shipVatChk = document.getElementById("shipVatToggle");
+      shipVat = !!(shipVatChk && shipVatChk.checked) && shipFeeK > 0;
+    }
     const discount = manualK > 0
       ? { amount: Math.min(manualK, totalK), label: "Giảm giá thủ công" }
       : ComboLogic.discountFor(totalK);
-    // v10.9.45: BUG FIX — phân bổ effectiveDiscK (= discount − shipFee − shipVatExtra) khớp với
-    // bill hiển thị. Trước đó dùng discount.amount → items chỉ có "giảm gốc", thiếu shipFee
-    // (và shipVat) khi nhập sổ → tổng sheet = remainK thay vì finalPayK = fullVATK.
-    const shipFeeK = Math.max(0, parseInt((document.getElementById("shipFeeK") || {}).value, 10) || 0);
-    const shipVatChk = document.getElementById("shipVatToggle");
-    const shipVat = !!(shipVatChk && shipVatChk.checked) && shipFeeK > 0;
     const shipVatExtraK = shipVat ? Math.round(shipFeeK * 0.5) : 0;
     const effectiveDiscK = shipVat
       ? (discount.amount - shipFeeK - shipVatExtraK)
