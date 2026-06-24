@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.54 · 29/05/2026 · (GMT+7)
+ - Fix case đặc biệt PackageGuides: gói có đuôi ", EXP : <ngày>" bị gán nhầm hướng dẫn của
+   gói KHÔNG có EXP (vì prefix match). Giữ NGUYÊN cơ chế prefix gốc, chỉ thêm 1 điều kiện
+   hẹp: nếu phần dư sau prefix CHỈ là ", EXP : ..." (biến thể hạn dùng) và prefix không chứa
+   "exp" → bỏ qua. Gói EXP cần dòng hướng dẫn riêng nếu muốn có. Prefix ngắn (vd chỉ "Japan
+   Softbank") VẪN cover mọi gói con như cũ (đuôi dư có thành phần khác ngoài EXP).
+
  v10.9.53 · 29/05/2026 · (GMT+7)
  - VAT lưu sẵn: dedup theo MST + EMAIL thay vì chỉ MST. Cùng công ty (cùng MST) nhưng KHÁC
    email = khách khác → lưu RIÊNG, không replace entry cũ. Sửa cả app (vatSaveToSheet +
@@ -1307,7 +1314,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.53
+    Version 10.9.54
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -9086,15 +9093,16 @@ const App = (() => {
       const typeNorm = norm(type);
       let best = null;
       for (const e of entries) {
-        // Prefix match (lưu ý: chỉ match nếu cuối prefix là word boundary để
-        //   "Mainland China A" không match "Mainland China AB"; check ký tự kế tiếp)
         if (!nameNorm.startsWith(e.prefix)) continue;
-        // Word-boundary: ký tự sau prefix phải là end-of-string hoặc whitespace/comma
         const nextCh = nameNorm.charAt(e.prefix.length);
         if (nextCh && !/[\s,.\-/]/.test(nextCh)) continue;
-        // Loại filter: nếu sheet entry có type, phải khớp
         if (e.type && e.type !== typeNorm) continue;
-        // Match dài nhất thắng
+        // v10.9.54: FIX case đặc biệt — gói có đuôi ", EXP : <ngày>" là biến thể riêng cần
+        //   dòng hướng dẫn riêng. Nếu phần dư sau prefix CHỈ là ", exp : ..." (không có thành
+        //   phần khác) thì prefix ngắn (gói không EXP) KHÔNG được lan sang. Trừ khi prefix
+        //   khớp ĐÚNG cả EXP (exact / prefix dài đã gồm exp) thì vẫn match.
+        const rest = nameNorm.slice(e.prefix.length);
+        if (rest && /^\s*,?\s*exp\s*:/.test(rest) && !/exp/.test(e.prefix)) continue;
         if (!best || e.prefixLen > best.prefixLen) best = e;
       }
       return best ? { file: best.file, prefix: best.prefix } : null;
