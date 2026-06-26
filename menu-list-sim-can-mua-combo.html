@@ -11186,9 +11186,10 @@ const App = (() => {
   })();
   // v10.8.38: bỏ popup picker → bỏ click-outside listener.
 
+  Cust2B.loadFromStorage(); // v10.9.59: restore tên/tag/VAT trước khi render bill lần đầu
+  Cust2B.syncToDOM(); // init UI section 2B
   render();
   liveRecalc();
-  Cust2B.syncToDOM(); // init UI section 2B
   updateShipVatVisibility(); // v10.8.27: init shipVat checkbox visibility
   _updateSaveBarUI(); // init UI hàng nút Lưu (State 1)
   // v10.8.33: init Date Range Calc
