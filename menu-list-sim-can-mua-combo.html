@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.59 · 27/06/2026 · (GMT+7)
+ - Lưu/khôi phục thông tin khách + VAT ở section 2B bằng localStorage riêng
+   `combo_bill_cust2b_state_v1`. Reload web giờ giữ cả giỏ hàng lẫn trạng thái Xuất VAT,
+   MST/Tên công ty/Địa chỉ/Email để bill và ảnh báo giá vẫn có VAT block.
+
  v10.9.58 · 27/06/2026 · (GMT+7)
  - Đề nghị TT: đưa con dấu công ty sang trái, để vòng tròn lòi/đè vào dòng "Kính gửi"
    khoảng 1/4 như mẫu ảnh.
@@ -1337,7 +1342,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.58
+    Version 10.9.59
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5489,6 +5494,7 @@ const App = (() => {
 
   /* ===== DRAFTS (đơn nháp) ===== */
   const DRAFT_KEY = "combo_bill_drafts_v3"; // v3: local-only (v10.2), không còn online
+  const CUST2B_STATE_KEY = "combo_bill_cust2b_state_v1"; // v10.9.59: persist tên/tag/VAT khi reload
 
   // Tag config: ZALO mặc định, ZALO OA, FB, KHÁC (custom text)
   const DRAFT_TAGS = [
@@ -5513,6 +5519,38 @@ const App = (() => {
       tag: "ZALO",
       customTag: "",
       vat: { mst: "", name: "", addr: "", email: "" },
+    },
+    _normalizeState(raw) {
+      const src = raw && typeof raw === "object" ? raw : {};
+      const vat = src.vat && typeof src.vat === "object" ? src.vat : {};
+      const tagOk = DRAFT_TAGS.some(t => t.id === src.tag);
+      return {
+        type: src.type === "company" ? "company" : "retail",
+        name: String(src.name || ""),
+        tag: tagOk ? src.tag : "ZALO",
+        customTag: String(src.customTag || ""),
+        vat: {
+          mst: String(vat.mst || ""),
+          name: String(vat.name || ""),
+          addr: String(vat.addr || ""),
+          email: String(vat.email || ""),
+        },
+      };
+    },
+    saveToStorage() {
+      try {
+        localStorage.setItem(CUST2B_STATE_KEY, JSON.stringify(this._normalizeState(this.state)));
+      } catch (e) {}
+    },
+    loadFromStorage() {
+      try {
+        const raw = localStorage.getItem(CUST2B_STATE_KEY);
+        if (!raw) return false;
+        this.state = this._normalizeState(JSON.parse(raw));
+        return true;
+      } catch (e) {
+        return false;
+      }
     },
     getDraftPayload() {
       // Trả về object để merge vào draft khi save/upsert
@@ -5585,6 +5623,7 @@ const App = (() => {
       cust2bRenderTagDropdown(s.tag || "ZALO");
       const customWrap = document.getElementById("cust2bCustomTagWrap");
       if (customWrap) customWrap.style.display = s.tag === "KHAC" ? "" : "none";
+      this.saveToStorage();
     },
     // Đọc state từ DOM (gọi sau khi user thao tác)
     syncFromDOM() {
@@ -5596,6 +5635,7 @@ const App = (() => {
       s.vat.name = get("cust2bVatName");
       s.vat.addr = get("cust2bVatAddr");
       s.vat.email = get("cust2bVatEmail");
+      this.saveToStorage();
     },
   };
 
