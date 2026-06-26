@@ -77,6 +77,21 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.56 · 27/06/2026 · (GMT+7)
+ - Đề nghị TT: đổi canvas từ A4 ngang sang A4 dọc (W=1000, H=1414). Nội dung nằm phía
+   trên theo mẫu giấy, chữ ký ngay sau thông tin thanh toán, phần còn lại phía dưới để trắng.
+ - Xác nhận file gốc root iCloud đang là bản v10.9.55 đã khôi phục, tiếp tục sửa trực tiếp
+   trên file này để tránh lệch bản.
+
+ v10.9.55 · 27/06/2026 · (GMT+7)
+ - Fix Safari copy ảnh QR nhanh: qrCustomCopy() chuyển sang copyImageToClipboardSafe()
+   (ClipboardItem ôm Promise<Blob>) như QR TT / báo giá / hóa đơn lẻ, và đóng modal sau
+   khi copy hoặc tải thành công.
+ - Rà copy ảnh còn sót: PackageGuides copy ảnh hướng dẫn cũng chuyển sang helper Safari-safe.
+ - Thêm nút "Đề nghị TT" cạnh "Hóa đơn lẻ": mở modal A4 ngang theo mẫu giấy đề nghị
+   thanh toán, tự lấy FullVAT, tự đọc số tiền bằng chữ, prefill thông tin công ty/VAT,
+   có logo + dấu công ty xoay random, nút Tải/Copy ảnh và tự đóng modal khi xong.
+
  v10.9.54 · 29/05/2026 · (GMT+7)
  - Fix case đặc biệt PackageGuides: gói có đuôi ", EXP : <ngày>" bị gán nhầm hướng dẫn của
    gói KHÔNG có EXP (vì prefix match). Giữ NGUYÊN cơ chế prefix gốc, chỉ thêm 1 điều kiện
@@ -1314,7 +1329,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.54
+    Version 10.9.56
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1600,6 +1615,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button class="blue" onclick="App.qrCopyFullQuick()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo ảnh báo giá full + Copy vào clipboard ngay (không hiển thị)">🖼️ Copy Báo giá</button>
         <button onclick="App.qrGenerateFull()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#bfdbfe;color:#1e40af;border:none;border-radius:7px;cursor:pointer;" title="Hiển thị ảnh báo giá full">🖼️ Xem Báo giá</button>
         <button onclick="App.invoiceOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#fde68a;color:#92400e;border:none;border-radius:7px;cursor:pointer;" title="Tạo ảnh Hóa đơn bán lẻ">🧾 Hóa đơn lẻ</button>
+        <button onclick="App.payReqOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;background:#fee2e2;color:#991b1b;border:none;border-radius:7px;cursor:pointer;" title="Tạo ảnh Giấy đề nghị thanh toán">📝 Đề nghị TT</button>
         <button class="amber" onclick="App.qrCustomOpen()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Tạo QR thanh toán với số tiền + nội dung tuỳ chọn">⚡ QR nhanh</button>
         <button class="light" onclick="App.qrCopySTK()" style="margin:0;padding:8px 12px;font-size:12.5px;" title="Copy thông tin chuyển khoản text">📋 Thông tin CK</button>
         <button style="background:#0e7c3a;color:white;margin:0;padding:8px 12px;font-size:12.5px;" onclick="App.sheetPayloadCopyDirect()" title="Copy mã nhập sổ vào clipboard ngay (không mở popup)">📤 Nhập sổ</button>
@@ -2060,6 +2076,88 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <button class="green" onclick="App.invoiceDownload()">💾 Tải ảnh</button>
       <button class="blue"  onclick="App.invoiceCopy()">📋 Copy ảnh</button>
       <button class="light" onclick="App.invoiceClose()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Giấy đề nghị thanh toán (v10.9.56) -->
+<div class="picker-overlay" id="payReqOverlay" data-overlay-close="App.payReqClose()">
+  <div class="picker-modal" style="width:min(96vw, 980px);">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">📝 Giấy đề nghị thanh toán</h3>
+      <button onclick="App.payReqClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div class="picker-body" style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Ngày đề nghị thanh toán</div>
+          <input id="payReqDate" type="date" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Kính gửi</div>
+          <input id="payReqRecipient" type="text" placeholder="Tên công ty / người nhận" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Người đề nghị thanh toán</div>
+          <input id="payReqRequester" type="text" value="Nguyễn Phấn Hoàn" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Bộ phận (địa chỉ)</div>
+          <input id="payReqDept" type="text" value="Quản lý" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div style="grid-column:1 / -1;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Nội dung thanh toán</div>
+          <textarea id="payReqContent" oninput="App.payReqRender()"
+            style="width:100%;min-height:62px;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--muted);">Hình thức:</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none;">
+            <input id="payReqTransfer" type="checkbox" checked onchange="App.payReqRender()" style="width:16px;height:16px;cursor:pointer;" />
+            <span>Chuyển khoản</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none;">
+            <input id="payReqCash" type="checkbox" onchange="App.payReqRender()" style="width:16px;height:16px;cursor:pointer;" />
+            <span>Tiền mặt</span>
+          </label>
+        </div>
+        <div style="font-size:13px;color:#374151;display:flex;align-items:center;">
+          <b>Số tiền:</b>&nbsp;<span id="payReqAmountPreview">0 vnđ</span>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên chủ TK</div>
+          <input id="payReqAccountName" type="text" value="CÔNG TY TNHH SIMGLOBE OFFICIAL" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Ngân hàng</div>
+          <input id="payReqBank" type="text" value="Techcombank" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Số TK</div>
+          <input id="payReqAccountNo" type="text" value="250891" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Chi nhánh</div>
+          <input id="payReqBranch" type="text" placeholder="Bỏ trống nếu không ghi" oninput="App.payReqRender()"
+            style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        </div>
+      </div>
+      <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow:auto;">
+        <canvas id="payReqCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
+      </div>
+      <div id="payReqStatus" class="status" style="font-size:12.5px;"></div>
+    </div>
+    <div class="picker-footer">
+      <button class="green" onclick="App.payReqDownload()">💾 Tải ảnh</button>
+      <button class="blue" onclick="App.payReqCopy()">📋 Copy ảnh</button>
+      <button class="light" onclick="App.payReqClose()">Đóng</button>
     </div>
   </div>
 </div>
@@ -8646,6 +8744,7 @@ const App = (() => {
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       qrShowStatus("✅ Đã tải QR.");
+      qrCustomClose();
     } catch(e) {
       qrShowStatus("❌ Lỗi tải: " + e.message);
     }
@@ -8659,13 +8758,17 @@ const App = (() => {
     const img = document.getElementById("qrCustomImg");
     if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
     try {
-      const blob = await (await fetch(img.src)).blob();
-      if (!navigator.clipboard || !navigator.clipboard.write) {
-        qrShowStatus("⚠️ Trình duyệt không hỗ trợ copy ảnh. Dùng Tải về.");
-        return;
+      const ok = await copyImageToClipboardSafe(async () => {
+        const blob = await (await fetch(img.src)).blob();
+        if (!blob) throw new Error("Tạo ảnh thất bại");
+        return blob;
+      });
+      if (ok) {
+        qrShowStatus("✅ Đã copy ảnh QR.");
+        qrCustomClose();
+      } else {
+        qrShowStatus("⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải QR.");
       }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      qrShowStatus("✅ Đã copy ảnh QR.");
     } catch(e) {
       qrShowStatus("❌ Lỗi copy: " + e.message);
     }
@@ -9262,27 +9365,30 @@ const App = (() => {
     if (!_currentGuideFile) return;
     const url = PackageGuides.getImageUrl(_currentGuideFile);
     try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      let blob = await resp.blob();
-      // ClipboardItem chỉ hỗ trợ một số MIME type. Convert sang PNG nếu cần.
-      if (!blob.type.startsWith("image/png")) {
-        // Convert qua canvas
-        const img = await new Promise((resolve, reject) => {
-          const im = new Image();
-          im.crossOrigin = "anonymous";
-          im.onload = () => resolve(im);
-          im.onerror = reject;
-          im.src = URL.createObjectURL(blob);
-        });
-        const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        canvas.getContext("2d").drawImage(img, 0, 0);
-        blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-      }
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      showStatus(`✅ Đã copy ảnh vào clipboard.`);
+      const ok = await copyImageToClipboardSafe(async () => {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        let blob = await resp.blob();
+        // ClipboardItem chỉ hỗ trợ một số MIME type. Convert sang PNG nếu cần.
+        if (!blob.type.startsWith("image/png")) {
+          const img = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.crossOrigin = "anonymous";
+            im.onload = () => resolve(im);
+            im.onerror = reject;
+            im.src = URL.createObjectURL(blob);
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+        }
+        if (!blob) throw new Error("Tạo ảnh thất bại");
+        return blob;
+      });
+      if (ok) showStatus(`✅ Đã copy ảnh vào clipboard.`);
+      else showStatus(`⚠️ Trình duyệt không cho copy ảnh. Dùng nút Tải.`);
     } catch (e) {
       showStatus(`⚠️ Trình duyệt không hỗ trợ copy ảnh hoặc gặp lỗi: ${e.message}. Dùng nút Tải.`);
     }
@@ -11560,6 +11666,351 @@ const App = (() => {
     return { open, close, render, download, copy };
   })();
 
+  /* ===== GIẤY ĐỀ NGHỊ THANH TOÁN (v10.9.56) ===== */
+  const PaymentRequest = (() => {
+    let cfg = null;
+    let stampRot = 0;
+    const DEFAULT_CFG = {
+      company: {
+        name: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
+        mst: "0318279674",
+        address: "163/18 Đường số 20, Phường An Nhơn, TP HCM, Việt Nam",
+        hotline: "+84 923282790",
+      },
+    };
+
+    async function loadCfg() {
+      if (cfg) return cfg;
+      try {
+        const res = await fetch("./hoadonle.json", { cache: "no-cache" });
+        if (res.ok) {
+          const d = await res.json();
+          cfg = { company: Object.assign({}, DEFAULT_CFG.company, d.company || {}) };
+        } else cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+      } catch (e) {
+        console.warn("[PaymentRequest] hoadonle.json không load được:", e.message);
+        cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+      }
+      return cfg;
+    }
+
+    function todayInputValue() {
+      const t = new Date();
+      const mm = String(t.getMonth() + 1).padStart(2, "0");
+      const dd = String(t.getDate()).padStart(2, "0");
+      return `${t.getFullYear()}-${mm}-${dd}`;
+    }
+    function dateTextFromInput(v) {
+      const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) return `Ngày ${parseInt(m[3], 10)} tháng ${m[2]} năm ${m[1]}`;
+      const t = new Date();
+      return `Ngày ${t.getDate()} tháng ${String(t.getMonth() + 1).padStart(2, "0")} năm ${t.getFullYear()}`;
+    }
+    function fmtDong(n) {
+      return Math.round(Number(n) || 0).toLocaleString("en-US").replace(/,/g, ".");
+    }
+    function capFirst(s) {
+      s = String(s || "").trim();
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+    }
+    function readTriple(n, full) {
+      const nums = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
+      n = Math.floor(n);
+      const h = Math.floor(n / 100);
+      const t = Math.floor((n % 100) / 10);
+      const u = n % 10;
+      const out = [];
+      if (full || h > 0) {
+        out.push(nums[h] + " trăm");
+        if (t === 0 && u > 0) out.push("linh");
+      }
+      if (t > 1) {
+        out.push(nums[t] + " mươi");
+        if (u === 1) out.push("mốt");
+        else if (u === 5) out.push("lăm");
+        else if (u > 0) out.push(nums[u]);
+      } else if (t === 1) {
+        out.push("mười");
+        if (u === 5) out.push("lăm");
+        else if (u > 0) out.push(nums[u]);
+      } else if (u > 0 && (h === 0 || !full)) {
+        out.push(nums[u]);
+      }
+      return out.join(" ");
+    }
+    function numberToVietnameseDong(n) {
+      n = Math.round(Number(n) || 0);
+      if (n <= 0) return "Không đồng";
+      const units = ["", "nghìn", "triệu", "tỷ", "nghìn tỷ", "triệu tỷ"];
+      const groups = [];
+      while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+      const parts = [];
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const g = groups[i];
+        if (!g) continue;
+        const full = parts.length > 0 && g < 100;
+        parts.push(readTriple(g, full) + (units[i] ? " " + units[i] : ""));
+      }
+      return capFirst(parts.join(" ").replace(/\s+/g, " ").trim()) + " đồng chẵn";
+    }
+    function getAmountDong() {
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      if (!r.ok) return 0;
+      return Math.round((r.summary.fullVatK || 0) * 1000);
+    }
+    function getOpt() {
+      const amountDong = getAmountDong();
+      const pick = id => (document.getElementById(id) || {}).value || "";
+      return {
+        dateStr: dateTextFromInput(pick("payReqDate")),
+        recipient: pick("payReqRecipient").trim(),
+        requester: pick("payReqRequester").trim(),
+        dept: pick("payReqDept").trim(),
+        content: pick("payReqContent").trim(),
+        transfer: !!((document.getElementById("payReqTransfer") || {}).checked),
+        cash: !!((document.getElementById("payReqCash") || {}).checked),
+        accountName: pick("payReqAccountName").trim(),
+        bank: pick("payReqBank").trim(),
+        accountNo: pick("payReqAccountNo").trim(),
+        branch: pick("payReqBranch").trim(),
+        amountDong,
+        amountText: numberToVietnameseDong(amountDong),
+      };
+    }
+
+    function open() {
+      if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để lập đề nghị thanh toán."); return; }
+      const r = ComboLogic.calc(cart, getCalcOpts());
+      if (!r.ok) { alert("Chưa có dòng hợp lệ để lập đề nghị thanh toán."); return; }
+      if (!currentOrderCode) regenOrderCode();
+      stampRot = (Math.random() * 24 - 12) * Math.PI / 180;
+      Cust2B.syncFromDOM();
+      const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
+      const dateEl = document.getElementById("payReqDate");
+      const recipientEl = document.getElementById("payReqRecipient");
+      const requesterEl = document.getElementById("payReqRequester");
+      const deptEl = document.getElementById("payReqDept");
+      const contentEl = document.getElementById("payReqContent");
+      const transferEl = document.getElementById("payReqTransfer");
+      const cashEl = document.getElementById("payReqCash");
+      const accNameEl = document.getElementById("payReqAccountName");
+      const bankEl = document.getElementById("payReqBank");
+      const accNoEl = document.getElementById("payReqAccountNo");
+      const branchEl = document.getElementById("payReqBranch");
+      if (dateEl) dateEl.value = todayInputValue();
+      if (recipientEl) recipientEl.value = v.name || "";
+      if (requesterEl) requesterEl.value = "Nguyễn Phấn Hoàn";
+      if (deptEl) deptEl.value = "Quản lý";
+      if (contentEl) contentEl.value = `Thanh toán cho đơn hàng ${currentOrderCode}`;
+      if (transferEl) transferEl.checked = true;
+      if (cashEl) cashEl.checked = false;
+      if (accNameEl) accNameEl.value = "CÔNG TY TNHH SIMGLOBE OFFICIAL";
+      if (bankEl) bankEl.value = "Techcombank";
+      if (accNoEl) accNoEl.value = "250891";
+      if (branchEl) branchEl.value = "";
+      document.getElementById("payReqOverlay").classList.add("open");
+      document.body.style.overflow = "hidden";
+      render();
+    }
+    function close() {
+      document.getElementById("payReqOverlay").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    async function render() {
+      const c = await loadCfg();
+      const canvas = document.getElementById("payReqCanvas");
+      const statusEl = document.getElementById("payReqStatus");
+      const amountPreview = document.getElementById("payReqAmountPreview");
+      const opt = getOpt();
+      if (amountPreview) amountPreview.textContent = `${fmtDong(opt.amountDong)} vnđ`;
+      if (!opt.amountDong) {
+        if (statusEl) statusEl.textContent = "❌ Không đọc được FullVAT của đơn.";
+        return;
+      }
+      await draw(canvas, c, opt);
+      if (statusEl) statusEl.textContent = `✅ FullVAT: ${fmtDong(opt.amountDong)} vnđ · ${opt.amountText}`;
+    }
+
+    async function draw(canvas, c, opt) {
+      const DPR = 2;
+      const W = 1000;
+      const H = Math.round(W * 297 / 210);
+      const padX = 70;
+      canvas.width = W * DPR;
+      canvas.height = H * DPR;
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      const ctx = canvas.getContext("2d");
+      ctx.scale(DPR, DPR);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+
+      let logoImg = null, stampCty = null;
+      try { logoImg = await loadImage("./logo.png"); } catch (e) {}
+      try { stampCty = await loadImage("./dau-cong-ty.png"); } catch (e) {}
+
+      ctx.fillStyle = "#111827";
+      if (logoImg) {
+        const logoW = 62;
+        const logoH = logoW * logoImg.height / logoImg.width;
+        ctx.drawImage(logoImg, padX - 8, 54, logoW, logoH);
+      }
+      const headerX = padX + 78;
+      ctx.textAlign = "left";
+      ctx.font = "bold 18px 'Times New Roman', Georgia, serif";
+      ctx.fillText("Đơn vị: " + c.company.name, headerX, 64);
+      ctx.font = "16px 'Times New Roman', Georgia, serif";
+      const addrLines = wrapText(ctx, "Địa chỉ: " + c.company.address, 500);
+      let hy = 88;
+      addrLines.slice(0, 2).forEach(line => { ctx.fillText(line, headerX, hy); hy += 22; });
+      ctx.fillText("Mã số thuế: " + c.company.mst, headerX, hy);
+
+      ctx.textAlign = "center";
+      ctx.font = "bold 16px 'Times New Roman', Georgia, serif";
+      ctx.fillText("Mẫu số: 05-TT", W - 190, 64);
+      ctx.font = "15px 'Times New Roman', Georgia, serif";
+      ctx.fillText("(Ban hành theo TT 133/2016/TT-BTC)", W - 190, 88);
+      ctx.fillText("ngày 26/08/2016 của Bộ tài chính", W - 190, 110);
+
+      ctx.font = "bold 29px 'Times New Roman', Georgia, serif";
+      ctx.fillText("GIẤY ĐỀ NGHỊ THANH TOÁN", W / 2, 160);
+      ctx.font = "19px 'Times New Roman', Georgia, serif";
+      ctx.fillText(opt.dateStr, W / 2, 188);
+
+      let y = 234;
+      const lineH = 46;
+      const labelFont = "bold 19px 'Times New Roman', Georgia, serif";
+      const bodyFont = "19px 'Times New Roman', Georgia, serif";
+      const drawLine = (label, value) => {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#111827";
+        ctx.font = labelFont;
+        ctx.fillText(label, padX, y);
+        const labelW = ctx.measureText(label).width + 8;
+        ctx.font = bodyFont;
+        ctx.fillText(value || "", padX + labelW, y);
+        y += lineH;
+      };
+      drawLine("Kính gửi:", opt.recipient);
+      drawLine("Họ và tên người đề nghị thanh toán:", opt.requester);
+      drawLine("Bộ phận (địa chỉ):", opt.dept);
+
+      ctx.textAlign = "left";
+      ctx.font = labelFont;
+      ctx.fillText("Nội dung thanh toán:", padX, y);
+      const contentX = padX + ctx.measureText("Nội dung thanh toán:").width + 8;
+      ctx.font = bodyFont;
+      const contentLines = wrapText(ctx, opt.content || "", W - contentX - padX);
+      contentLines.slice(0, 3).forEach((line, idx) => ctx.fillText(line, contentX, y + idx * 27));
+      y += Math.max(lineH, contentLines.length * 27 + 12);
+
+      ctx.font = labelFont;
+      ctx.fillText("Số tiền:", padX, y);
+      ctx.font = bodyFont;
+      ctx.fillText(fmtDong(opt.amountDong) + " vnđ", padX + 96, y);
+      ctx.font = labelFont;
+      ctx.fillText("Bằng chữ:", padX + 330, y);
+      ctx.font = bodyFont;
+      const amountTextLines = wrapText(ctx, opt.amountText, W - (padX + 435) - padX);
+      amountTextLines.slice(0, 2).forEach((line, idx) => ctx.fillText(line, padX + 435, y + idx * 26));
+      y += Math.max(lineH, amountTextLines.length * 26 + 10);
+
+      function drawCheckbox(x, yBase, checked, text) {
+        const s = 16;
+        ctx.strokeStyle = "#111827";
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(x, yBase - 14, s, s);
+        if (checked) {
+          ctx.beginPath();
+          ctx.moveTo(x + 3, yBase - 6);
+          ctx.lineTo(x + 7, yBase - 2);
+          ctx.lineTo(x + 14, yBase - 13);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "#111827";
+        ctx.font = bodyFont;
+        ctx.fillText(text, x + s + 8, yBase);
+      }
+      ctx.font = labelFont;
+      ctx.fillText("Hình thức:", padX, y);
+      drawCheckbox(padX + 260, y, opt.transfer, "Chuyển khoản");
+      drawCheckbox(padX + 660, y, opt.cash, "Tiền mặt");
+      y += lineH;
+
+      ctx.font = labelFont;
+      ctx.fillText("Tên chủ TK:", padX, y);
+      ctx.font = bodyFont;
+      ctx.fillText(opt.accountName, padX + 130, y);
+      ctx.font = labelFont;
+      ctx.fillText("Ngân hàng:", padX + 610, y);
+      ctx.font = bodyFont;
+      ctx.fillText(opt.bank, padX + 730, y);
+      y += lineH;
+      ctx.font = labelFont;
+      ctx.fillText("Số TK:", padX, y);
+      ctx.font = bodyFont;
+      ctx.fillText(opt.accountNo, padX + 86, y);
+      if (opt.branch) {
+        ctx.font = labelFont;
+        ctx.fillText("Chi nhánh:", padX + 610, y);
+        ctx.font = bodyFont;
+        ctx.fillText(opt.branch, padX + 730, y);
+      }
+
+      if (stampCty) {
+        const sW = 235;
+        const sH = sW * stampCty.height / stampCty.width;
+        ctx.save();
+        ctx.translate(padX + 118, 210);
+        ctx.rotate(stampRot);
+        ctx.globalAlpha = 0.86;
+        ctx.drawImage(stampCty, -sW / 2, -sH / 2, sW, sH);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+
+      const signX = W - 300;
+      let sy = y + 50;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 19px 'Times New Roman', Georgia, serif";
+      ctx.fillText("Người đề nghị", signX, sy);
+      ctx.font = "17px 'Times New Roman', Georgia, serif";
+      ctx.fillText("(Ký, ghi họ tên)", signX, sy + 36);
+      ctx.fillStyle = "#1e40af";
+      ctx.font = "italic 28px 'Brush Script MT', 'Segoe Script', cursive";
+      ctx.fillText(opt.requester || "Nguyễn Phấn Hoàn", signX, sy + 120);
+    }
+
+    async function download() {
+      const canvas = document.getElementById("payReqCanvas");
+      if (!canvas || !canvas.width) { alert("Chưa có giấy đề nghị thanh toán."); return; }
+      const a = document.createElement("a");
+      a.download = `de_nghi_tt_${currentOrderCode || Date.now()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      close();
+    }
+    async function copy() {
+      const canvas = document.getElementById("payReqCanvas");
+      const st = document.getElementById("payReqStatus");
+      if (!canvas || !canvas.width) { alert("Chưa có giấy đề nghị thanh toán."); return; }
+      const ok = await copyImageToClipboardSafe(async () => {
+        const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+        if (!blob) throw new Error("Tạo blob thất bại");
+        return blob;
+      });
+      if (ok) close();
+      else if (st) st.textContent = "⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải ảnh.";
+    }
+
+    return { open, close, render, download, copy };
+  })();
+
   return {
     addFromText,
     pasteClipboardAndAdd,
@@ -11643,6 +12094,11 @@ const App = (() => {
     invoiceRender: () => Invoice.render(),
     invoiceDownload: () => Invoice.download(),
     invoiceCopy: () => Invoice.copy(),
+    payReqOpen: () => PaymentRequest.open(),
+    payReqClose: () => PaymentRequest.close(),
+    payReqRender: () => PaymentRequest.render(),
+    payReqDownload: () => PaymentRequest.download(),
+    payReqCopy: () => PaymentRequest.copy(),
     pickerFilter,
     pickerSelectAll,
     pickerDeselectAll,
