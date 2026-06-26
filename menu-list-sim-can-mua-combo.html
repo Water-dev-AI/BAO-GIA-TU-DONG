@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.58 · 27/06/2026 · (GMT+7)
+ - Đề nghị TT: đưa con dấu công ty sang trái, để vòng tròn lòi/đè vào dòng "Kính gửi"
+   khoảng 1/4 như mẫu ảnh.
+
  v10.9.57 · 27/06/2026 · (GMT+7)
  - Đề nghị TT: giảm con dấu công ty xuống 3/4 kích thước v10.9.56 và bỏ chữ ký viết tay
    "Nguyễn Phấn Hoàn" dưới phần Người đề nghị.
@@ -1333,7 +1337,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.57
+    Version 10.9.58
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2084,7 +2088,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
   </div>
 </div>
 
-<!-- Modal Giấy đề nghị thanh toán (v10.9.57) -->
+<!-- Modal Giấy đề nghị thanh toán (v10.9.58) -->
 <div class="picker-overlay" id="payReqOverlay" data-overlay-close="App.payReqClose()">
   <div class="picker-modal" style="width:min(96vw, 980px);">
     <div class="picker-header">
@@ -11670,7 +11674,7 @@ const App = (() => {
     return { open, close, render, download, copy };
   })();
 
-  /* ===== GIẤY ĐỀ NGHỊ THANH TOÁN (v10.9.57) ===== */
+  /* ===== GIẤY ĐỀ NGHỊ THANH TOÁN (v10.9.58) ===== */
   const PaymentRequest = (() => {
     let cfg = null;
     let stampRot = 0;
@@ -11969,7 +11973,7 @@ const App = (() => {
         const sW = 176;
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
-        ctx.translate(padX + 118, 210);
+        ctx.translate(padX + 35, 225);
         ctx.rotate(stampRot);
         ctx.globalAlpha = 0.86;
         ctx.drawImage(stampCty, -sW / 2, -sH / 2, sW, sH);
