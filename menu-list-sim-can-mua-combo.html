@@ -77,6 +77,19 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.68 · 27/06/2026 · (GMT+7)
+ - Hóa đơn bán lẻ: giữ size dấu công ty `sW=176` nhưng kéo tâm dấu sang phải để dấu
+   ăn vào block chữ MST/Địa chỉ như layout cũ.
+ - Đề nghị TT: sửa modal preview thành layout 2 cột form/ảnh, preview sticky có chiều cao
+   riêng; không còn bị footer/form che làm chỉ thấy một lát canvas.
+ - Safari bảng giá: thêm IndexedDB cache cho CSV. Auto-update lưu từng bảng vào IndexedDB,
+   mở bảng đọc IndexedDB trước khi fetch mạng. Đổi index key sang v3 để bắt buộc update lại
+   sau bản v10.9.66 đã có trạng thái "cập nhật" nhưng chưa có CSV cache bền.
+
+ v10.9.67 · 27/06/2026 · (GMT+7)
+ - Fix header modal chọn gói: tên bảng giá dài không còn đè lên ô tìm kiếm/filter/nút.
+   Title được giới hạn chiều rộng và cụm control bọc riêng để tự xuống dòng gọn.
+
  v10.9.66 · 27/06/2026 · (GMT+7)
  - Fix Safari vẫn hiện "Chưa cập nhật lần nào": CountrySearch không còn lưu toàn bộ
    `csvText` của 41 bảng vào localStorage (dễ vượt quota Safari). Cache persistent giờ chỉ
@@ -1158,10 +1171,60 @@
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
   .picker-header h3 { margin: 0; font-size: 16px; flex: 1; }
+  #pickerOverlay .picker-header { align-items: flex-start; }
+  #pickerOverlay .picker-header h3 {
+    flex: 1 1 280px;
+    min-width: 240px;
+    max-width: 360px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .picker-header-controls {
+    flex: 999 1 520px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
   .picker-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .picker-footer {
     padding: 12px 18px; border-top: 1px solid var(--line);
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .payreq-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+    gap: 14px;
+    align-items: start;
+  }
+  .payreq-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    min-width: 0;
+  }
+  .payreq-preview {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px;
+    text-align: center;
+    max-height: calc(88vh - 170px);
+    overflow: auto;
+    position: sticky;
+    top: 0;
+  }
+  #payReqStatus { grid-column: 2; }
+  @media (max-width: 980px) {
+    .payreq-body { grid-template-columns: 1fr; }
+    .payreq-form-grid { grid-template-columns: 1fr; }
+    .payreq-preview {
+      position: static;
+      max-height: 520px;
+    }
+    #payReqStatus { grid-column: auto; }
   }
   table.picker-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.picker-table th {
@@ -1378,7 +1441,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.66
+    Version 10.9.68
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1725,18 +1788,20 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   <div class="picker-modal">
     <div class="picker-header">
       <h3 id="pickerTitle">Chọn gói</h3>
-      <input id="pickerSearch" type="text" placeholder="🔍 Tìm kiếm..."
-        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:200px;"
-        oninput="App.pickerFilter()" />
-      <input id="pickerDaysFilter" type="text" placeholder="📅 Ngày: 5, 7, 10..."
-        title="Lọc theo số ngày — nhập 1-5 số phân cách bằng dấu phẩy/khoảng trắng/dấu /. Vd: 5, 7, 10"
-        style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:170px;font-family:inherit;"
-        oninput="App.pickerFilter()" />
-      <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
-      <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
-      <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
-      <button class="light" onclick="App.pickerOpenSheetUrl()" style="margin:0;" title="Mở bảng giá này trong tab mới">🔗</button>
-      <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+      <div class="picker-header-controls">
+        <input id="pickerSearch" type="text" placeholder="🔍 Tìm kiếm..."
+          style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:200px;"
+          oninput="App.pickerFilter()" />
+        <input id="pickerDaysFilter" type="text" placeholder="📅 Ngày: 5, 7, 10..."
+          title="Lọc theo số ngày — nhập 1-5 số phân cách bằng dấu phẩy/khoảng trắng/dấu /. Vd: 5, 7, 10"
+          style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:170px;font-family:inherit;"
+          oninput="App.pickerFilter()" />
+        <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
+        <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
+        <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
+        <button class="light" onclick="App.pickerOpenSheetUrl()" style="margin:0;" title="Mở bảng giá này trong tab mới">🔗</button>
+        <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+      </div>
     </div>
     <div id="pickerTabBar" style="padding:10px 14px;display:flex;flex-wrap:nowrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;"></div>
     <div id="pickerTabDesc" style="display:none;padding:7px 18px;background:#eff6ff;border-bottom:1px solid var(--line);border-left:3px solid #3b82f6;font-size:12.5px;line-height:1.5;color:#1e3a8a;font-weight:500;white-space:pre-wrap;flex-shrink:0;max-height:150px;overflow-y:auto;"></div>
@@ -2131,13 +2196,13 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 
 <!-- Modal Giấy đề nghị thanh toán (v10.9.58) -->
 <div class="picker-overlay" id="payReqOverlay" data-overlay-close="App.payReqClose()">
-  <div class="picker-modal" style="width:min(96vw, 980px);">
+  <div class="picker-modal" style="width:min(96vw, 1180px);">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">📝 Giấy đề nghị thanh toán</h3>
       <button onclick="App.payReqClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div class="picker-body" style="padding:16px;display:flex;flex-direction:column;gap:14px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="picker-body payreq-body" style="padding:16px;">
+      <div class="payreq-form-grid">
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Ngày đề nghị thanh toán</div>
           <input id="payReqDate" type="date" oninput="App.payReqRender()"
@@ -2198,7 +2263,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
             style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
         </div>
       </div>
-      <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;max-height:520px;overflow:auto;">
+      <div class="payreq-preview">
         <canvas id="payReqCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
       </div>
       <div id="payReqStatus" class="status" style="font-size:12.5px;"></div>
@@ -4731,6 +4796,51 @@ const App = (() => {
 
   // In-memory CSV cache: key=URL, value={csvText, fetchedAt}. Reset khi refresh trang.
   const csvCache = new Map();
+  const CSV_DB_NAME = "simglobe_csv_cache_v1";
+  const CSV_DB_STORE = "csv";
+  let _csvDbPromise = null;
+
+  function csvDbOpen() {
+    if (!("indexedDB" in window)) return Promise.resolve(null);
+    if (_csvDbPromise) return _csvDbPromise;
+    _csvDbPromise = new Promise(resolve => {
+      const req = indexedDB.open(CSV_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(CSV_DB_STORE)) db.createObjectStore(CSV_DB_STORE, { keyPath: "url" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    });
+    return _csvDbPromise;
+  }
+
+  async function csvDbGet(url) {
+    try {
+      const db = await csvDbOpen();
+      if (!db) return null;
+      return await new Promise(resolve => {
+        const tx = db.transaction(CSV_DB_STORE, "readonly");
+        const req = tx.objectStore(CSV_DB_STORE).get(url);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
+  }
+
+  async function csvDbSet(url, csvText) {
+    try {
+      const db = await csvDbOpen();
+      if (!db || !csvText) return false;
+      return await new Promise(resolve => {
+        const tx = db.transaction(CSV_DB_STORE, "readwrite");
+        tx.objectStore(CSV_DB_STORE).put({ url, csvText, savedAt: Date.now(), len: csvText.length });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  }
 
   function slShowLoading(title, sub) {
     document.getElementById("slLoadingText").textContent = title || "Đang tải...";
@@ -4760,11 +4870,27 @@ const App = (() => {
       csvText = cached.csvText;
       document.getElementById("slStatus").textContent = "⚡ " + item.name + " (đã cache trong phiên)";
     } else {
+      if (!forceRefresh) {
+        const persisted = await csvDbGet(_csvUrl);
+        if (persisted && persisted.csvText) {
+          csvText = persisted.csvText;
+          csvCache.set(_csvUrl, { csvText, fetchedAt: persisted.savedAt || Date.now() });
+          if (item.presetId) {
+            _slPreloadCachedIds.add(item.presetId);
+            slRenderFavorites();
+          }
+          document.getElementById("slStatus").textContent = "⚡ " + item.name + " (đã cache Safari/IndexedDB)";
+        }
+      }
+    }
+
+    if (!csvText) {
       // Cache miss → fetch với loading overlay
       slShowLoading("Đang tải " + item.name + "...", "Lần đầu trong phiên có thể mất 5-15 giây tuỳ tốc độ mạng.");
       try {
         csvText = await gsFetch(_csvUrl);
         csvCache.set(_csvUrl, { csvText, fetchedAt: Date.now() });
+        csvDbSet(_csvUrl, csvText);
         // Track cached → UI dot
         if (item.presetId) {
           _slPreloadCachedIds.add(item.presetId);
@@ -5226,7 +5352,7 @@ const App = (() => {
   //   TTL: 24h. Quá hạn → auto background update khi mở tab (không chặn UI).
   //   v10.9.66: Không lưu csvText thô vào localStorage để tránh Safari quota.
   const CountrySearch = (() => {
-    const STORAGE_KEY = "combo_bill_country_index_v2";
+    const STORAGE_KEY = "combo_bill_country_index_v3";
     const STALE_MS = 12 * 3600 * 1000; // 12h
     // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
     //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
@@ -5454,6 +5580,7 @@ const App = (() => {
             if (typeof csvCache !== "undefined") {
               csvCache.set(csvUrl, { csvText, fetchedAt: Date.now() });
             }
+            try { csvDbSet(csvUrl, csvText); } catch (e) {}
           }
           const normText = ComboLogic.norm(csvText || "");
           newById[item.presetId] = {
@@ -11546,7 +11673,7 @@ const App = (() => {
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
         // Neo dấu sát đỉnh vùng header, lệch phải. Tâm dấu:
-        const cx = sW / 2;   // dấu sát lề trái (trái = 0), chỉ mép phải chạm đầu chữ
+        const cx = headerTextX - 18; // v10.9.68: kéo dấu ăn vào block chữ MST/địa chỉ
         const cy = pad + 8 + sH / 2;
         ctx.translate(cx, cy);
         ctx.rotate(rotStamp1);
