@@ -77,6 +77,19 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.71 · 27/06/2026 · (GMT+7)
+ - Picker chọn gói: đổi header thành 2 tầng. Tên bảng giá nằm ngang tối đa 2 dòng ở hàng
+   trên, nút X giữ góc phải; search/filter/nút chọn chuyển xuống hàng dưới cho gọn.
+
+ v10.9.70 · 27/06/2026 · (GMT+7)
+ - Safari auto-update: tăng timeout fetch mỗi đường từ 12s lên 30s để mạng chậm/Google Sheet
+   phản hồi chậm vẫn có cơ hội tải, nhưng vẫn tránh treo vĩnh viễn.
+
+ v10.9.69 · 27/06/2026 · (GMT+7)
+ - Fix Safari treo khi tự cập nhật bảng giá giữa chừng (vd 37/41): `gsFetch()` giờ có
+   timeout 12s cho từng đường fetch proxy/direct/allorigins. Bảng nào timeout sẽ fail nhanh
+   để vòng update tiếp tục bảng kế tiếp, không đứng progress vĩnh viễn.
+
  v10.9.68 · 27/06/2026 · (GMT+7)
  - Hóa đơn bán lẻ: giữ size dấu công ty `sW=176` nhưng kéo tâm dấu sang phải để dấu
    ăn vào block chữ MST/Địa chỉ như layout cũ.
@@ -1171,23 +1184,36 @@
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
   .picker-header h3 { margin: 0; font-size: 16px; flex: 1; }
-  #pickerOverlay .picker-header { align-items: flex-start; }
+  #pickerOverlay .picker-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
   #pickerOverlay .picker-header h3 {
-    flex: 1 1 280px;
-    min-width: 240px;
-    max-width: 360px;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
     line-height: 1.35;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow-wrap: break-word;
+  }
+  .picker-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
   }
   .picker-header-controls {
-    flex: 999 1 520px;
+    flex: 1 1 auto;
     min-width: 0;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 10px;
     flex-wrap: wrap;
   }
+  .picker-header-controls input { max-width: 100%; }
   .picker-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .picker-footer {
     padding: 12px 18px; border-top: 1px solid var(--line);
@@ -1441,7 +1467,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.68
+    Version 10.9.71
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1787,7 +1813,10 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 <div class="picker-overlay" id="pickerOverlay" data-overlay-close="App.pickerClose()">
   <div class="picker-modal">
     <div class="picker-header">
-      <h3 id="pickerTitle">Chọn gói</h3>
+      <div class="picker-title-row">
+        <h3 id="pickerTitle">Chọn gói</h3>
+        <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;flex:0 0 auto;">✕</button>
+      </div>
       <div class="picker-header-controls">
         <input id="pickerSearch" type="text" placeholder="🔍 Tìm kiếm..."
           style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:200px;"
@@ -1800,7 +1829,6 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
         <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
         <button class="light" onclick="App.pickerOpenSheetUrl()" style="margin:0;" title="Mở bảng giá này trong tab mới">🔗</button>
-        <button onclick="App.pickerClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
       </div>
     </div>
     <div id="pickerTabBar" style="padding:10px 14px;display:flex;flex-wrap:nowrap;gap:8px;border-bottom:2px solid var(--line);background:#f5f7fa;align-items:stretch;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;"></div>
@@ -9754,10 +9782,17 @@ const App = (() => {
       return !t.startsWith("<!") && !t.startsWith("<html") && !t.startsWith("<HTML");
     }
 
+    function fetchWithTimeout(fetchUrl, ms) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      return fetch(fetchUrl, { redirect: "follow", signal: ctrl.signal })
+        .finally(() => clearTimeout(timer));
+    }
+
     const attempts = [
-      () => fetch(proxyUrl(url), { redirect: "follow" }),
-      () => fetch(url, { redirect: "follow" }),
-      () => fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url)),
+      () => fetchWithTimeout(proxyUrl(url), 30000),
+      () => fetchWithTimeout(url, 30000),
+      () => fetchWithTimeout("https://api.allorigins.win/raw?url=" + encodeURIComponent(url), 30000),
     ];
 
     for (const attempt of attempts) {
