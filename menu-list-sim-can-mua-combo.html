@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.66 · 27/06/2026 · (GMT+7)
+ - Fix Safari vẫn hiện "Chưa cập nhật lần nào": CountrySearch không còn lưu toàn bộ
+   `csvText` của 41 bảng vào localStorage (dễ vượt quota Safari). Cache persistent giờ chỉ
+   lưu `normText` + metadata; CSV thô vẫn dùng trong phiên hiện tại.
+ - Nếu auto-update fail toàn bộ bảng, UI báo lỗi rõ thay vì im lặng/quay về "Chưa cập nhật".
+
  v10.9.65 · 27/06/2026 · (GMT+7)
  - Đồng bộ size con dấu công ty: Hóa đơn bán lẻ cũng dùng `sW = 176` như Giấy đề nghị
    thanh toán, giữ filter đỏ đậm hơn.
@@ -1372,7 +1378,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.65
+    Version 10.9.66
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5216,9 +5222,9 @@ const App = (() => {
 
   // ─── v10.9.13: CountrySearch (sheet cache + price index 24h, dùng chung) ───
   //   Storage key: combo_bill_country_index_v2
-  //     { byId: { [presetId]: { name, csvText, normText, indexedAt } }, savedAt }
+  //     { byId: { [presetId]: { name, normText, indexedAt, csvLen } }, savedAt }
   //   TTL: 24h. Quá hạn → auto background update khi mở tab (không chặn UI).
-  //   PriceIndex được hydrate từ csvText khi load (cho cảnh báo giá lệch).
+  //   v10.9.66: Không lưu csvText thô vào localStorage để tránh Safari quota.
   const CountrySearch = (() => {
     const STORAGE_KEY = "combo_bill_country_index_v2";
     const STALE_MS = 12 * 3600 * 1000; // 12h
@@ -5321,9 +5327,23 @@ const App = (() => {
       } catch (e) { _data = null; }
       return _data;
     }
+    function _compactForStorage(d) {
+      if (!d || !d.byId) return d;
+      const byId = {};
+      for (const [id, entry] of Object.entries(d.byId)) {
+        if (!entry) continue;
+        byId[id] = {
+          name: entry.name || "",
+          normText: entry.normText || "",
+          indexedAt: entry.indexedAt || d.savedAt || Date.now(),
+          csvLen: entry.csvLen || (entry.csvText ? String(entry.csvText).length : 0),
+        };
+      }
+      return { byId, savedAt: d.savedAt || Date.now() };
+    }
     function _save() {
       try {
-        if (_data) localStorage.setItem(STORAGE_KEY, JSON.stringify(_data));
+        if (_data) localStorage.setItem(STORAGE_KEY, JSON.stringify(_compactForStorage(_data)));
       } catch (e) {
         console.error("CountrySearch save fail:", e);
       }
@@ -5438,9 +5458,9 @@ const App = (() => {
           const normText = ComboLogic.norm(csvText || "");
           newById[item.presetId] = {
             name: item.name,
-            csvText,      // v10.9.13: lưu raw để hydrate PriceIndex sau reload
             normText,
             indexedAt: Date.now(),
+            csvLen: csvText.length,
           };
           // v10.9.13: nạp PriceIndex ngay để cảnh báo giá lệch hoạt động
           try { gsParseTables(csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
@@ -5452,29 +5472,35 @@ const App = (() => {
         done++;
         if (onProgress) onProgress(done, targets.length, item.name);
       }
+      const countOk = Object.keys(newById).length;
+      if (countOk === 0) {
+        return { ok: false, count: 0, total: targets.length, error: "Không tải được bảng giá nào." };
+      }
       _data = { byId: newById, savedAt: Date.now() };
       _save();
-      return { ok: true, count: Object.keys(newById).length, total: targets.length };
+      return { ok: true, count: countOk, total: targets.length };
     }
 
-    // v10.9.13: hydrate csvCache + PriceIndex từ storage (gọi 1 lần khi init).
-    // Cho phép cảnh báo giá lệch hoạt động ngay khi mở tab mà chưa cần fetch mới.
+    // v10.9.13: hydrate csvCache + PriceIndex từ storage nếu cache cũ còn csvText.
+    // v10.9.66: cache mới chỉ lưu normText để Safari không vượt quota.
     function hydrate() {
       const d = _load();
       if (!d || !d.byId) return;
       const list = (typeof slLoadAll === "function") ? slLoadAll() : [];
       const byPresetId = new Map(list.map(x => [x.presetId, x]));
       for (const [pid, entry] of Object.entries(d.byId)) {
-        if (!entry || !entry.csvText) continue;
+        if (!entry) continue;
         const item = byPresetId.get(pid);
         if (!item || !item.url) continue;
-        const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
-        if (csvUrl && typeof csvCache !== "undefined" && !csvCache.has(csvUrl)) {
-          csvCache.set(csvUrl, { csvText: entry.csvText, fetchedAt: entry.indexedAt || d.savedAt });
+        if (entry.csvText) {
+          const csvUrl = gsBuildCsvUrl(item.url, item.gid || "0");
+          if (csvUrl && typeof csvCache !== "undefined" && !csvCache.has(csvUrl)) {
+            csvCache.set(csvUrl, { csvText: entry.csvText, fetchedAt: entry.indexedAt || d.savedAt });
+          }
+          try { gsParseTables(entry.csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
+          // v10.9.14: đánh dấu pills "đã preload" ngay khi hydrate
+          try { _slPreloadCachedIds.add(pid); } catch (e) {}
         }
-        try { gsParseTables(entry.csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
-        // v10.9.14: đánh dấu pills "đã preload" ngay khi hydrate
-        try { _slPreloadCachedIds.add(pid); } catch (e) {}
       }
     }
 
@@ -5520,6 +5546,7 @@ const App = (() => {
         if (count) count.textContent = `${done} / ${total}`;
         if (fill) fill.style.width = `${Math.round(done / total * 100)}%`;
       }, true);  // v10.9.40: LUÔN force fetch mới (cả manual + silent>12h) — đó là điểm của TTL
+      if (!r.ok) throw new Error(r.error || "Không cập nhật được bảng giá.");
       if (label) label.textContent = `✅ Đã tải ${r.count || 0}/${r.total || 0} bảng giá`;
       setTimeout(() => { if (bar) bar.style.display = "none"; }, 2000);
       csUpdateBadgeUI();
