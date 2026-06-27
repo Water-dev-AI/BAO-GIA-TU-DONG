@@ -77,6 +77,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.72 · 27/06/2026 · (GMT+7)
+ - Fix Safari cập nhật xong reload lại vẫn tự cập nhật: CountrySearch index/savedAt chuyển
+   sang IndexedDB, localStorage chỉ giữ meta nhỏ. Init giờ `await CountrySearch.hydrate()`
+   trước khi kiểm tra stale 12h.
+ - `csUpdate()` chờ ghi IndexedDB xong rồi mới báo hoàn tất, tránh reload ngay làm mất mốc.
+
  v10.9.71 · 27/06/2026 · (GMT+7)
  - Picker chọn gói: đổi header thành 2 tầng. Tên bảng giá nằm ngang tối đa 2 dòng ở hàng
    trên, nút X giữ góc phải; search/filter/nút chọn chuyển xuống hàng dưới cho gọn.
@@ -1467,7 +1473,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.71
+    Version 10.9.72
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4870,6 +4876,32 @@ const App = (() => {
     } catch (e) { return false; }
   }
 
+  async function csvDbPutRecord(record) {
+    try {
+      const db = await csvDbOpen();
+      if (!db || !record || !record.url) return false;
+      return await new Promise(resolve => {
+        const tx = db.transaction(CSV_DB_STORE, "readwrite");
+        tx.objectStore(CSV_DB_STORE).put(record);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  }
+
+  async function csvDbDelete(url) {
+    try {
+      const db = await csvDbOpen();
+      if (!db) return false;
+      return await new Promise(resolve => {
+        const tx = db.transaction(CSV_DB_STORE, "readwrite");
+        tx.objectStore(CSV_DB_STORE).delete(url);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  }
+
   function slShowLoading(title, sub) {
     document.getElementById("slLoadingText").textContent = title || "Đang tải...";
     document.getElementById("slLoadingSub").textContent = sub || "";
@@ -5380,7 +5412,9 @@ const App = (() => {
   //   TTL: 24h. Quá hạn → auto background update khi mở tab (không chặn UI).
   //   v10.9.66: Không lưu csvText thô vào localStorage để tránh Safari quota.
   const CountrySearch = (() => {
-    const STORAGE_KEY = "combo_bill_country_index_v3";
+    const STORAGE_KEY = "combo_bill_country_index_v4";
+    const STORAGE_META_KEY = STORAGE_KEY + "_meta";
+    const STORAGE_DB_KEY = "__" + STORAGE_KEY + "__";
     const STALE_MS = 12 * 3600 * 1000; // 12h
     // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
     //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
@@ -5481,6 +5515,17 @@ const App = (() => {
       } catch (e) { _data = null; }
       return _data;
     }
+    async function _loadFromDb() {
+      if (_data) return _data;
+      try {
+        const rec = await csvDbGet(STORAGE_DB_KEY);
+        if (rec && rec.data && rec.data.byId) {
+          _data = rec.data;
+          return _data;
+        }
+      } catch (e) {}
+      return _load();
+    }
     function _compactForStorage(d) {
       if (!d || !d.byId) return d;
       const byId = {};
@@ -5495,9 +5540,16 @@ const App = (() => {
       }
       return { byId, savedAt: d.savedAt || Date.now() };
     }
-    function _save() {
+    async function _save() {
       try {
-        if (_data) localStorage.setItem(STORAGE_KEY, JSON.stringify(_compactForStorage(_data)));
+        if (!_data) return;
+        const compact = _compactForStorage(_data);
+        _data = compact;
+        await csvDbPutRecord({ url: STORAGE_DB_KEY, data: compact, savedAt: compact.savedAt || Date.now() });
+        localStorage.setItem(STORAGE_META_KEY, JSON.stringify({
+          count: compact.byId ? Object.keys(compact.byId).length : 0,
+          savedAt: compact.savedAt || Date.now(),
+        }));
       } catch (e) {
         console.error("CountrySearch save fail:", e);
       }
@@ -5508,7 +5560,11 @@ const App = (() => {
     }
     function getSavedAt() {
       const d = _load();
-      return d ? (d.savedAt || 0) : 0;
+      if (d) return d.savedAt || 0;
+      try {
+        const meta = JSON.parse(localStorage.getItem(STORAGE_META_KEY) || "null");
+        return meta ? (meta.savedAt || 0) : 0;
+      } catch (e) { return 0; }
     }
     function isStale() {
       const at = getSavedAt();
@@ -5517,12 +5573,20 @@ const App = (() => {
     }
     function getStats() {
       const d = _load();
-      if (!d || !d.byId) return { count: 0, savedAt: 0 };
+      if (!d || !d.byId) {
+        try {
+          const meta = JSON.parse(localStorage.getItem(STORAGE_META_KEY) || "null");
+          if (meta) return { count: meta.count || 0, savedAt: meta.savedAt || 0 };
+        } catch (e) {}
+        return { count: 0, savedAt: 0 };
+      }
       return { count: Object.keys(d.byId).length, savedAt: d.savedAt || 0 };
     }
     function clear() {
       _data = null;
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      try { localStorage.removeItem(STORAGE_META_KEY); } catch (e) {}
+      try { csvDbDelete(STORAGE_DB_KEY); } catch (e) {}
     }
 
     // v10.8.34: User gõ tên VN/EN — expand thành EN aliases ONLY (content sheet là tiếng Anh).
@@ -5632,14 +5696,14 @@ const App = (() => {
         return { ok: false, count: 0, total: targets.length, error: "Không tải được bảng giá nào." };
       }
       _data = { byId: newById, savedAt: Date.now() };
-      _save();
+      await _save();
       return { ok: true, count: countOk, total: targets.length };
     }
 
     // v10.9.13: hydrate csvCache + PriceIndex từ storage nếu cache cũ còn csvText.
     // v10.9.66: cache mới chỉ lưu normText để Safari không vượt quota.
-    function hydrate() {
-      const d = _load();
+    async function hydrate() {
+      const d = await _loadFromDb();
       if (!d || !d.byId) return;
       const list = (typeof slLoadAll === "function") ? slLoadAll() : [];
       const byPresetId = new Map(list.map(x => [x.presetId, x]));
@@ -5654,6 +5718,8 @@ const App = (() => {
           }
           try { gsParseTables(entry.csvText, "2", "").forEach(t => PriceIndex.addFromLines(t.lines)); } catch (e) {}
           // v10.9.14: đánh dấu pills "đã preload" ngay khi hydrate
+          try { _slPreloadCachedIds.add(pid); } catch (e) {}
+        } else if (entry.csvLen) {
           try { _slPreloadCachedIds.add(pid); } catch (e) {}
         }
       }
@@ -9053,12 +9119,12 @@ const App = (() => {
 
   // Render ngay với local sheets, rồi async fetch preset từ sheets.json và re-render.
   slRender();
-  loadSheetPresets().then(presets => {
+  loadSheetPresets().then(async presets => {
     presetSheets = presets;
     if (presets.length) {
       slRender();
       document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
-      try { CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
+      try { await CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
       csUpdateBadgeUI();
       if (CountrySearch.isStale()) {
         setTimeout(() => { csUpdate(true); }, 800);
