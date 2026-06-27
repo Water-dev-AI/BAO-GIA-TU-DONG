@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.60 · 27/06/2026 · (GMT+7)
+ - Fix modal "QR thanh toán nhanh": body dùng vùng scroll chuẩn `.picker-body`
+   và `min-height:0`, giữ footer/nút Tải QR + Copy ảnh + Đóng luôn hiện trong viewport.
+
  v10.9.59 · 27/06/2026 · (GMT+7)
  - Lưu/khôi phục thông tin khách + VAT ở section 2B bằng localStorage riêng
    `combo_bill_cust2b_state_v1`. Reload web giờ giữ cả giỏ hàng lẫn trạng thái Xuất VAT,
@@ -1122,7 +1126,7 @@
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
   .picker-header h3 { margin: 0; font-size: 16px; flex: 1; }
-  .picker-body { flex: 1; overflow-y: auto; }
+  .picker-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .picker-footer {
     padding: 12px 18px; border-top: 1px solid var(--line);
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
@@ -1342,7 +1346,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.59
+    Version 10.9.60
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2010,12 +2014,12 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
 
 <!-- Modal QR Custom -->
 <div class="picker-overlay" id="qrCustomOverlay" data-overlay-close="App.qrCustomClose()">
-  <div class="picker-modal" style="width:min(96vw, 560px);">
+  <div class="picker-modal" style="width:min(96vw, 560px);max-height:90vh;">
     <div class="picker-header">
       <h3 style="margin:0;flex:1;">⚡ QR thanh toán nhanh</h3>
       <button onclick="App.qrCustomClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+    <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Số tiền (VND) *</div>
         <input id="qrCustomAmount" type="text" inputmode="numeric" placeholder="VD: 500,000"
@@ -2030,7 +2034,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
           style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
       </div>
       <div id="qrCustomPreview" style="display:none;text-align:center;background:white;border:1px solid var(--line);border-radius:10px;padding:12px;">
-        <img id="qrCustomImg" alt="QR" style="max-width:280px;height:auto;" />
+        <img id="qrCustomImg" alt="QR" style="max-width:min(100%, 320px);height:auto;" />
         <div id="qrCustomInfo" style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6;"></div>
       </div>
     </div>
