@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.61 · 27/06/2026 · (GMT+7)
+ - Fix ngưỡng giảm giá: các mốc 500k/1tr/2tr/3tr/4tr được giảm ngay tại đúng mốc
+   (`>=` thay vì `>`). Đổi label bill từ "Trên..." sang "Từ..." và parser bỏ qua dòng
+   "Từ..." khi paste bill ngược vào giỏ.
+
  v10.9.60 · 27/06/2026 · (GMT+7)
  - Fix modal "QR thanh toán nhanh": body dùng vùng scroll chuẩn `.picker-body`
    và `min-height:0`, giữ footer/nút Tải QR + Copy ảnh + Đóng luôn hiện trong viewport.
@@ -1346,7 +1351,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.60
+    Version 10.9.61
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2218,11 +2223,11 @@ const ComboLogic = (() => {
   // Group 1 = giá ("299k"), group 2 = qty optional ("2", "N3", "2+N3"...)
   const priceRe = /(\d[\d.,]*\s*k)(?:\s*\*\s*((?:N?\d+)(?:\+N?\d+)*))?(?=\s*(?:\t|$))/i;
   const discounts = [
-    [4000, 200, "Trên 4tr"],
-    [3000, 150, "Trên 3tr"],
-    [2000, 100, "Trên 2tr"],
-    [1000, 50, "Trên 1tr"],
-    [500, 25, "Trên 500k"],
+    [4000, 200, "Từ 4tr"],
+    [3000, 150, "Từ 3tr"],
+    [2000, 100, "Từ 2tr"],
+    [1000, 50, "Từ 1tr"],
+    [500, 25, "Từ 500k"],
   ];
   const RECHARGE_DISCOUNT_K = 20; // nạp gói SIM VẬT LÝ: giá -20k/SIM
 
@@ -2257,6 +2262,7 @@ const ComboLogic = (() => {
       low.startsWith("tong:") ||
       low.startsWith("con:") ||
       low.startsWith("tren ") ||
+      low.startsWith("tu ") ||
       low.startsWith("ghi chu:") ||
       low.startsWith("da copy") ||
       s.startsWith("✅") ||
@@ -2312,16 +2318,16 @@ const ComboLogic = (() => {
   }
 
   function discountFor(totalK) {
-    // Trên 4tr: công thức tuyến tính 200k + 50k mỗi 1tr thêm (5tr=250k, 6tr=300k, 10tr=500k, ...)
+    // Từ 4tr: công thức tuyến tính 200k + 50k mỗi 1tr thêm (5tr=250k, 6tr=300k, 10tr=500k, ...)
     if (totalK >= 4000) {
       const extraMillions = Math.floor((totalK - 4000) / 1000);
       const amount = 200 + extraMillions * 50;
-      const tierLabel = extraMillions === 0 ? "Trên 4tr" : `Trên ${4 + extraMillions}tr`;
+      const tierLabel = extraMillions === 0 ? "Từ 4tr" : `Từ ${4 + extraMillions}tr`;
       return { amount, label: tierLabel };
     }
     // Dưới 4tr: dùng bảng cũ
     for (const [threshold, amount, label] of discounts) {
-      if (totalK > threshold) return { amount, label };
+      if (totalK >= threshold) return { amount, label };
     }
     return { amount: 0, label: "" };
   }
