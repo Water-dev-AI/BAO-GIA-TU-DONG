@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.77 · 28/06/2026 · (GMT+7)
+ - Đơn lưu chung: lần reload/tab mở đầu tải danh sách online ở nền, không hiện overlay
+   spinner chặn thao tác. Spinner chỉ hiện khi user chủ động thao tác online như Tải lại,
+   Lưu Online, Lưu Nháp, xoá, cập nhật hoặc nhập sổ từ đơn online.
+
  v10.9.76 · 28/06/2026 · (GMT+7)
  - Đơn lưu chung online trong tab DRAFTS tự xoá các đơn quá 15 ngày khi tải danh
    sách. `GS/vat-sheet.gs` bump version `10.9.76` và menu purge đổi thành ">15 ngày".
@@ -1497,7 +1502,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.76
+    Version 10.9.77
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -6800,10 +6805,11 @@ const App = (() => {
 
     function getAll() { return list.slice(); }
     function getById(id) { return list.find(d => d.id === id) || null; }
-    async function _post(body) {
+    async function _post(body, opts) {
+      const silent = !!(opts && opts.silent);
       const url = await _sharedDraftWebAppUrl();
       if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json.");
-      slShowLoading("☁️ Đang xử lý đơn lưu chung...", "Đang kết nối VAT Sheet.");
+      if (!silent) slShowLoading("☁️ Đang xử lý đơn lưu chung...", "Đang kết nối VAT Sheet.");
       try {
         const res = await fetch(url, {
           method: "POST",
@@ -6814,11 +6820,11 @@ const App = (() => {
         if (!data.ok) throw new Error(data.error || "unknown");
         return data;
       } finally {
-        slHideLoading();
+        if (!silent) slHideLoading();
       }
     }
-    async function refresh() {
-      const data = await _post({ action: "drafts_list" });
+    async function refresh(opts) {
+      const data = await _post({ action: "drafts_list" }, opts);
       list = (data.drafts || []).map(_normalizeDraftRecord);
       return { ok: true, count: list.length, purged: data.purged || 0 };
     }
@@ -8532,7 +8538,7 @@ const App = (() => {
     await DraftStore.refresh(false);
     draftRender();
     try {
-      await SharedDraftStore.refresh();
+      await SharedDraftStore.refresh({ silent: true });
       sharedDraftRender();
     } catch (e) {
       const wrap = document.getElementById("sharedDraftListWrap");
