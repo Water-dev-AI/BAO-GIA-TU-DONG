@@ -77,6 +77,25 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.76 · 28/06/2026 · (GMT+7)
+ - Đơn lưu chung online trong tab DRAFTS tự xoá các đơn quá 15 ngày khi tải danh
+   sách. `GS/vat-sheet.gs` bump version `10.9.76` và menu purge đổi thành ">15 ngày".
+
+ v10.9.75 · 28/06/2026 · (GMT+7)
+ - Thêm "Đơn lưu chung" online dưới Đơn nháp local, dùng tab DRAFTS trong VAT Sheet.
+   Mỗi đơn nháp local có nút "Lưu Online" cạnh Import; lưu xong hỏi có xoá bản local
+   không; đơn online có nút "Lưu Nháp" để lưu ngược về local. Giao diện/nút Xem/
+   Import/Share/Xoá/đổi tên/mã/copy payload dùng chung cơ chế.
+ - Cập nhật `GS/vat-sheet.gs` schema DRAFTS để lưu đủ codes/extras/imported/groupByType,
+   thêm `vatSheetScriptVersion()` để check đúng bản Apps Script. Khi import từ Đơn lưu
+   chung rồi cập nhật/nhập sổ, dữ liệu sync ngược về đúng bản online; các thao tác
+   online có overlay spinner.
+
+ v10.9.74 · 28/06/2026 · (GMT+7)
+ - Apps Script nhập sổ (`GS/simglobe_import.gs`): thêm version marker `10.9.74`
+   ngay đầu file và hàm `sgImportScriptVersion()` để chạy check bản đang paste trên
+   Google Apps Script, tránh nhầm/trùng script cũ.
+
  v10.9.73 · 28/06/2026 · (GMT+7)
  - Apps Script nhập sổ (`GS/simglobe_import.gs`): cột "TỔNG GIẢM GIÁ ĐÃ PHÂN BỔ"
    giờ ghi cả `g` âm (vd `-27k`) cho case ship-vào-VAT không có giảm giá gốc.
@@ -1478,7 +1497,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.73
+    Version 10.9.76
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1712,7 +1731,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
 
         <!-- Badge "Đang sửa đơn nháp" (chỉ hiện khi đang edit draft) -->
         <div id="draftEditingBadge" style="display:none;margin-top:12px;padding:7px 11px;background:#dbeafe;border:1px solid #93c5fd;border-radius:7px;font-size:12px;color:#1e40af;">
-          📝 Đang sửa đơn nháp: <b id="draftEditingName"></b>
+          📝 Đang sửa <span id="draftEditingKind">đơn nháp</span>: <b id="draftEditingName"></b>
           <span style="color:var(--muted);">—</span>
           <a href="#" onclick="event.preventDefault();App.draftEditingClear()" style="color:#1e40af;text-decoration:underline;">Bỏ liên kết, lưu thành đơn mới</a>
         </div>
@@ -1817,6 +1836,21 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
       <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
     </div>
+
+    <!-- ====== Đơn lưu chung online ====== -->
+    <div class="card" style="border-color:#f59e0b;background:#fffdf7;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <h2 style="margin:0;color:#92400e;">🗂️ Đơn lưu chung <span id="sharedDraftCount" class="pill" style="background:#fef3c7;color:#92400e;">0 đơn</span></h2>
+        <button onclick="App.sharedDraftsManualRefresh()" style="margin:0;padding:7px 11px;font-size:12px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:7px;cursor:pointer;font-weight:700;">🔄 Tải lại</button>
+      </div>
+      <div style="color:#7c2d12;font-size:12px;margin-bottom:10px;line-height:1.5;">
+        Đơn lưu chung đồng bộ qua tab <b>DRAFTS</b> trong VAT Sheet, dùng cho nhiều máy. Các thao tác Xem, Import, Share, đổi tên/mã, nhập sổ và xoá dùng giống Đơn nháp.
+      </div>
+      <input id="sharedDraftSearch" type="text" placeholder="🔍 Tìm đơn lưu chung hoặc mã đơn (DH...)..."
+        oninput="App.sharedDraftFilter()"
+        style="width:100%;padding:9px 11px;border:1px solid #fbbf24;border-radius:10px;font-size:13px;margin-bottom:10px;background:#fff;" />
+      <div id="sharedDraftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
+    </div>
   </div>
 </div>
 
@@ -1902,12 +1936,14 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
   text-align:center;
 }
 /* Batch delete toolbar */
-#draftBatchBar {
+#draftBatchBar,
+#sharedDraftBatchBar {
   display:none;align-items:center;gap:8px;flex-wrap:wrap;
   padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;
   border-radius:8px;margin-bottom:8px;
 }
-#draftBatchBar.show { display:flex; }
+#draftBatchBar.show,
+#sharedDraftBatchBar.show { display:flex; }
 table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-out infinite; border-radius:5px; }
 .vat-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #cfd5df; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:240px; overflow-y:auto; margin-top:2px; }
 .vat-dropdown.open { display:block; }
@@ -3532,6 +3568,7 @@ const App = (() => {
       Cust2B.clear();
       resetCartExtras();
       draftEditingId = null;
+      draftEditingScope = "local";
       currentOrderCode = "";
       const oc = document.getElementById("orderCode");
       if (oc) oc.value = "";
@@ -4314,8 +4351,10 @@ const App = (() => {
     d.codes.groups = newGroups;
     return newGroups;
   }
-  async function _draftSaveGroupCode(draftId, runIdx, value) {
-    const d = DraftStore.getById(draftId);
+  async function _draftSaveGroupCode(draftId, runIdx, value, scope) {
+    scope = _draftScope(scope || _draftViewingScope);
+    const store = _draftStore(scope);
+    const d = store.getById(draftId);
     if (!d) return;
     _syncCodesGroupsToRuns(d);
     if (!d.codes.groups[runIdx]) return;
@@ -4324,17 +4363,19 @@ const App = (() => {
     const newVal = lines.join("\n");
     if (d.codes.groups[runIdx].code === newVal) return;
     d.codes.groups[runIdx].code = newVal;
-    await DraftStore.upsert(d);
+    await store.upsert(d);
     const label = d.codes.groups[runIdx].type === "esim" ? "eSIM" : "SIM VL";
     if (lines.length) _draftViewStatus(`✅ Đã lưu ${lines.length} mã ${label} (nhóm ${runIdx + 1}).`, "success");
     else _draftViewStatus(`✅ Đã xoá mã ${label} (nhóm ${runIdx + 1}).`, "success");
-    draftRender();
+    _draftRenderScope(scope);
   }
 
   // v10.8.26: Tag "Đã nhập sổ" — toggle off khi bấm ✕
   // v10.8.32: preserveUpdatedAt → không đẩy draft lên top list khi tick metadata.
-  async function _draftToggleImported(draftId, val) {
-    const d = DraftStore.getById(draftId);
+  async function _draftToggleImported(draftId, val, scope) {
+    scope = _draftScope(scope);
+    const store = _draftStore(scope);
+    const d = store.getById(draftId);
     if (!d) return;
     if (val) {
       d.imported = true;
@@ -4343,18 +4384,20 @@ const App = (() => {
       d.imported = false;
       delete d.importedAt;
     }
-    await DraftStore.upsert(d, { preserveUpdatedAt: true });
-    draftRender();
+    await store.upsert(d, { preserveUpdatedAt: true });
+    _draftRenderScope(scope);
   }
   // Mark imported = true. Gọi khi user copy payload thành công ở 1 trong 2 nơi.
-  async function _draftMarkImported(draftId) {
+  async function _draftMarkImported(draftId, scope) {
+    scope = _draftScope(scope || draftEditingScope || _draftViewingScope);
     if (!draftId) return;
-    const d = DraftStore.getById(draftId);
+    const store = _draftStore(scope);
+    const d = store.getById(draftId);
     if (!d || d.imported === true) return;
     d.imported = true;
     d.importedAt = Date.now();
-    await DraftStore.upsert(d, { preserveUpdatedAt: true });
-    draftRender();
+    await store.upsert(d, { preserveUpdatedAt: true });
+    _draftRenderScope(scope);
   }
 
   // Tạo nút copy inline cho 1 chuỗi text (vd tên gói).
@@ -4504,6 +4547,7 @@ const App = (() => {
     saveCart();
     // Reset state đơn nháp/import — bắt đầu đơn mới hoàn toàn
     draftEditingId = null;
+    draftEditingScope = "local";
     pendingVatFromImport = null;
     pendingTagFromImport = "";
     pendingImportPayload = null;
@@ -6622,6 +6666,8 @@ const App = (() => {
 
   let draftSearchKw = "";
   let draftEditingId = null; // nếu đang edit 1 draft, lưu id để overwrite khi Lưu
+  let draftEditingScope = "local"; // "local" | "shared"
+  let sharedDraftSearchKw = "";
   let draftSelectedTag = "ZALO";
   let pendingImportPayload = null; // payload từ URL hash chờ confirm
   // Giữ VAT info + tag từ link share KHI user chọn "Chỉ Import vào giỏ" (không save draft).
@@ -6629,7 +6675,7 @@ const App = (() => {
   let pendingVatFromImport = null; // {mst, name, addr, email} hoặc null
   let pendingTagFromImport = "";   // "" | "ZALO" | "ZALO_OA" | "FB" | "KHAC"
 
-  /* ─── DraftStore: online qua Web App, cache 1h trong localStorage ─── */
+  /* ─── DraftStore local + SharedDraftStore online ─── */
   // DraftStore v10.2: local-only (localStorage). Không sync online nữa.
   // Mất khi user xoá browser data hoặc dùng máy khác.
   const DraftStore = (() => {
@@ -6688,6 +6734,133 @@ const App = (() => {
     return { refresh, upsert, remove, getAll, getById };
   })();
 
+  function _draftTs(v) {
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    const t = new Date(v).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  function _normalizeDraftRecord(d) {
+    const src = d && typeof d === "object" ? d : {};
+    const codes = src.codes && typeof src.codes === "object" ? src.codes : { groups: [] };
+    if (!Array.isArray(codes.groups)) codes.groups = [];
+    const groupByType = typeof src.groupByType === "boolean" ? src.groupByType : null;
+    return {
+      ...src,
+      id: String(src.id || ""),
+      name: String(src.name || ""),
+      tag: String(src.tag || "ZALO"),
+      customTag: String(src.customTag || ""),
+      orderCode: String(src.orderCode || ""),
+      cart: Array.isArray(src.cart) ? src.cart : [],
+      vat: src.vat || null,
+      codes,
+      extras: src.extras || null,
+      imported: src.imported === true,
+      importedAt: _draftTs(src.importedAt),
+      groupByType,
+      createdAt: _draftTs(src.createdAt),
+      updatedAt: _draftTs(src.updatedAt || src.createdAt),
+    };
+  }
+  async function _sharedDraftWebAppUrl() {
+    try {
+      let cfg = typeof vatGetCfg === "function" ? vatGetCfg() : { webAppUrl: "" };
+      if (!cfg.webAppUrl && typeof vatLoadConfigFile === "function") {
+        await vatLoadConfigFile();
+        cfg = vatGetCfg();
+      }
+      return (cfg && cfg.webAppUrl) || "";
+    } catch (e) {
+      console.warn("[SharedDrafts] config fail:", e);
+      return "";
+    }
+  }
+  function _sharedDraftPayload(d, opts) {
+    const src = _normalizeDraftRecord(d);
+    return {
+      action: "drafts_upsert",
+      id: src.id,
+      name: src.name,
+      tag: src.tag,
+      customTag: src.customTag,
+      orderCode: src.orderCode,
+      cart: src.cart,
+      vat: src.vat,
+      codes: src.codes,
+      extras: src.extras,
+      imported: src.imported === true,
+      importedAt: src.importedAt || "",
+      groupByType: typeof src.groupByType === "boolean" ? src.groupByType : "",
+      preserveUpdatedAt: !!(opts && opts.preserveUpdatedAt),
+    };
+  }
+  const SharedDraftStore = (() => {
+    let list = [];
+
+    function getAll() { return list.slice(); }
+    function getById(id) { return list.find(d => d.id === id) || null; }
+    async function _post(body) {
+      const url = await _sharedDraftWebAppUrl();
+      if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json.");
+      slShowLoading("☁️ Đang xử lý đơn lưu chung...", "Đang kết nối VAT Sheet.");
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "unknown");
+        return data;
+      } finally {
+        slHideLoading();
+      }
+    }
+    async function refresh() {
+      const data = await _post({ action: "drafts_list" });
+      list = (data.drafts || []).map(_normalizeDraftRecord);
+      return { ok: true, count: list.length, purged: data.purged || 0 };
+    }
+    async function upsert(draft, opts) {
+      const data = await _post(_sharedDraftPayload(draft, opts));
+      const idx = list.findIndex(d => d.id === draft.id);
+      const now = Date.now();
+      let updatedAt = now;
+      if (opts && opts.preserveUpdatedAt && idx >= 0) {
+        updatedAt = list[idx].updatedAt || list[idx].createdAt || now;
+      }
+      const merged = _normalizeDraftRecord({
+        ...draft,
+        createdAt: idx >= 0 ? list[idx].createdAt : _draftTs(data.createdAt) || now,
+        updatedAt: _draftTs(data.updatedAt) || updatedAt,
+      });
+      if (idx >= 0) list[idx] = merged; else list.unshift(merged);
+      return { ok: true, action: data.action || "ok" };
+    }
+    async function remove(id) {
+      const data = await _post({ action: "drafts_delete", id });
+      list = list.filter(d => d.id !== id);
+      return { ok: true, action: data.action || "deleted" };
+    }
+    return { refresh, upsert, remove, getAll, getById };
+  })();
+
+  function _draftScope(scope) { return scope === "shared" ? "shared" : "local"; }
+  function _draftStore(scope) { return _draftScope(scope) === "shared" ? SharedDraftStore : DraftStore; }
+  function _draftScopeName(scope) { return _draftScope(scope) === "shared" ? "đơn lưu chung" : "đơn nháp"; }
+  function _draftRenderScope(scope) {
+    if (_draftScope(scope) === "shared") sharedDraftRender();
+    else draftRender();
+  }
+  function _draftEditingRecord() {
+    if (!draftEditingId) return null;
+    return _draftStore(draftEditingScope).getById(draftEditingId);
+  }
+  function _draftDomKey(scope, id) {
+    return _draftScope(scope) + "_" + String(id || "").replace(/[^A-Za-z0-9_-]/g, "_");
+  }
+
   function draftsCleanup() {
     // Compat shim cho code cũ — đồng bộ, dùng cache đã load
     return DraftStore.getAll();
@@ -6737,13 +6910,27 @@ const App = (() => {
     draftSearchKw = (document.getElementById("draftSearch").value || "").trim();
     draftRender();
   }
+  function sharedDraftFilter() {
+    sharedDraftSearchKw = (document.getElementById("sharedDraftSearch").value || "").trim();
+    sharedDraftRender();
+  }
 
-  function draftRender() {
-    const list = DraftStore.getAll();
-    const wrap = document.getElementById("draftListWrap");
-    document.getElementById("draftCount").textContent = list.length + " đơn";
+  function draftRender() { _renderDraftList("local"); }
+  function sharedDraftRender() { _renderDraftList("shared"); }
 
-    const kw = ComboLogic.norm(draftSearchKw);
+  function _renderDraftList(scope) {
+    scope = _draftScope(scope);
+    const isShared = scope === "shared";
+    const store = _draftStore(scope);
+    const list = store.getAll();
+    const wrap = document.getElementById(isShared ? "sharedDraftListWrap" : "draftListWrap");
+    const countEl = document.getElementById(isShared ? "sharedDraftCount" : "draftCount");
+    const selected = isShared ? _sharedDraftSelected : _draftSelected;
+    const searchKw = isShared ? sharedDraftSearchKw : draftSearchKw;
+    if (!wrap || !countEl) return;
+    countEl.textContent = list.length + " đơn";
+
+    const kw = ComboLogic.norm(searchKw);
     const filtered = kw ? list.filter(d => {
       const hay = ComboLogic.norm(d.name + " " + (d.customTag || "") + " " + (d.orderCode || ""));
       return hay.includes(kw);
@@ -6751,8 +6938,8 @@ const App = (() => {
 
     if (!filtered.length) {
       wrap.innerHTML = kw
-        ? `<div style="color:var(--muted);font-size:13px;padding:10px;">Không tìm thấy đơn khớp "${escapeHtml(draftSearchKw)}".</div>`
-        : '<div style="color:var(--muted);font-size:13px;padding:10px;">Chưa có đơn nháp nào. Bấm "💾 Lưu giỏ hiện tại" để tạo.</div>';
+        ? `<div style="color:var(--muted);font-size:13px;padding:10px;">Không tìm thấy đơn khớp "${escapeHtml(searchKw)}".</div>`
+        : `<div style="color:var(--muted);font-size:13px;padding:10px;">${isShared ? "Chưa có đơn lưu chung nào. Bấm Lưu Online ở một đơn nháp local để đưa lên đây." : 'Chưa có đơn nháp nào. Bấm "💾 Lưu giỏ hiện tại" để tạo.'}</div>`;
       return;
     }
 
@@ -6761,13 +6948,14 @@ const App = (() => {
 
     // v10.9.49: Batch bar (hiện khi có chọn)
     const batchBarHtml = `
-      <div id="draftBatchBar" class="${_draftSelected.size ? 'show' : ''}">
-        <span style="font-size:13px;font-weight:600;color:#b91c1c;">Đã chọn ${_draftSelected.size} đơn</span>
-        <button onclick="App.draftBatchDelete()" style="padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ Xoá các đơn đã chọn</button>
-        <button onclick="App.draftBatchClear()" style="padding:6px 10px;background:#eef2f7;color:#444;border:none;border-radius:7px;font-size:12px;cursor:pointer;">Bỏ chọn tất cả</button>
+      <div id="${isShared ? "sharedDraftBatchBar" : "draftBatchBar"}" class="${selected.size ? 'show' : ''}">
+        <span style="font-size:13px;font-weight:600;color:#b91c1c;">Đã chọn ${selected.size} đơn</span>
+        <button onclick="App.draftBatchDelete('${scope}')" style="padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ Xoá các đơn đã chọn</button>
+        <button onclick="App.draftBatchClear('${scope}')" style="padding:6px 10px;background:#eef2f7;color:#444;border:none;border-radius:7px;font-size:12px;cursor:pointer;">Bỏ chọn tất cả</button>
       </div>`;
 
     wrap.innerHTML = batchBarHtml + filtered.map(d => {
+      const domKey = _draftDomKey(scope, d.id);
       const itemCount = (d.cart || []).length;
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
@@ -6804,42 +6992,48 @@ const App = (() => {
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #fcd34d;" title="SIM VL: ${physicalCount} mã">⚡ Đã nạp</span>`
         : "";
       const importedBadge = d.imported === true
-        ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 4px 2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #93c5fd;display:inline-flex;align-items:center;gap:4px;" title="Đã copy payload để nhập sổ. Bấm ✕ nếu chưa nhập thực sự.">📥 Đã nhập sổ<button onclick="event.stopPropagation();App._draftToggleImported('${d.id}', false)" title="Tắt tag (chưa nhập thực sự)" style="background:#1e40af;color:#fff;border:none;border-radius:50%;width:14px;height:14px;font-size:9px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;">✕</button></span>`
+        ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 4px 2px 7px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid #93c5fd;display:inline-flex;align-items:center;gap:4px;" title="Đã copy payload để nhập sổ. Bấm ✕ nếu chưa nhập thực sự.">📥 Đã nhập sổ<button onclick="event.stopPropagation();App._draftToggleImported('${d.id}', false, '${scope}')" title="Tắt tag (chưa nhập thực sự)" style="background:#1e40af;color:#fff;border:none;border-radius:50%;width:14px;height:14px;font-size:9px;line-height:1;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;">✕</button></span>`
         : "";
       const oc = d.orderCode || "";
       const ocDisplay = oc ? escapeHtml(oc) : `<span style="color:#9ca3af;">(chưa có)</span>`;
+      const moveBtn = isShared
+        ? `<button style="margin:0;padding:7px 12px;font-size:12px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;cursor:pointer;font-weight:700;" onclick="App.sharedDraftSaveLocal('${d.id}')" title="Lưu đơn lưu chung này về Đơn nháp local">💾 Lưu Nháp</button>`
+        : `<button style="margin:0;padding:7px 12px;font-size:12px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;cursor:pointer;font-weight:700;" onclick="App.draftSaveOnline('${d.id}')" title="Lưu đơn này sang Đơn lưu chung online">☁️ Lưu Online</button>`;
+      const rowBg = isShared ? "#fffaf0" : "#f9fafb";
+      const rowBorder = isShared ? "#fbbf24" : "var(--line)";
       return `
-        <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;background:${rowBg};border:1px solid ${rowBorder};border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
           <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
-            <div id="draftNameRow_${d.id}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div id="draftNameRow_${domKey}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
               ${vatBadge}
               ${tookBadge}
               ${chargedBadge}
               ${importedBadge}
               <span style="font-weight:700;font-size:14px;">${escapeHtml(d.name)}</span>
-              <button onclick="App.draftEditName('${d.id}')" title="Đổi tên (Enter để lưu, Esc huỷ)" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
+              <button onclick="App.draftEditName('${d.id}', '${scope}')" title="Đổi tên (Enter để lưu, Esc huỷ)" style="margin:0;padding:2px 7px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✏️</button>
             </div>
-            <div id="draftCodeRow_${d.id}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <div id="draftCodeRow_${domKey}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-size:10.5px;color:var(--muted);">Mã đơn:</span>
               <span style="font-family:'Roboto Mono',monospace;font-size:11.5px;font-weight:600;color:#1f2937;background:#fff;padding:2px 7px;border:1px solid #d1d5db;border-radius:4px;">${ocDisplay}</span>
-              ${oc ? `<button onclick="App.draftCopyOrderCode('${d.id}')" title="Copy mã đơn" style="margin:0;padding:2px 6px;background:#dcfce7;color:#166534;font-size:11px;border:none;border-radius:4px;cursor:pointer;">📋</button>` : ""}
-              <button onclick="App.draftEditOrderCode('${d.id}')" title="Sửa mã đơn" style="margin:0;padding:2px 6px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:4px;cursor:pointer;">✏️</button>
+              ${oc ? `<button onclick="App.draftCopyOrderCode('${d.id}', '${scope}')" title="Copy mã đơn" style="margin:0;padding:2px 6px;background:#dcfce7;color:#166534;font-size:11px;border:none;border-radius:4px;cursor:pointer;">📋</button>` : ""}
+              <button onclick="App.draftEditOrderCode('${d.id}', '${scope}')" title="Sửa mã đơn" style="margin:0;padding:2px 6px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:4px;cursor:pointer;">✏️</button>
               <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTimePair(d.createdAt, d.updatedAt)}</span>
             </div>
           </div>
-          <button style="margin:0;padding:7px 10px;font-size:12px;background:#f1f5f9;color:#1e293b;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;" onclick="App.draftView('${d.id}')" title="Xem chi tiết (không thay giỏ hiện tại)">👁 Xem</button>
-          <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}')">⬇️ Import</button>
-          <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}')">🔗 Share</button>
-          <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}')" title="Xoá đơn">✕</button>
-          <input type="checkbox" class="draft-sel-chk" data-id="${d.id}" onchange="App.draftBatchToggle('${d.id}', this.checked)"
+          <button style="margin:0;padding:7px 10px;font-size:12px;background:#f1f5f9;color:#1e293b;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;" onclick="App.draftView('${d.id}', '${scope}')" title="Xem chi tiết (không thay giỏ hiện tại)">👁 Xem</button>
+          <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}', '${scope}')">⬇️ Import</button>
+          ${moveBtn}
+          <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}', '${scope}')">🔗 Share</button>
+          <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}', '${scope}')" title="Xoá đơn">✕</button>
+          <input type="checkbox" class="draft-sel-chk" data-id="${d.id}" onchange="App.draftBatchToggle('${d.id}', this.checked, '${scope}')"
             title="Chọn để xoá hàng loạt"
             style="width:16px;height:16px;cursor:pointer;accent-color:#dc2626;" />
         </div>
       `;
     }).join("");
     // Restore checkbox checked state
-    _draftSelected.forEach(id => {
+    selected.forEach(id => {
       const chk = wrap.querySelector(`.draft-sel-chk[data-id="${id}"]`);
       if (chk) chk.checked = true;
     });
@@ -6847,36 +7041,46 @@ const App = (() => {
 
   // v10.9.49: Set lưu các id đang chọn để xoá batch
   const _draftSelected = new Set();
+  const _sharedDraftSelected = new Set();
 
-  function draftBatchToggle(id, checked) {
-    if (checked) _draftSelected.add(id);
-    else _draftSelected.delete(id);
+  function draftBatchToggle(id, checked, scope) {
+    scope = _draftScope(scope);
+    const selected = scope === "shared" ? _sharedDraftSelected : _draftSelected;
+    if (checked) selected.add(id);
+    else selected.delete(id);
     // Update batch bar
-    const bar = document.getElementById("draftBatchBar");
+    const bar = document.getElementById(scope === "shared" ? "sharedDraftBatchBar" : "draftBatchBar");
     if (bar) {
-      bar.className = _draftSelected.size ? "show" : "";
+      bar.className = selected.size ? "show" : "";
       const cnt = bar.querySelector("span");
-      if (cnt) cnt.textContent = `Đã chọn ${_draftSelected.size} đơn`;
+      if (cnt) cnt.textContent = `Đã chọn ${selected.size} đơn`;
     }
   }
 
-  function draftBatchClear() {
-    _draftSelected.clear();
-    draftRender();
+  function draftBatchClear(scope) {
+    scope = _draftScope(scope);
+    (scope === "shared" ? _sharedDraftSelected : _draftSelected).clear();
+    _draftRenderScope(scope);
   }
 
-  async function draftBatchDelete() {
-    if (!_draftSelected.size) return;
-    if (!confirm(`Xoá ${_draftSelected.size} đơn đã chọn? Không thể hoàn tác.`)) return;
-    const ids = Array.from(_draftSelected);
+  async function draftBatchDelete(scope) {
+    scope = _draftScope(scope);
+    const selected = scope === "shared" ? _sharedDraftSelected : _draftSelected;
+    if (!selected.size) return;
+    if (!confirm(`Xoá ${selected.size} ${_draftScopeName(scope)} đã chọn? Không thể hoàn tác.`)) return;
+    const ids = Array.from(selected);
+    const store = _draftStore(scope);
     for (const id of ids) {
-      await DraftStore.remove(id);
-      if (draftEditingId === id) draftEditingId = null;
+      await store.remove(id);
+      if (draftEditingId === id && draftEditingScope === scope) {
+        draftEditingId = null;
+        draftEditingScope = "local";
+      }
     }
-    _draftSelected.clear();
-    draftRender();
+    selected.clear();
+    _draftRenderScope(scope);
     _updateSaveBarUI();
-    showStatus(`✅ Đã xoá ${ids.length} đơn nháp.`);
+    showStatus(`✅ Đã xoá ${ids.length} ${_draftScopeName(scope)}.`);
   }
 
   // v10.9.49: Toast xoá đơn đơn lẻ — tối nền 0.7s, không cho bấm
@@ -6894,8 +7098,9 @@ const App = (() => {
     });
   }
 
-  async function draftCopyOrderCode(id) {
-    const d = DraftStore.getById(id);
+  async function draftCopyOrderCode(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d || !d.orderCode) return;
     const ok = await copyText(d.orderCode);
     if (ok) showStatus(`✅ Đã copy mã đơn: ${d.orderCode}`);
@@ -6903,32 +7108,36 @@ const App = (() => {
   }
 
   // Inline edit tên đơn nháp — thay span+nút bằng input + 2 nút lưu/huỷ
-  function draftEditName(id) {
-    const d = DraftStore.getById(id);
+  function draftEditName(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d) return;
-    const row = document.getElementById("draftNameRow_" + id);
+    const domKey = _draftDomKey(scope, id);
+    const row = document.getElementById("draftNameRow_" + domKey);
     if (!row) return;
     row.innerHTML = `
       ${draftTagBadge(d.tag, d.customTag)}
-      <input id="draftNameInput_${id}" type="text" value="${escapeHtml(d.name)}"
-        onkeydown="App.draftEditNameKey(event, '${id}')"
+      <input id="draftNameInput_${domKey}" type="text" value="${escapeHtml(d.name)}"
+        onkeydown="App.draftEditNameKey(event, '${id}', '${scope}')"
         style="flex:1;min-width:140px;font-weight:700;font-size:14px;padding:3px 8px;border:2px solid var(--blue);border-radius:5px;font-family:inherit;" />
-      <button onclick="App.draftEditNameSave('${id}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
-      <button onclick="App.draftEditNameCancel('${id}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
+      <button onclick="App.draftEditNameSave('${id}', '${scope}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
+      <button onclick="App.draftEditNameCancel('${id}', '${scope}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
     `;
-    const inp = document.getElementById("draftNameInput_" + id);
+    const inp = document.getElementById("draftNameInput_" + domKey);
     inp.focus();
     inp.select();
   }
-  function draftEditNameKey(ev, id) {
-    if (ev.key === "Enter") { ev.preventDefault(); draftEditNameSave(id); }
-    else if (ev.key === "Escape") { ev.preventDefault(); draftEditNameCancel(id); }
+  function draftEditNameKey(ev, id, scope) {
+    if (ev.key === "Enter") { ev.preventDefault(); draftEditNameSave(id, scope); }
+    else if (ev.key === "Escape") { ev.preventDefault(); draftEditNameCancel(id, scope); }
   }
-  function draftEditNameCancel(id) { draftRender(); }
-  async function draftEditNameSave(id) {
-    const d = DraftStore.getById(id);
+  function draftEditNameCancel(id, scope) { _draftRenderScope(scope); }
+  async function draftEditNameSave(id, scope) {
+    scope = _draftScope(scope);
+    const store = _draftStore(scope);
+    const d = store.getById(id);
     if (!d) return;
-    const inp = document.getElementById("draftNameInput_" + id);
+    const inp = document.getElementById("draftNameInput_" + _draftDomKey(scope, id));
     if (!inp) return;
     const newName = (inp.value || "").trim();
     if (!newName) {
@@ -6936,54 +7145,58 @@ const App = (() => {
       inp.focus();
       return;
     }
-    if (newName === d.name) { draftRender(); return; }
+    if (newName === d.name) { _draftRenderScope(scope); return; }
     // Check trùng tên với draft khác (case-insensitive, kệ tag)
-    const dup = DraftStore.getAll().find(x => x.id !== id && _normName(x.name) === _normName(newName));
+    const dup = store.getAll().find(x => x.id !== id && _normName(x.name) === _normName(newName));
     if (dup) {
-      showStatus(`⚠️ Đã có đơn nháp tên "${dup.name}". Vui lòng chọn tên khác.`);
+      showStatus(`⚠️ Đã có ${_draftScopeName(scope)} tên "${dup.name}". Vui lòng chọn tên khác.`);
       inp.focus();
       return;
     }
     d.name = newName;
-    const r = await DraftStore.upsert(d);
-    draftRender();
+    const r = await store.upsert(d);
+    _draftRenderScope(scope);
     if (r && r.ok) showStatus(`✅ Đã đổi tên thành "${newName}".`);
     else showStatus("⚠️ Đổi tên thất bại.");
   }
 
   // Inline edit mã đơn — input + Lưu/Huỷ
-  function draftEditOrderCode(id) {
-    const d = DraftStore.getById(id);
+  function draftEditOrderCode(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d) return;
-    const row = document.getElementById("draftCodeRow_" + id);
+    const domKey = _draftDomKey(scope, id);
+    const row = document.getElementById("draftCodeRow_" + domKey);
     if (!row) return;
     row.innerHTML = `
       <span style="font-size:10.5px;color:var(--muted);">Mã đơn:</span>
-      <input id="draftCodeInput_${id}" type="text" value="${escapeHtml(d.orderCode || '')}"
-        placeholder="DH..." onkeydown="App.draftEditCodeKey(event, '${id}')"
+      <input id="draftCodeInput_${domKey}" type="text" value="${escapeHtml(d.orderCode || '')}"
+        placeholder="DH..." onkeydown="App.draftEditCodeKey(event, '${id}', '${scope}')"
         style="font-family:'Roboto Mono',monospace;font-size:11.5px;padding:3px 7px;border:2px solid var(--blue);border-radius:4px;width:150px;" />
-      <button onclick="App.draftEditCodeSave('${id}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
-      <button onclick="App.draftEditCodeCancel('${id}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
+      <button onclick="App.draftEditCodeSave('${id}', '${scope}')" style="margin:0;padding:3px 9px;background:var(--green);color:white;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✓ Lưu</button>
+      <button onclick="App.draftEditCodeCancel('${id}', '${scope}')" style="margin:0;padding:3px 9px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:5px;cursor:pointer;">✕</button>
     `;
-    const inp = document.getElementById("draftCodeInput_" + id);
+    const inp = document.getElementById("draftCodeInput_" + domKey);
     inp.focus();
     inp.select();
   }
-  function draftEditCodeKey(ev, id) {
-    if (ev.key === "Enter") { ev.preventDefault(); draftEditCodeSave(id); }
-    else if (ev.key === "Escape") { ev.preventDefault(); draftEditCodeCancel(id); }
+  function draftEditCodeKey(ev, id, scope) {
+    if (ev.key === "Enter") { ev.preventDefault(); draftEditCodeSave(id, scope); }
+    else if (ev.key === "Escape") { ev.preventDefault(); draftEditCodeCancel(id, scope); }
   }
-  function draftEditCodeCancel(id) { draftRender(); }
-  async function draftEditCodeSave(id) {
-    const d = DraftStore.getById(id);
+  function draftEditCodeCancel(id, scope) { _draftRenderScope(scope); }
+  async function draftEditCodeSave(id, scope) {
+    scope = _draftScope(scope);
+    const store = _draftStore(scope);
+    const d = store.getById(id);
     if (!d) return;
-    const inp = document.getElementById("draftCodeInput_" + id);
+    const inp = document.getElementById("draftCodeInput_" + _draftDomKey(scope, id));
     if (!inp) return;
     const newCode = (inp.value || "").trim();
-    if (newCode === (d.orderCode || "")) { draftRender(); return; }
+    if (newCode === (d.orderCode || "")) { _draftRenderScope(scope); return; }
     d.orderCode = newCode;
-    const r = await DraftStore.upsert(d);
-    draftRender();
+    const r = await store.upsert(d);
+    _draftRenderScope(scope);
     if (r && r.ok) showStatus(`✅ Đã cập nhật mã đơn cho "${d.name}".`);
     else showStatus("⚠️ Cập nhật thất bại.");
   }
@@ -6995,14 +7208,17 @@ const App = (() => {
 
   /* ─── Xem đơn nháp (read-only, không thay giỏ hiện tại) ─── */
   let _draftViewingId = null;
+  let _draftViewingScope = "local";
 
-  function draftView(id) {
-    const d = DraftStore.getById(id);
+  function draftView(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d) return;
     _draftViewingId = id;
+    _draftViewingScope = scope;
     const body = document.getElementById("draftViewBody");
     const title = document.getElementById("draftViewTitle");
-    title.innerHTML = `👁 Xem đơn nháp: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
+    title.innerHTML = `👁 Xem ${_draftScopeName(scope)}: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
 
     // v10.8.29: Dùng _draftCalcOpts(d) để đọc đúng d.extras (ship/discount/shipVat) + d.vat.
     // calc() đã embed VAT block khi opts.vatInfo có giá trị → không cần append thủ công.
@@ -7138,14 +7354,14 @@ const App = (() => {
         const meta = `${r.count} dòng${r.count > 1 ? " (merge)" : ""}`;
         // v10.8.37: Nút bắt seri từ ảnh — chỉ cho SIM VL, nằm BÊN PHẢI textarea
         const scanBtn = r.type === "physical"
-          ? `<button type="button" onclick="App.serialScanOpen('${d.id}', ${idx})" style="margin:0;padding:6px 10px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;align-self:flex-start;line-height:1.3;" title="Bắt seri từ ảnh (QR + barcode trong clipboard hoặc file)">📷 Bắt<br>seri</button>`
+          ? `<button type="button" onclick="App.serialScanOpen('${d.id}', ${idx}, '${scope}')" style="margin:0;padding:6px 10px;font-size:11px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;align-self:flex-start;line-height:1.3;" title="Bắt seri từ ảnh (QR + barcode trong clipboard hoặc file)">📷 Bắt<br>seri</button>`
           : "";
         return `
           <div style="display:contents;">
             <span style="color:var(--muted);padding-top:6px;">${label}<br><span style="font-size:10px;color:#9ca3af;">${meta}</span></span>
             <div style="display:flex;gap:6px;align-items:flex-start;">
               <textarea id="drcCodeTA_${d.id}_${idx}" rows="2" placeholder="${placeholder}&#10;Mỗi mã 1 dòng (Enter để xuống dòng)"
-                onblur="App._draftSaveGroupCode('${d.id}', ${idx}, this.value)"
+                onblur="App._draftSaveGroupCode('${d.id}', ${idx}, this.value, '${scope}')"
                 style="${codeTaStyle}">${escapeHtml(code)}</textarea>
               ${scanBtn}
             </div>
@@ -7180,6 +7396,7 @@ const App = (() => {
   function draftViewClose() {
     document.getElementById("draftViewOverlay").classList.remove("open");
     _draftViewingId = null;
+    _draftViewingScope = "local";
     // Clear status khi đóng để lần sau mở không thấy message cũ
     const sEl = document.getElementById("draftViewStatus");
     if (sEl) { sEl.style.display = "none"; sEl.textContent = ""; }
@@ -7204,7 +7421,7 @@ const App = (() => {
   }
   async function draftViewCopyBill() {
     if (!_draftViewingId) return;
-    const d = DraftStore.getById(_draftViewingId);
+    const d = _draftStore(_draftViewingScope).getById(_draftViewingId);
     if (!d) return;
     try {
       // v10.8.29: dùng _draftCalcOpts đọc d.extras + d.vat. calc() đã embed VAT block.
@@ -7220,8 +7437,9 @@ const App = (() => {
   }
   function draftViewImport() {
     const id = _draftViewingId;
+    const scope = _draftViewingScope;
     draftViewClose();
-    if (id) draftImport(id);
+    if (id) draftImport(id, scope);
   }
 
   // ─── Quick actions trong modal Xem đơn nháp (KHÔNG đụng state hiện tại) ───
@@ -7289,7 +7507,7 @@ const App = (() => {
   // Copy ảnh QR thanh toán của draft vào clipboard
   async function draftViewCopyQR() {
     if (!_draftViewingId) return;
-    const d = DraftStore.getById(_draftViewingId);
+    const d = _draftStore(_draftViewingScope).getById(_draftViewingId);
     if (!d) return;
     if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
     if (!d.orderCode) { _draftViewStatus("⚠️ Đơn nháp chưa có mã đơn. Mở Import để cấp mã.", "error"); return; }
@@ -7330,7 +7548,7 @@ const App = (() => {
   // Copy ảnh báo giá full của draft vào clipboard
   async function draftViewCopyFullImage() {
     if (!_draftViewingId) return;
-    const d = DraftStore.getById(_draftViewingId);
+    const d = _draftStore(_draftViewingScope).getById(_draftViewingId);
     if (!d) return;
     if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
     if (!d.orderCode) { _draftViewStatus("⚠️ Đơn nháp chưa có mã đơn.", "error"); return; }
@@ -7378,7 +7596,7 @@ const App = (() => {
   // Copy payload (mã nhập sổ) của draft vào clipboard
   async function draftViewCopyPayload() {
     if (!_draftViewingId) return;
-    const d = DraftStore.getById(_draftViewingId);
+    const d = _draftStore(_draftViewingScope).getById(_draftViewingId);
     if (!d) return;
     if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
     try {
@@ -7433,7 +7651,7 @@ const App = (() => {
       if (ok) {
         _draftViewStatus(`✅ Đã copy mã nhập của "${d.name}" vào clipboard. Mở Google Sheet hoá đơn → chọn ô MÃ ORDER ID → menu ⚙ Tools → 📥 Nhập đơn từ App → paste.`, "success");
         // v10.8.26: mark imported = true (user có thể bấm ✕ trên tag nếu chưa nhập thực sự)
-        _draftMarkImported(d.id);
+        _draftMarkImported(d.id, _draftViewingScope);
       }
       else _draftViewStatus("❌ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
@@ -7494,8 +7712,9 @@ const App = (() => {
     document.getElementById("draftName").value = prefillName || nameInCust;
     document.getElementById("draftCustomTag").value = prefillCustom || Cust2B.state.customTag || "";
     document.getElementById("draftSaveStatus").textContent = "";
+    const saveKind = _draftScopeName(draftEditingId ? draftEditingScope : "local");
     document.getElementById("draftSaveTitle").textContent = draftEditingId
-      ? "✏️ Cập nhật đơn nháp"
+      ? `✏️ Cập nhật ${saveKind}`
       : "💾 Lưu đơn nháp";
     const summary = `${cart.length} dòng trong giỏ`;
     document.getElementById("draftSaveSummary").textContent = summary;
@@ -7536,13 +7755,16 @@ const App = (() => {
   async function doDraftSaveFromCust2B() {
     Cust2B.syncFromDOM();
     const payload = Cust2B.getDraftPayload();
+    const scope = draftEditingId ? _draftScope(draftEditingScope) : "local";
+    if (!draftEditingId) draftEditingScope = "local";
+    const store = _draftStore(scope);
     if (!payload.name) {
       // Tên vẫn trống → mở modal hỏi
       draftSaveOpen("", payload.tag, payload.customTag);
       return;
     }
     // Check trùng tên (case-insensitive, kệ tag) với draft KHÁC id đang edit
-    const dup = DraftStore.getAll().find(x =>
+    const dup = store.getAll().find(x =>
       x.id !== draftEditingId && _normName(x.name) === _normName(payload.name)
     );
     if (dup) {
@@ -7555,6 +7777,7 @@ const App = (() => {
       if (choice === "replace") {
         // Update draft đang trùng → coi như edit draft dup
         draftEditingId = dup.id;
+        draftEditingScope = scope;
         await _persistDraftFromCust2B();
         return;
       }
@@ -7567,6 +7790,7 @@ const App = (() => {
         // Regen mã đơn mới (đơn mới)
         regenOrderCode();
         draftEditingId = null; // ép tạo mới
+        draftEditingScope = scope;
         await _persistDraftFromCust2B();
         return;
       }
@@ -7578,7 +7802,7 @@ const App = (() => {
   // Hỏi xử lý trùng tên — dùng confirm() vì đơn giản; có thể thay bằng modal nếu cần đẹp hơn
   async function _askDuplicateName(dup, name) {
     const dt = draftFormatTimePair(dup.createdAt, dup.updatedAt);
-    const msg = `Đã có đơn nháp tên "${dup.name}" (${dt}).\n\nBấm OK = Thay thế đơn cũ.\nBấm Cancel = Tạo mới (sẽ đổi mã đơn + bắt nhập tên khác).`;
+    const msg = `Đã có ${_draftScopeName(draftEditingScope)} tên "${dup.name}" (${dt}).\n\nBấm OK = Thay thế đơn cũ.\nBấm Cancel = Tạo mới (sẽ đổi mã đơn + bắt nhập tên khác).`;
     if (confirm(msg)) return "replace";
     // Cancel → hỏi tiếp: tạo mới hay huỷ
     if (confirm(`Tạo đơn nháp MỚI với tên KHÁC?\n\nBấm OK để nhập tên mới, Cancel để huỷ lưu.`)) return "new";
@@ -7592,7 +7816,8 @@ const App = (() => {
       if (v === null) return null;
       const t = v.trim();
       if (!t) { alert("Tên không được trống."); suggest = currentName + " (2)"; continue; }
-      const dup = DraftStore.getAll().find(x =>
+      const store = _draftStore(draftEditingScope);
+      const dup = store.getAll().find(x =>
         x.id !== draftEditingId && _normName(x.name) === _normName(t)
       );
       if (dup) {
@@ -7608,9 +7833,11 @@ const App = (() => {
   async function _persistDraftFromCust2B() {
     const p = Cust2B.getDraftPayload();
     const extras = readCartExtras(); // v10.8.27
+    const scope = draftEditingId ? _draftScope(draftEditingScope) : _draftScope(draftEditingScope);
+    const store = _draftStore(scope);
     let draft;
     if (draftEditingId) {
-      const prev = DraftStore.getById(draftEditingId);
+      const prev = store.getById(draftEditingId);
       if (prev) {
         draft = {
           ...prev,
@@ -7645,9 +7872,10 @@ const App = (() => {
         extras,
       };
     }
-    const r = await DraftStore.upsert(draft);
+    const r = await store.upsert(draft);
     draftEditingId = draft.id;
-    draftRender();
+    draftEditingScope = scope;
+    _draftRenderScope(scope);
     _updateSaveBarUI();
     // Sync VAT vào VAT DB online nếu có (VAT vẫn online, không thay đổi)
     if (p.vat && (p.vat.mst || p.vat.name) && typeof vatSaveToSheet === "function") {
@@ -7657,8 +7885,8 @@ const App = (() => {
         });
       } catch (e) { /* silent fail — không block UX */ }
     }
-    if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp "${p.name}".`);
-    else showStatus(`⚠️ Lưu đơn nháp thất bại.`);
+    if (r && r.ok) showStatus(`✅ Đã lưu ${_draftScopeName(scope)} "${p.name}".`);
+    else showStatus(`⚠️ Lưu ${_draftScopeName(scope)} thất bại.`);
   }
 
   /* ─── Save state UI (v10.3) ──────────────────────────
@@ -7697,9 +7925,11 @@ const App = (() => {
     if (isEditing) {
       bar1.style.display = "none";
       bar2.style.display = "flex";
-      const d = DraftStore.getById(draftEditingId);
+      const d = _draftStore(draftEditingScope).getById(draftEditingId);
       if (d) {
         badge.style.display = "block";
+        const kind = document.getElementById("draftEditingKind");
+        if (kind) kind.textContent = _draftScopeName(draftEditingScope);
         document.getElementById("draftEditingName").textContent = d.name || "(không tên)";
       } else {
         badge.style.display = "none";
@@ -7721,6 +7951,7 @@ const App = (() => {
   function draftEditingClear() {
     if (!draftEditingId) return;
     draftEditingId = null;
+    draftEditingScope = "local";
     _updateSaveBarUI();
     showStatus("✅ Đã bỏ liên kết. Bấm 'Lưu giỏ hiện tại' sẽ tạo đơn nháp MỚI.");
   }
@@ -7733,6 +7964,7 @@ const App = (() => {
     Cust2B.clear();              // clear DOM + state Cust2B (bao gồm VAT block trong bill)
     resetCartExtras();           // clear ship/discount inputs
     draftEditingId = null;
+    draftEditingScope = "local";
     currentOrderCode = "";
     const oc = document.getElementById("orderCode");
     if (oc) oc.value = "";
@@ -7750,6 +7982,7 @@ const App = (() => {
 
   // ─── State 1: Tạo đơn nháp mới (chưa edit draft nào) ───
   async function doSaveNewDraft() {
+    draftEditingScope = "local";
     if (!cart.length) {
       showStatus("⚠️ Giỏ rỗng, không có gì để lưu.");
       return;
@@ -7768,6 +8001,7 @@ const App = (() => {
       if (choice === "cancel") { showStatus("⏸ Đã huỷ lưu."); return; }
       if (choice === "replace") {
         draftEditingId = dup.id;
+        draftEditingScope = "local";
         await _persistDraftFromCust2B();
         _afterSaveAction();
         return;
@@ -7779,6 +8013,7 @@ const App = (() => {
         Cust2B.syncToDOM();
         regenOrderCode();
         draftEditingId = null;
+        draftEditingScope = "local";
         await _persistDraftFromCust2B();
         _afterSaveAction();
         return;
@@ -7803,7 +8038,8 @@ const App = (() => {
       return;
     }
     // Check trùng tên với draft KHÁC id đang edit
-    const dup = DraftStore.getAll().find(x =>
+    const store = _draftStore(draftEditingScope);
+    const dup = store.getAll().find(x =>
       x.id !== draftEditingId && _normName(x.name) === _normName(payload.name)
     );
     if (dup) {
@@ -7845,10 +8081,11 @@ const App = (() => {
   }
 
   // --- Actions trên đơn nháp ---
-  function draftImport(id) {
-    const d = DraftStore.getById(id);
+  function draftImport(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d) return;
-    if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng đơn nháp "${d.name}"?`)) return;
+    if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng ${_draftScopeName(scope)} "${d.name}"?`)) return;
     _loadingDraft = true; // chặn auto-regen mã đơn trong liveRecalc
     cart = JSON.parse(JSON.stringify(d.cart || []));
     saveCart();
@@ -7861,6 +8098,7 @@ const App = (() => {
     if (d.extras && typeof d.extras === "object") applyCartExtras(d.extras);
     render();
     draftEditingId = id;
+    draftEditingScope = scope;
     // Restore mã đơn (đồng bộ với QR card + bill)
     if (d.orderCode) setOrderCode(d.orderCode);
     // Restore Cust2B (Tên + Tag + VAT) từ draft
@@ -7874,22 +8112,91 @@ const App = (() => {
     _lastCartSig = _cartSig();
     setTimeout(() => { _loadingDraft = false; }, 200);
     _updateSaveBarUI();
-    let msg = `✅ Đã import đơn "${d.name}".`;
+    let msg = `✅ Đã import ${_draftScopeName(scope)} "${d.name}".`;
     if (d.orderCode) msg += ` Mã đơn: ${d.orderCode}.`;
     if (d.vat && (d.vat.mst || d.vat.name)) msg += " (Có VAT đã lưu.)";
     showStatus(msg);
   }
 
-  async function draftDelete(id) {
-    const d = DraftStore.getById(id);
+  async function draftDelete(id, scope) {
+    scope = _draftScope(scope);
+    const store = _draftStore(scope);
+    const d = store.getById(id);
     if (!d) return;
     // v10.9.49: bỏ confirm, show toast 0.7s tối nền
-    const r = await DraftStore.remove(id);
-    if (draftEditingId === id) draftEditingId = null;
-    _draftSelected.delete(id);
-    draftRender();
+    const r = await store.remove(id);
+    if (draftEditingId === id && draftEditingScope === scope) {
+      draftEditingId = null;
+      draftEditingScope = "local";
+    }
+    (scope === "shared" ? _sharedDraftSelected : _draftSelected).delete(id);
+    _draftRenderScope(scope);
     _updateSaveBarUI();
     await _showDraftDeleteToast(d.name);
+  }
+
+  async function draftSaveOnline(id) {
+    const d = DraftStore.getById(id);
+    if (!d) return;
+    try {
+      const copy = _normalizeDraftRecord({
+        ...JSON.parse(JSON.stringify(d)),
+        id: d.id || draftGenId(),
+      });
+      const r = await SharedDraftStore.upsert(copy);
+      sharedDraftRender();
+      if (r && r.ok) {
+        showStatus(`✅ Đã lưu online "${copy.name}" vào Đơn lưu chung.`);
+        const delLocal = confirm(`Đã lưu online "${copy.name}".\n\nXoá bản Đơn nháp local không?\nOK = xoá local, Cancel = giữ cả hai.`);
+        if (delLocal) {
+          await DraftStore.remove(id);
+          if (draftEditingId === id && draftEditingScope === "local") {
+            draftEditingId = null;
+            draftEditingScope = "local";
+          }
+          _draftSelected.delete(id);
+          draftRender();
+          _updateSaveBarUI();
+          showStatus(`✅ Đã lưu online và xoá bản local "${copy.name}".`);
+        }
+      } else {
+        showStatus("⚠️ Lưu online thất bại.");
+      }
+    } catch (e) {
+      showStatus("❌ Lưu online thất bại: " + e.message);
+    }
+  }
+
+  async function sharedDraftSaveLocal(id) {
+    const d = SharedDraftStore.getById(id);
+    if (!d) return;
+    try {
+      const copy = _normalizeDraftRecord({
+        ...JSON.parse(JSON.stringify(d)),
+        id: d.id || draftGenId(),
+      });
+      const r = await DraftStore.upsert(copy);
+      draftRender();
+      if (r && r.ok) {
+        showStatus(`✅ Đã lưu về Đơn nháp local "${copy.name}".`);
+        const delOnline = confirm(`Đã lưu về Đơn nháp local "${copy.name}".\n\nXoá bản Đơn lưu chung online không?\nOK = xoá online, Cancel = giữ cả hai.`);
+        if (delOnline) {
+          await SharedDraftStore.remove(id);
+          if (draftEditingId === id && draftEditingScope === "shared") {
+            draftEditingId = null;
+            draftEditingScope = "local";
+          }
+          _sharedDraftSelected.delete(id);
+          sharedDraftRender();
+          _updateSaveBarUI();
+          showStatus(`✅ Đã lưu local và xoá bản online "${copy.name}".`);
+        }
+      } else {
+        showStatus("⚠️ Lưu về Đơn nháp thất bại.");
+      }
+    } catch (e) {
+      showStatus("❌ Lưu về Đơn nháp thất bại: " + e.message);
+    }
   }
 
   // --- Share link (encode draft vào URL hash) ---
@@ -8001,8 +8308,9 @@ const App = (() => {
 
   let lastShareLink = "";
 
-  function draftShare(id) {
-    const d = DraftStore.getById(id);
+  function draftShare(id, scope) {
+    scope = _draftScope(scope);
+    const d = _draftStore(scope).getById(id);
     if (!d) return;
     lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart, {
       orderCode: d.orderCode || "",
@@ -8110,6 +8418,7 @@ const App = (() => {
     }
 
     // Có yêu cầu lưu thành draft → check trùng tên trước
+    draftEditingScope = "local";
     const dup = DraftStore.getAll().find(x => _normName(x.name) === _normName(p.name));
     if (dup) {
       const choice = await _askDuplicateOnImport(dup, p);
@@ -8135,6 +8444,7 @@ const App = (() => {
         };
         const r = await DraftStore.upsert(draft);
         draftEditingId = draft.id;
+        draftEditingScope = "local";
         draftRender();
         _updateSaveBarUI();
         if (r && r.ok) showStatus(`✅ Đã ghi đè đơn nháp "${dup.name}".`);
@@ -8169,6 +8479,7 @@ const App = (() => {
         Cust2B.syncToDOM();
         const r = await DraftStore.upsert(draft);
         draftEditingId = draft.id;
+        draftEditingScope = "local";
         draftRender();
         _updateSaveBarUI();
         if (r && r.ok) showStatus(`✅ Đã lưu đơn nháp mới "${newName}".`);
@@ -8194,6 +8505,7 @@ const App = (() => {
     };
     const r = await DraftStore.upsert(draft);
     draftEditingId = draft.id;
+    draftEditingScope = "local";
     draftRender();
     _updateSaveBarUI();
     if (r && r.ok) showStatus(`✅ Đã import + lưu đơn nháp "${p.name}".`);
@@ -8213,11 +8525,19 @@ const App = (() => {
 
   // Init drafts — refresh từ server (background, không block UI)
   draftRender();
+  sharedDraftRender();
   (async () => {
-    // Đợi VAT config load xong rồi mới refresh drafts (cùng webAppUrl)
+    // Đợi VAT config load xong rồi refresh drafts local + đơn lưu chung online
     await new Promise(r => setTimeout(r, 500));
     await DraftStore.refresh(false);
     draftRender();
+    try {
+      await SharedDraftStore.refresh();
+      sharedDraftRender();
+    } catch (e) {
+      const wrap = document.getElementById("sharedDraftListWrap");
+      if (wrap) wrap.innerHTML = `<div style="color:#b91c1c;font-size:13px;padding:10px;">Không tải được Đơn lưu chung: ${escapeHtml(e.message)}</div>`;
+    }
   })();
   draftCheckUrlHash();
 
@@ -8229,6 +8549,16 @@ const App = (() => {
     await DraftStore.refresh();
     draftRender();
     showStatus(`✅ Đã load ${DraftStore.getAll().length} đơn nháp local.`);
+  }
+
+  async function sharedDraftsManualRefresh() {
+    try {
+      await SharedDraftStore.refresh();
+      sharedDraftRender();
+      showStatus(`✅ Đã tải ${SharedDraftStore.getAll().length} đơn lưu chung online.`);
+    } catch (e) {
+      showStatus("❌ Không tải được Đơn lưu chung: " + e.message);
+    }
   }
 
   /* ===== QR THANH TOÁN ===== */
@@ -9496,7 +9826,7 @@ const App = (() => {
           console.log(`[StockOverflow] Loaded ${count} gói thừa tồn kho.`);
           // Re-render cart + draft list để show tô tím
           try { render(); } catch (e) {}
-          try { draftRender(); } catch (e) {}
+          try { draftRender(); sharedDraftRender(); } catch (e) {}
         } catch (e) {
           console.warn("[StockOverflow] Fetch failed:", e.message);
         }
@@ -9627,7 +9957,7 @@ const App = (() => {
           _saveCache(rows);
           console.log(`[PackageGuides] Loaded ${count} guides.`);
           try { render(); } catch (e) {}
-          try { draftRender(); } catch (e) {}
+          try { draftRender(); sharedDraftRender(); } catch (e) {}
         } catch (e) {
           console.warn("[PackageGuides] Fetch failed:", e.message);
         }
@@ -9991,6 +10321,33 @@ const App = (() => {
     sheetPayloadRegenerate();
   }
 
+  async function _syncEditingDraftFromCurrent(opts) {
+    if (!draftEditingId) return false;
+    const store = _draftStore(draftEditingScope);
+    const prev = store.getById(draftEditingId);
+    if (!prev) return false;
+    Cust2B.syncFromDOM();
+    const cust = Cust2B.getDraftPayload();
+    const updated = {
+      ...prev,
+      orderCode: currentOrderCode || prev.orderCode || "",
+      vat: cust.vat || prev.vat || null,
+      cart: JSON.parse(JSON.stringify(cart)),
+      name: cust.name || prev.name,
+      tag: cust.tag || prev.tag,
+      customTag: cust.customTag || prev.customTag,
+      groupByType: _getGroupToggle(),
+      extras: readCartExtras(),
+    };
+    if (opts && opts.imported) {
+      updated.imported = true;
+      updated.importedAt = Date.now();
+    }
+    await store.upsert(updated);
+    _draftRenderScope(draftEditingScope);
+    return true;
+  }
+
   // v10.7.5: Build payload + copy thẳng vào clipboard (không mở modal).
   // Behavior giống nút "📤 Nhập sổ" trong modal Xem đơn nháp.
   async function sheetPayloadCopyDirect() {
@@ -10009,7 +10366,7 @@ const App = (() => {
       // v10.8.35: lấy codes/extras từ draft đang edit (nếu có)
       let _shareCodes = null, _shareExtras = null, _shareImported = false;
       if (draftEditingId) {
-        const _ed = DraftStore.getById(draftEditingId);
+        const _ed = _draftEditingRecord();
         if (_ed) {
           _shareCodes = _ed.codes || null;
           _shareImported = _ed.imported === true;
@@ -10046,7 +10403,7 @@ const App = (() => {
       if (cust.vat) payload.vat = cust.vat;
       // v10.8.26: codes.groups + groupByType từ draft đang edit
       if (draftEditingId) {
-        const d = DraftStore.getById(draftEditingId);
+        const d = _draftEditingRecord();
         if (d) {
           _syncCodesGroupsToRuns(d);
           if (d.codes && Array.isArray(d.codes.groups) && d.codes.groups.length) {
@@ -10066,8 +10423,8 @@ const App = (() => {
       const discK = items.reduce((s, it) => s + it.discountAllocK, 0);
       if (ok) {
         qrShowStatus(`✅ Đã copy mã nhập sổ (${items.length} gói, ${ComboLogic.fmtK(totalK - discK)}). Paste vào Google Sheet hoá đơn.`);
-        // v10.8.26: mark imported = true cho draft đang edit
-        if (draftEditingId) _draftMarkImported(draftEditingId);
+        // v10.9.75: đang xử lý đơn ở đâu thì sync ngược về đúng store đó (local/shared)
+        if (draftEditingId) await _syncEditingDraftFromCurrent({ imported: true });
       } else {
         qrShowStatus("❌ Copy thất bại — browser có thể chặn clipboard.");
       }
@@ -10214,7 +10571,7 @@ const App = (() => {
     // v10.8.35: lấy codes/extras từ draft đang edit + DOM
     let _spCodes = null, _spImported = false;
     if (draftEditingId) {
-      const _ed = DraftStore.getById(draftEditingId);
+      const _ed = _draftEditingRecord();
       if (_ed) {
         _spCodes = _ed.codes || null;
         _spImported = _ed.imported === true;
@@ -10258,7 +10615,7 @@ const App = (() => {
 
     // v10.8.26: thêm codes.groups + groupByType từ draft đang edit
     if (draftEditingId) {
-      const d = DraftStore.getById(draftEditingId);
+      const d = _draftEditingRecord();
       if (d) {
         _syncCodesGroupsToRuns(d);
         if (d.codes && Array.isArray(d.codes.groups) && d.codes.groups.length) {
@@ -10298,25 +10655,8 @@ const App = (() => {
         if (cust.vat && (cust.vat.mst || cust.vat.name) && typeof vatSaveToSheet === "function") {
           vatSaveToSheet({ mst: cust.vat.mst, name: cust.vat.name, addr: cust.vat.addr, email: cust.vat.email });
         }
-        // Sync draft đang edit
-        if (draftEditingId) {
-          const prev = DraftStore.getById(draftEditingId);
-          if (prev) {
-            const updated = {
-              ...prev,
-              orderCode: currentOrderCode || prev.orderCode || "",
-              vat: cust.vat || prev.vat || null,
-              cart: JSON.parse(JSON.stringify(cart)),
-              name: cust.name || prev.name,
-              tag: cust.tag || prev.tag,
-              customTag: cust.customTag || prev.customTag,
-              // v10.8.26: mark imported
-              imported: true,
-              importedAt: Date.now(),
-            };
-            DraftStore.upsert(updated).then(() => draftRender());
-          }
-        }
+        // Sync draft đang edit về đúng store local/shared.
+        if (draftEditingId) await _syncEditingDraftFromCurrent({ imported: true });
       } catch (e) { console.warn("Auto-save fail:", e); }
     } else {
       ta.focus(); ta.select();
@@ -10710,6 +11050,7 @@ const App = (() => {
     let _state = {
       open: false,
       draftId: "",
+      scope: "local",
       runIdx: -1,
       imageUrl: "", // data URL hiển thị
       serials: [], // [{code, format, x, y, width, height}]
@@ -10955,9 +11296,10 @@ const App = (() => {
       return unique;
     }
 
-    async function open(draftId, runIdx) {
+    async function open(draftId, runIdx, scope) {
       _state.open = true;
       _state.draftId = draftId;
+      _state.scope = _draftScope(scope || _draftViewingScope);
       _state.runIdx = runIdx;
       _showModal();
       _setStatus("📋 Đang lấy ảnh từ clipboard...", "info");
@@ -11078,7 +11420,7 @@ const App = (() => {
       const newCodes = _state.sortedSerials.map(s => s.code).join("\n");
       ta.value = curr ? (curr + "\n" + newCodes) : newCodes;
       // Trigger save (call blur handler manually)
-      await _draftSaveGroupCode(_state.draftId, _state.runIdx, ta.value);
+      await _draftSaveGroupCode(_state.draftId, _state.runIdx, ta.value, _state.scope);
       close();
     }
 
@@ -12423,7 +12765,7 @@ const App = (() => {
     },
     pkgInfoClose: () => PkgInfo.close(),
     pkgInfoCopyLine: (line) => PkgInfo.copyLine(line),
-    serialScanOpen: (draftId, runIdx) => SerialScanner.open(draftId, runIdx),
+    serialScanOpen: (draftId, runIdx, scope) => SerialScanner.open(draftId, runIdx, scope),
     serialScanClose: () => SerialScanner.close(),
     serialScanPickFile: (event) => SerialScanner.pickFile(event),
     serialScanCopyOne: (idx) => SerialScanner.copyOne(idx),
@@ -12478,7 +12820,10 @@ const App = (() => {
     draftSave,
     draftSelectTag,
     draftFilter,
+    sharedDraftFilter,
     draftImport,
+    draftSaveOnline,
+    sharedDraftSaveLocal,
     draftCopyOrderCode,
     draftEditName,
     draftEditNameKey,
@@ -12516,6 +12861,7 @@ const App = (() => {
     cust2bHideVatSuggest,
     cust2bPickVat,
     draftsManualRefresh,
+    sharedDraftsManualRefresh,
     draftDelete,
     draftBatchToggle,
     draftBatchDelete,
