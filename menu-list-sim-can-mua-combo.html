@@ -77,6 +77,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.73 · 28/06/2026 · (GMT+7)
+ - Apps Script nhập sổ (`GS/simglobe_import.gs`): cột "TỔNG GIẢM GIÁ ĐÃ PHÂN BỔ"
+   giờ ghi cả `g` âm (vd `-27k`) cho case ship-vào-VAT không có giảm giá gốc.
+   Trước đó script chỉ ghi khi `discK > 0` nên phụ thu âm bị bỏ trống.
+
  v10.9.72 · 27/06/2026 · (GMT+7)
  - Fix Safari cập nhật xong reload lại vẫn tự cập nhật: CountrySearch index/savedAt chuyển
    sang IndexedDB, localStorage chỉ giữ meta nhỏ. Init giờ `await CountrySearch.hydrate()`
@@ -1473,7 +1478,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.72
+    Version 10.9.73
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
