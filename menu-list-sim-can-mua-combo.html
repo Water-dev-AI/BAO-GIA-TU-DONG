@@ -77,6 +77,13 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.78 · 29/06/2026 · (GMT+7)
+ - Fix modal "VAT tự điền từ text" trên Chrome/Safari khi viewport thấp bị mất phần
+   footer/nút dưới sau preview 4 ô: body chuyển sang `.picker-body` cuộn riêng, header/
+   footer không bị co.
+ - Rà các modal cùng pattern và chuyển Lưu đơn/Share link/Import link sang body cuộn
+   riêng để tránh lỗi tương tự trên Safari.
+
  v10.9.77 · 28/06/2026 · (GMT+7)
  - Đơn lưu chung: lần reload/tab mở đầu tải danh sách online ở nền, không hiện overlay
    spinner chặn thao tác. Spinner chỉ hiện khi user chủ động thao tác online như Tải lại,
@@ -1205,6 +1212,7 @@
     display: none; position: fixed; inset: 0;
     background: rgba(0,0,0,.45); z-index: 1000;
     align-items: center; justify-content: center;
+    padding: 18px 12px; box-sizing: border-box;
   }
   .picker-overlay.open { display: flex; }
   .picker-modal {
@@ -1217,6 +1225,7 @@
   .picker-header {
     padding: 14px 18px; border-bottom: 1px solid var(--line);
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    flex: 0 0 auto;
   }
   .picker-header h3 { margin: 0; font-size: 16px; flex: 1; }
   #pickerOverlay .picker-header {
@@ -1253,6 +1262,7 @@
   .picker-footer {
     padding: 12px 18px; border-top: 1px solid var(--line);
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    flex: 0 0 auto;
   }
   .payreq-body {
     display: grid;
@@ -1502,7 +1512,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.77
+    Version 10.9.78
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1993,7 +2003,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <h3 style="margin:0;flex:1;" id="draftSaveTitle">💾 Lưu đơn nháp</h3>
       <button onclick="App.draftSaveClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+    <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên khách hàng *</div>
         <input id="draftName" type="text" placeholder="VD: Anh Minh"
@@ -2025,7 +2035,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <h3 style="margin:0;flex:1;">🔗 Link chia sẻ đơn nháp</h3>
       <button onclick="App.draftShareClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+    <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div style="font-size:13px;color:var(--muted);line-height:1.55;">
         Link này chứa toàn bộ giỏ + tên KH + tag. Người nhận mở link sẽ thấy popup hỏi import đơn nháp.
         Link có thể dài; nếu cần ngắn hơn, paste vào <a href="https://tinyurl.com" target="_blank" style="color:var(--blue);">tinyurl.com</a> trước khi gửi.
@@ -2048,7 +2058,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <h3 style="margin:0;flex:1;">📥 Import đơn nháp từ link</h3>
       <button onclick="App.draftImportClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+    <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div id="draftImportInfo" style="font-size:13px;line-height:1.6;"></div>
       <div style="font-size:12px;color:var(--amber);background:#fffaeb;padding:10px 12px;border-radius:8px;border:1px solid #fde68a;">
         ⚠️ Việc import sẽ thay thế toàn bộ giỏ hiện tại của bạn. Nếu muốn giữ giỏ hiện tại, hãy <b>Lưu đơn nháp</b> trước.
@@ -2138,7 +2148,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <h3 style="margin:0;flex:1;">📝 VAT tự điền từ text</h3>
       <button onclick="App.vatAutoFillClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
     </div>
-    <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+    <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div style="font-size:12.5px;color:#475569;line-height:1.55;">
         Paste text chứa thông tin VAT, hoặc edit text OCR vừa quét. App tự nhận diện 4 field. Bấm "Phân tích thử" để xem kết quả trước khi điền.
         <details style="margin-top:6px;font-size:11.5px;color:#64748b;">
