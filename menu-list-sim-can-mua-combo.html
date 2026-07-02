@@ -43,7 +43,7 @@
    • Ship input default rỗng (placeholder "—"). Clear khi xoá đơn / lưu xong.
    • Checkbox "ship vào VAT" (chỉ hiện khi Xuất VAT): tick → cộng ship*50% vào FullVAT,
      discount hiệu dụng để phân bổ = D - S - V (có thể âm = phụ thu, in "+Xk").
-   • Lưu vào `d.extras = {shipFeeK, manualDiscK, manualDiscPct, shipVat}` của draft.
+   • Lưu vào `d.extras = {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat}` của draft.
  - VAT block embed trực tiếp vào `result.bill` của `calc()` (không append ở caller).
  - Đơn nháp ONLINE → tab DRAFTS của Google Sheet VAT DB (cache 1h, share giữa máy,
    auto-purge >7 ngày). Draft có ✏️ rename inline, ô mã đơn edit nhanh, badge VAT.
@@ -76,6 +76,10 @@
 ═══════════════════════════════════════════════════════════════════════════════
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
+
+ v10.9.79 · 02/07/2026 · (GMT+7)
+ - Giảm giá riêng: nhập `0` ở ô k/% giờ là override giảm 0, tắt giảm giá bậc
+   thang tự động; để trống mới dùng công thức. Draft/share/nhập sổ giữ cờ này.
 
  v10.9.78 · 29/06/2026 · (GMT+7)
  - Fix modal "VAT tự điền từ text" trên Chrome/Safari khi viewport thấp bị mất phần
@@ -230,7 +234,7 @@
    #shipVatToggle, computeManualDiscountK) — nhưng nhập sổ từ draft chỉ swap `cart`, DOM
    vẫn là đơn ĐANG MỞ. Máy bạn không lỗi vì DOM còn giữ giá trị đơn vừa mở; máy khác DOM
    trống → mất extras. Đã thêm tham số extrasOverride: draftViewCopyPayload truyền d.extras
-   {shipFeeK, manualDiscK, manualDiscPct, shipVat}. Nhập sổ trực tiếp (sheetPayloadCopyDirect/
+   {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat}. Nhập sổ trực tiếp (sheetPayloadCopyDirect/
    Regenerate) vẫn đọc DOM (đúng cho đơn đang mở). Fix này áp dụng đồng thời cho cả 4 case:
    phí ship, ship vào VAT, ship không VAT, giảm giá tiền & %.
 
@@ -733,7 +737,7 @@
  - Logic phân bổ discount khi shipVat ON: `effectiveDiscK = D - S - V` (có thể âm = phụ thu).
    `largestRemainderShares` + `buildDiscountNotes` đã support share âm → hiện "+Xk" thay vì "-Xk".
    Verify: `totalK - effectiveDiscK = FullVAT` (Sum cột tiền sheet = FullVAT).
- - Lưu `d.extras = {shipFeeK, manualDiscK, manualDiscPct, shipVat}` vào draft. Restore khi import.
+- Lưu `d.extras = {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat}` vào draft. Restore khi import.
    Clear khi clearCart / _clearAllAfterSave / addFromText replace.
  - Parser bắt "Giảm giá riêng: -Xk" trong bill text paste (mục 1) → set manualDiscK.
  - Bug fix #1: Bill (live preview) bị mất VAT block sau Copy → `calc()` giờ embed VAT block
@@ -1512,7 +1516,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.78
+    Version 10.9.79
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2840,11 +2844,12 @@ const ComboLogic = (() => {
     }
 
     const manualDiscK = Math.max(0, parseInt(opts.manualDiscountK, 10) || 0);
+    const manualDiscOverride = opts.manualDiscountOverride === true;
     let discount;
-    if (manualDiscK > 0) {
+    if (manualDiscOverride) {
       // Manual đè bậc thang. Cap không vượt totalK.
       // v10.8.27: đổi label "thủ công" → "riêng"
-      discount = { amount: Math.min(manualDiscK, totalK), label: "Giảm giá riêng" };
+      discount = { amount: Math.min(manualDiscK, totalK), label: manualDiscK > 0 ? "Giảm giá riêng" : "" };
     } else {
       discount = discountFor(totalK);
     }
@@ -4159,15 +4164,18 @@ const App = (() => {
     const sv = document.getElementById("shipVatToggle");
     if (sv) sv.checked = false;
   }
-  // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, shipVat} vào DOM
+  // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat} vào DOM
   function applyCartExtras(extras) {
     if (!extras || typeof extras !== "object") return;
     const ship = document.getElementById("shipFeeK");
     if (ship) ship.value = (extras.shipFeeK > 0) ? String(extras.shipFeeK) : "";
+    const manualOverride = extras.manualDiscOverride === true;
+    const manualK = Math.max(0, parseInt(extras.manualDiscK, 10) || 0);
+    const manualPct = Math.max(0, Math.min(15, parseFloat(extras.manualDiscPct) || 0));
     const md = document.getElementById("manualDiscK");
-    if (md) md.value = (extras.manualDiscK > 0) ? String(extras.manualDiscK) : "";
+    if (md) md.value = manualOverride && manualPct <= 0 ? String(manualK) : (manualK > 0 ? String(manualK) : "");
     const mp = document.getElementById("manualDiscPct");
-    if (mp) mp.value = (extras.manualDiscPct > 0) ? String(extras.manualDiscPct) : "";
+    if (mp) mp.value = (manualPct > 0) ? String(manualPct) : "";
     const sv = document.getElementById("shipVatToggle");
     if (sv) sv.checked = extras.shipVat === true;
   }
@@ -4177,6 +4185,7 @@ const App = (() => {
       shipFeeK: getShipFeeK(),
       manualDiscK: getManualDiscountK(),
       manualDiscPct: getManualDiscountPct(),
+      manualDiscOverride: hasManualDiscountOverride(),
       shipVat: getShipVat(),
     };
   }
@@ -4221,6 +4230,12 @@ const App = (() => {
     return v;
   }
 
+  function hasManualDiscountOverride() {
+    const md = document.getElementById("manualDiscK");
+    const mp = document.getElementById("manualDiscPct");
+    return !!((md && md.value !== "") || (mp && mp.value !== ""));
+  }
+
   // Compute effective manual discount in k (priority: k input > pct input)
   function computeManualDiscountK(totalK) {
     const k = getManualDiscountK();
@@ -4234,10 +4249,10 @@ const App = (() => {
     // Khi user gõ 1 ô, clear ô kia để tránh xung đột
     if (which === "k") {
       const v = document.getElementById("manualDiscK").value;
-      if (v !== "" && parseFloat(v) > 0) document.getElementById("manualDiscPct").value = "";
+      if (v !== "") document.getElementById("manualDiscPct").value = "";
     } else {
       const v = document.getElementById("manualDiscPct").value;
-      if (v !== "" && parseFloat(v) > 0) {
+      if (v !== "") {
         document.getElementById("manualDiscK").value = "";
         // Clamp 0..15
         let n = parseFloat(v);
@@ -4267,6 +4282,7 @@ const App = (() => {
       shipVat: getShipVat(),
       orderCode: currentOrderCode || "",
       manualDiscountK: computeManualDiscountK(rawTotalK),
+      manualDiscountOverride: hasManualDiscountOverride(),
       // v10.8.27: VAT info passed for inline render
       vatInfo: (Cust2B && Cust2B.state && Cust2B.state.type === "company") ? Cust2B.state.vat : null,
     };
@@ -7467,6 +7483,7 @@ const App = (() => {
     let manualDiscountK = 0;
     const mdK = Math.max(0, parseInt(ex.manualDiscK, 10) || 0);
     const mdPct = Math.max(0, Math.min(15, parseFloat(ex.manualDiscPct) || 0));
+    const manualDiscountOverride = ex.manualDiscOverride === true || mdK > 0 || mdPct > 0;
     if (mdK > 0) {
       manualDiscountK = mdK;
     } else if (mdPct > 0) {
@@ -7479,6 +7496,7 @@ const App = (() => {
       shipVat: ex.shipVat === true,
       orderCode: d.orderCode || "",
       manualDiscountK,
+      manualDiscountOverride,
       vatInfo: (d.vat && (d.vat.mst || d.vat.name || d.vat.addr || d.vat.email)) ? d.vat : null,
     };
   }
@@ -8259,11 +8277,13 @@ const App = (() => {
     }
     if (opts.extras && typeof opts.extras === "object") {
       const ex = opts.extras;
-      const hasExtras = (ex.shipFeeK > 0) || (ex.manualDiscK > 0) || (ex.manualDiscPct > 0) || ex.shipVat === true;
+      const manualOverride = ex.manualDiscOverride === true || ex.manualDiscK > 0 || ex.manualDiscPct > 0;
+      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true;
       if (hasExtras) {
         payload.ex = {};
         if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
-        if (ex.manualDiscK > 0) payload.ex.dk = ex.manualDiscK;
+        if (manualOverride) payload.ex.mo = 1;
+        if (ex.manualDiscK > 0 || (manualOverride && !(ex.manualDiscPct > 0))) payload.ex.dk = ex.manualDiscK || 0;
         if (ex.manualDiscPct > 0) payload.ex.dp = ex.manualDiscPct;
         if (ex.shipVat === true) payload.ex.sv = 1;
       }
@@ -8292,6 +8312,7 @@ const App = (() => {
             shipFeeK: parseInt(data.ex.s, 10) || 0,
             manualDiscK: parseInt(data.ex.dk, 10) || 0,
             manualDiscPct: parseFloat(data.ex.dp) || 0,
+            manualDiscOverride: data.ex.mo === 1 || Object.prototype.hasOwnProperty.call(data.ex, "dk") || Object.prototype.hasOwnProperty.call(data.ex, "dp"),
             shipVat: data.ex.sv === 1,
           }
         : null;
@@ -10538,9 +10559,11 @@ const App = (() => {
     // phải lấy từ d.extras (override), KHÔNG đọc DOM (DOM là của đơn đang mở khác → mất giảm
     // giá riêng/ship trên vài máy). Nếu không có override → đọc DOM như cũ (nhập sổ trực tiếp).
     let manualK, shipFeeK, shipVat;
+    let manualOverride;
     if (extrasOverride) {
       const ex = extrasOverride;
       // manual discount: ưu tiên manualDiscK (tiền) > manualDiscPct (%)
+      manualOverride = ex.manualDiscOverride === true || ex.manualDiscK > 0 || ex.manualDiscPct > 0;
       if (ex.manualDiscK > 0) {
         manualK = ex.manualDiscK;
       } else if (ex.manualDiscPct > 0) {
@@ -10552,12 +10575,13 @@ const App = (() => {
       shipVat = ex.shipVat === true && shipFeeK > 0;
     } else {
       manualK = computeManualDiscountK(totalK);
+      manualOverride = hasManualDiscountOverride();
       shipFeeK = Math.max(0, parseInt((document.getElementById("shipFeeK") || {}).value, 10) || 0);
       const shipVatChk = document.getElementById("shipVatToggle");
       shipVat = !!(shipVatChk && shipVatChk.checked) && shipFeeK > 0;
     }
-    const discount = manualK > 0
-      ? { amount: Math.min(manualK, totalK), label: "Giảm giá thủ công" }
+    const discount = manualOverride
+      ? { amount: Math.min(manualK, totalK), label: manualK > 0 ? "Giảm giá riêng" : "" }
       : ComboLogic.discountFor(totalK);
     const shipVatExtraK = shipVat ? Math.round(shipFeeK * 0.5) : 0;
     const effectiveDiscK = shipVat
