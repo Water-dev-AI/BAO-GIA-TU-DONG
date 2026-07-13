@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.80 · 13/07/2026 · (GMT+7)
+ - Fix import ngược bill không-tab của SIM VẬT LÝ dạng tổng data: ngày nằm trong tên gói
+   (vd `Mainland China SG, 5 Days, 30GB`) không còn bị tách nhầm sang cột Ngày.
+
  v10.9.79 · 02/07/2026 · (GMT+7)
  - Giảm giá riêng: nhập `0` ở ô k/% giờ là override giảm 0, tắt giảm giá bậc
    thang tự động; để trống mới dùng công thức. Draft/share/nhập sổ giữ cờ này.
@@ -1516,7 +1520,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.79
+    Version 10.9.80
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3487,14 +3491,20 @@ const App = (() => {
       // Thay bằng: phải có whitespace/start/punctuation 2 bên (tự match qua [^\w] / start / end).
       const typeMatch = beforePrice.match(/(?:^|[\s,.;:|/\\])(ESIM|SIM\s+VẬT\s+LÝ|SIM\s+VAT\s+LY|NẠP\s+GÓI|NAP\s+GOI)(?=$|[\s,.;:|/\\])/i);
       let remaining = beforePrice;
+      let afterTypeText = "";
       if (typeMatch) {
         type = typeMatch[1].toUpperCase().replace(/\s+/g, " ");
         // Normalize
         if (type.includes("VAT")) type = "SIM VẬT LÝ";
         if (type.includes("NAP")) { type = "NẠP GÓI"; isRecharge = true; }
-        // typeMatch[0] có thể bao gồm ký tự whitespace ở đầu (do non-capturing prefix);
-        // dùng typeMatch[1] để xoá CHỈNH XÁC từ khóa loại.
-        remaining = beforePrice.replace(typeMatch[1], " ").replace(/\s{2,}/g, " ").trim();
+        // typeMatch[0] có thể bao gồm ký tự whitespace ở đầu; tính đúng vị trí token loại
+        // để chỉ xét phần SAU loại khi tách cột Ngày.
+        const typeOffset = typeMatch[0].indexOf(typeMatch[1]);
+        const typeStart = typeMatch.index + (typeOffset >= 0 ? typeOffset : 0);
+        const typeEnd = typeStart + typeMatch[1].length;
+        const beforeTypeText = beforePrice.slice(0, typeStart).trim();
+        afterTypeText = beforePrice.slice(typeEnd).trim();
+        remaining = [beforeTypeText, afterTypeText].filter(Boolean).join(" ").replace(/\s{2,}/g, " ").trim();
       }
       // v10.8.9: Detect NGÀY ngay SAU loại (vd "SIM VẬT LÝ 8 NGÀY" → days="8 NGÀY")
       // v10.8.10: CHỈ trích NGÀY nếu type = SIM VẬT LÝ (vì SIM VL có cột NGÀY riêng).
@@ -3502,7 +3512,7 @@ const App = (() => {
       // Khi không xác định được type → để empty (an toàn hơn).
       if (type === "SIM VẬT LÝ") {
         const daysRe = /(\d{1,3})\s*(NGÀY|Ngày|ngày|NGAY|Ngay|ngay|Days|days|DAYS|Day|day|DAY)\b/;
-        const daysMatch = remaining.match(daysRe);
+        const daysMatch = afterTypeText.match(daysRe);
         if (daysMatch) {
           const dnum = daysMatch[1];
           const dunit = daysMatch[2];
@@ -3511,7 +3521,11 @@ const App = (() => {
           if (/^ng[aà]y$/i.test(dunit)) unitOut = "NGÀY";
           days = `${dnum} ${unitOut}`;
           // Bỏ phần "X NGÀY" khỏi name, kèm dấu phẩy thừa
-          remaining = remaining.replace(daysMatch[0], " ").replace(/\s*,\s*,/g, ",").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
+          const cleanedAfterType = afterTypeText.replace(daysMatch[0], " ").replace(/\s*,\s*,/g, ",").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
+          const beforeDaysText = typeMatch
+            ? beforePrice.slice(0, typeMatch.index + typeMatch[0].indexOf(typeMatch[1])).trim()
+            : remaining;
+          remaining = [beforeDaysText, cleanedAfterType].filter(Boolean).join(" ").replace(/\s*,\s*,/g, ",").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
           // Bỏ comma ở đầu/cuối + comma cô đơn
           remaining = remaining.replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").trim();
         }
