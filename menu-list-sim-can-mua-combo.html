@@ -77,6 +77,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.82 · 16/07/2026 · (GMT+7)
+ - Fix tay nắm trong popup tùy chỉnh bảng giá nhanh không kéo được: bỏ xung đột
+   `draggable` của cả dòng, dùng kéo chuột/cảm ứng riêng với bóng nổi bám theo con trỏ.
+
  v10.9.81 · 16/07/2026 · (GMT+7)
  - Nút mở bảng giá nhanh có thể tùy biến riêng theo từng trình duyệt: tick bảng muốn
    hiện, kéo thả thứ tự, sửa tên viết tắt và reset mặc định; cấu hình lưu local lâu dài.
@@ -1296,11 +1300,17 @@
     align-items: center; gap: 8px; padding: 8px 10px;
     border: 1px solid var(--line); border-radius: 7px; background: #fff;
   }
-  .sl-quick-config-row.dragging { opacity: .45; }
+  .sl-quick-config-row.drag-source { opacity: .22; }
+  .sl-quick-drag-ghost {
+    position: fixed; z-index: 3000; pointer-events: none; margin: 0;
+    opacity: .94; box-shadow: 0 10px 28px rgba(15, 23, 42, .24);
+  }
   .sl-quick-drag {
     cursor: grab; color: #64748b; font-size: 18px; line-height: 1;
     user-select: none; text-align: center; touch-action: none;
+    align-self: stretch; display: flex; align-items: center; justify-content: center;
   }
+  .sl-quick-drag:active { cursor: grabbing; }
   .sl-quick-config-row input[type="checkbox"] { width: 17px; height: 17px; margin: 0; }
   .sl-quick-config-row input[type="text"] {
     width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid #cfd5df;
@@ -1561,7 +1571,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.81
+    Version 10.9.82
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -4888,7 +4898,6 @@ const App = (() => {
   }
 
   let slQuickConfigDraft = [];
-  let slQuickDraggingKey = "";
 
   function slQuickOpen(key) {
     const list = slLoadAll();
@@ -4933,7 +4942,6 @@ const App = (() => {
       const row = document.createElement("div");
       row.className = "sl-quick-config-row";
       row.dataset.key = entry.key;
-      row.draggable = true;
       row.title = "Kéo thả để đổi thứ tự";
 
       const drag = document.createElement("span");
@@ -4942,42 +4950,59 @@ const App = (() => {
       drag.title = "Kéo thả";
       row.appendChild(drag);
 
-      let pointerDragging = false;
-      const finishPointerDrag = ev => {
-        if (!pointerDragging) return;
-        pointerDragging = false;
-        try { drag.releasePointerCapture(ev.pointerId); } catch (e) {}
-        row.classList.remove("dragging");
-        const order = Array.from(wrap.children).map(el => el.dataset.key);
-        const byKey = new Map(slQuickConfigDraft.map(item => [item.key, item]));
-        slQuickConfigDraft = order.map(key => byKey.get(key)).filter(Boolean);
-      };
-      drag.addEventListener("pointerdown", ev => {
-        if (ev.pointerType === "mouse" && ev.button !== 0) return;
-        pointerDragging = true;
-        row.classList.add("dragging");
-        try { drag.setPointerCapture(ev.pointerId); } catch (e) {}
-        ev.preventDefault();
-      });
-      drag.addEventListener("pointermove", ev => {
-        if (!pointerDragging) return;
-        const target = document.elementFromPoint(ev.clientX, ev.clientY);
-        const targetRow = target && target.closest && target.closest(".sl-quick-config-row");
-        if (targetRow && targetRow !== row && targetRow.parentElement === wrap) {
-          const rect = targetRow.getBoundingClientRect();
-          if (ev.clientY < rect.top + rect.height / 2) wrap.insertBefore(row, targetRow);
-          else wrap.insertBefore(row, targetRow.nextSibling);
-        }
+      drag.addEventListener("pointerdown", downEv => {
+        if (downEv.pointerType === "mouse" && downEv.button !== 0) return;
+        const rect = row.getBoundingClientRect();
         const body = wrap.closest(".picker-body");
-        if (body) {
-          const bodyRect = body.getBoundingClientRect();
-          if (ev.clientY < bodyRect.top + 36) body.scrollTop -= 14;
-          else if (ev.clientY > bodyRect.bottom - 36) body.scrollTop += 14;
-        }
-        ev.preventDefault();
+        const ghost = row.cloneNode(true);
+        const offsetY = downEv.clientY - rect.top;
+        const oldUserSelect = document.body.style.userSelect;
+
+        ghost.classList.remove("drag-source");
+        ghost.classList.add("sl-quick-drag-ghost");
+        ghost.removeAttribute("title");
+        ghost.style.left = rect.left + "px";
+        ghost.style.top = rect.top + "px";
+        ghost.style.width = rect.width + "px";
+        ghost.style.height = rect.height + "px";
+        document.body.appendChild(ghost);
+        row.classList.add("drag-source");
+        document.body.style.userSelect = "none";
+
+        const move = ev => {
+          ghost.style.top = (ev.clientY - offsetY) + "px";
+          const target = document.elementFromPoint(ev.clientX, ev.clientY);
+          const targetRow = target && target.closest && target.closest(".sl-quick-config-row");
+          if (targetRow && targetRow !== row && targetRow.parentElement === wrap) {
+            const targetRect = targetRow.getBoundingClientRect();
+            if (ev.clientY < targetRect.top + targetRect.height / 2) wrap.insertBefore(row, targetRow);
+            else wrap.insertBefore(row, targetRow.nextSibling);
+          }
+          if (body) {
+            const bodyRect = body.getBoundingClientRect();
+            if (ev.clientY < bodyRect.top + 42) body.scrollTop -= 18;
+            else if (ev.clientY > bodyRect.bottom - 42) body.scrollTop += 18;
+          }
+          ev.preventDefault();
+        };
+
+        const finish = () => {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", finish);
+          document.removeEventListener("pointercancel", finish);
+          ghost.remove();
+          row.classList.remove("drag-source");
+          document.body.style.userSelect = oldUserSelect;
+          const order = Array.from(wrap.children).map(el => el.dataset.key);
+          const byKey = new Map(slQuickConfigDraft.map(item => [item.key, item]));
+          slQuickConfigDraft = order.map(key => byKey.get(key)).filter(Boolean);
+        };
+
+        document.addEventListener("pointermove", move, { passive: false });
+        document.addEventListener("pointerup", finish);
+        document.addEventListener("pointercancel", finish);
+        downEv.preventDefault();
       });
-      drag.addEventListener("pointerup", finishPointerDrag);
-      drag.addEventListener("pointercancel", finishPointerDrag);
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -5001,41 +5026,6 @@ const App = (() => {
       fullName.textContent = entry.item.name;
       row.appendChild(fullName);
 
-      row.addEventListener("dragstart", ev => {
-        if (ev.target && ev.target.matches("input, button")) {
-          ev.preventDefault();
-          return;
-        }
-        slQuickDraggingKey = entry.key;
-        row.classList.add("dragging");
-        if (ev.dataTransfer) {
-          ev.dataTransfer.effectAllowed = "move";
-          ev.dataTransfer.setData("text/plain", entry.key);
-        }
-      });
-      row.addEventListener("dragend", () => {
-        slQuickDraggingKey = "";
-        row.classList.remove("dragging");
-      });
-      row.addEventListener("dragover", ev => {
-        if (!slQuickDraggingKey || slQuickDraggingKey === entry.key) return;
-        ev.preventDefault();
-        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
-      });
-      row.addEventListener("drop", ev => {
-        ev.preventDefault();
-        const fromKey = slQuickDraggingKey || (ev.dataTransfer && ev.dataTransfer.getData("text/plain"));
-        if (!fromKey || fromKey === entry.key) return;
-        const fromIdx = slQuickConfigDraft.findIndex(x => x.key === fromKey);
-        if (fromIdx < 0) return;
-        const moved = slQuickConfigDraft.splice(fromIdx, 1)[0];
-        let toIdx = slQuickConfigDraft.findIndex(x => x.key === entry.key);
-        const rect = row.getBoundingClientRect();
-        if (ev.clientY >= rect.top + rect.height / 2) toIdx += 1;
-        slQuickConfigDraft.splice(Math.max(0, toIdx), 0, moved);
-        slQuickDraggingKey = "";
-        slQuickConfigRender();
-      });
       wrap.appendChild(row);
     });
   }
