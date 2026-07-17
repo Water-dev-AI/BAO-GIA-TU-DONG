@@ -77,6 +77,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.83 · 17/07/2026 · (GMT+7)
+ - Thêm nút `Cập nhật phụ trợ` cạnh cập nhật giá: ép tải mới VAT, hướng dẫn gói,
+   ảnh hướng dẫn, tồn kho, STK và cấu hình hóa đơn/đề nghị thanh toán; có thời gian cập nhật.
+ - Ảnh hướng dẫn tự phá cache sau 12 giờ dù giữ nguyên filename; bấm cập nhật phụ trợ
+   sẽ lấy bản mới ngay.
+ - Khi copy Bill khách, Bill gọn hoặc Bill trong đơn nháp có gói kèm hướng dẫn, hiện
+   banner giữa màn hình 3 giây; có nút `✕` để tắt ngay.
+
  v10.9.82 · 16/07/2026 · (GMT+7)
  - Fix tay nắm trong popup tùy chỉnh bảng giá nhanh không kéo được: bỏ xung đột
    `draggable` của cả dòng, dùng kéo chuột/cảm ứng riêng với bóng nổi bám theo con trỏ.
@@ -1317,6 +1325,30 @@
     border-radius: 6px; font-size: 12px; font-family: inherit;
   }
   .sl-quick-full-name { min-width: 0; font-size: 12px; line-height: 1.35; color: #475569; }
+  #guideReminderBanner {
+    display: none; position: fixed; left: 50%; top: 50%; z-index: 10050;
+    width: min(88vw, 430px); transform: translate(-50%, -50%);
+    align-items: flex-start; gap: 11px; padding: 15px 44px 15px 16px;
+    background: #fff; color: #1e293b; border: 1px solid #93c5fd;
+    border-left: 5px solid #f59e0b; border-radius: 9px;
+    box-shadow: 0 18px 55px rgba(15, 23, 42, .28);
+  }
+  #guideReminderBanner.show {
+    display: flex; animation: guideReminderIn .22s ease-out;
+  }
+  .guide-reminder-icon { font-size: 25px; line-height: 1; flex: 0 0 auto; }
+  .guide-reminder-title { font-size: 14px; line-height: 1.35; font-weight: 750; color: #1e3a8a; }
+  .guide-reminder-text { margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: #475569; }
+  .guide-reminder-close {
+    position: absolute; right: 8px; top: 8px; width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin: 0; padding: 0; border: 0; border-radius: 6px;
+    background: #eff6ff; color: #334155; cursor: pointer; font-size: 15px;
+  }
+  @keyframes guideReminderIn {
+    from { opacity: 0; transform: translate(-50%, -46%) scale(.97); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
   @media (max-width: 640px) {
     .sl-quick-config-row {
       grid-template-columns: 24px 28px minmax(0, 1fr);
@@ -1571,7 +1603,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.82
+    Version 10.9.83
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1631,8 +1663,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <h2 style="margin:0;">📋 Danh sách bảng giá</h2>
-        <span id="slUpdateInfo" style="font-size:11.5px;color:var(--muted);margin-right:8px;"></span>
-        <button id="slCapNhatGiaBtn" onclick="App.csUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h)">🔄 Cập nhật giá</button>
+        <div style="margin-left:auto;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px;">
+          <span id="slUpdateInfo" style="font-size:11.5px;color:var(--muted);"></span>
+          <button id="slCapNhatGiaBtn" onclick="App.csUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h)">🔄 Cập nhật giá</button>
+          <span id="auxUpdateInfo" style="font-size:11.5px;color:var(--muted);"></span>
+          <button id="auxUpdateBtn" onclick="App.auxUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:7px;cursor:pointer;" title="Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK và cấu hình hóa đơn">🔄 Cập nhật phụ trợ</button>
+        </div>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
         Bấm pills hoặc tìm kiếm (theo tên bảng giá hoặc tên nước) để mở bảng giá chọn gói.
@@ -3092,6 +3128,81 @@ const App = (() => {
   function $(id) { return document.getElementById(id); }
 
   function showStatus(msg) { $("status").textContent = msg; }
+
+  const AUX_UPDATE_META_KEY = "simglobe_aux_update_meta_v1";
+  const AUX_ASSET_STATE_KEY = "simglobe_aux_asset_state_v1";
+  const AUX_ASSET_TTL_MS = 12 * 60 * 60 * 1000;
+  let auxAssetTimer = null;
+  let auxAssetState = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(AUX_ASSET_STATE_KEY) || "null");
+      if (saved && Number(saved.at) > 0 && saved.version) {
+        return { at: Number(saved.at), version: String(saved.version) };
+      }
+    } catch (e) {}
+    const now = Date.now();
+    return { at: now, version: String(now) };
+  })();
+
+  function saveAuxAssetState() {
+    try { localStorage.setItem(AUX_ASSET_STATE_KEY, JSON.stringify(auxAssetState)); } catch (e) {}
+  }
+
+  function bumpAuxAssetVersion() {
+    const now = Date.now();
+    auxAssetState = { at: now, version: String(now) };
+    saveAuxAssetState();
+    scheduleAuxAssetRefresh();
+    return auxAssetState.version;
+  }
+
+  function ensureAuxAssetVersion() {
+    if (Date.now() - auxAssetState.at >= AUX_ASSET_TTL_MS) bumpAuxAssetVersion();
+    else saveAuxAssetState();
+  }
+
+  function scheduleAuxAssetRefresh() {
+    if (auxAssetTimer) clearTimeout(auxAssetTimer);
+    const remaining = Math.max(1000, AUX_ASSET_TTL_MS - (Date.now() - auxAssetState.at));
+    auxAssetTimer = setTimeout(() => bumpAuxAssetVersion(), remaining);
+  }
+
+  function auxVersionedUrl(rawUrl) {
+    const url = String(rawUrl || "");
+    if (!url || /^(?:data:|blob:)/i.test(url)) return url;
+    const hashAt = url.indexOf("#");
+    const base = hashAt >= 0 ? url.slice(0, hashAt) : url;
+    const hash = hashAt >= 0 ? url.slice(hashAt) : "";
+    const sep = base.includes("?") ? "&" : "?";
+    return base + sep + "sgaux=" + encodeURIComponent(auxAssetState.version) + hash;
+  }
+
+  function forceFreshUrl(rawUrl) {
+    const url = String(rawUrl || "");
+    const sep = url.includes("?") ? "&" : "?";
+    return url + sep + "sgfresh=" + Date.now();
+  }
+
+  async function fetchAuxJson(fileName) {
+    const paths = ["./" + fileName, "./JSON/" + fileName];
+    let lastError = null;
+    for (const path of paths) {
+      try {
+        const res = await fetch(auxVersionedUrl(path), { cache: "no-store" });
+        if (!res.ok) {
+          lastError = new Error(path + " HTTP " + res.status);
+          continue;
+        }
+        return await res.json();
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError || new Error("Không tải được " + fileName);
+  }
+
+  ensureAuxAssetVersion();
+  scheduleAuxAssetRefresh();
 
   function loadCart() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
@@ -4580,6 +4691,41 @@ const App = (() => {
     setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, 1800);
   }
 
+  let guideReminderTimer = null;
+  function closeGuideReminder() {
+    if (guideReminderTimer) clearTimeout(guideReminderTimer);
+    guideReminderTimer = null;
+    const banner = document.getElementById("guideReminderBanner");
+    if (banner) banner.classList.remove("show");
+  }
+
+  function showGuideReminderForItems(parsedItems) {
+    if (!Array.isArray(parsedItems) || typeof PackageGuides === "undefined") return false;
+    const matchedPackages = new Set();
+    parsedItems.forEach(item => {
+      const name = String(item && item.packageName || "").trim();
+      const type = String(item && item.productType || "").trim();
+      if (!name) return;
+      if (PackageGuides.lookup(name, type)) matchedPackages.add(name + "|" + type);
+    });
+    if (!matchedPackages.size) return false;
+
+    const banner = document.getElementById("guideReminderBanner");
+    const title = document.getElementById("guideReminderTitle");
+    if (!banner) return false;
+    if (title) {
+      title.textContent = matchedPackages.size > 1
+        ? `Đơn này có ${matchedPackages.size} gói cần hướng dẫn riêng`
+        : "Đơn này có hướng dẫn riêng";
+    }
+    if (guideReminderTimer) clearTimeout(guideReminderTimer);
+    banner.classList.remove("show");
+    void banner.offsetWidth;
+    banner.classList.add("show");
+    guideReminderTimer = setTimeout(closeGuideReminder, 3000);
+    return true;
+  }
+
   // Copy Bill khách → copy thẳng (không popup, không hỏi save).
   async function calcAndCopyBill(ev) {
     const btn = ev && ev.currentTarget; // v10.9.19: capture TRƯỚC await (browser clears currentTarget sau)
@@ -4588,6 +4734,7 @@ const App = (() => {
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill khách.");
+      showGuideReminderForItems(result.parsedItems);
     } else {
       flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
       showStatus("⚠️ Copy thất bại.");
@@ -4602,6 +4749,7 @@ const App = (() => {
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
+      showGuideReminderForItems(result.parsedItems);
     } else {
       flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
       showStatus("⚠️ Copy thất bại.");
@@ -6228,6 +6376,82 @@ const App = (() => {
   }
   // v10.9.13: bỏ csClear (không còn lý do clear riêng — cứ bấm "Cập nhật giá" để tải mới).
 
+  function formatAuxTime(ms) {
+    const d = new Date(ms);
+    const opts = { timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false };
+    const p = new Intl.DateTimeFormat("en-GB", opts).formatToParts(d).reduce((a, x) => (a[x.type] = x.value, a), {});
+    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+  }
+
+  function auxUpdateBadgeUI() {
+    const info = document.getElementById("auxUpdateInfo");
+    const btn = document.getElementById("auxUpdateBtn");
+    let meta = null;
+    try { meta = JSON.parse(localStorage.getItem(AUX_UPDATE_META_KEY) || "null"); } catch (e) {}
+    if (meta && Number(meta.at) > 0) {
+      const stamp = formatAuxTime(Number(meta.at));
+      if (info) info.textContent = `Phụ trợ: ${stamp}`;
+      if (btn) btn.title = `${meta.summary || "Đã cập nhật phụ trợ"} · ${stamp} (GMT+7). Ảnh hướng dẫn tự làm mới sau 12h.`;
+    } else {
+      if (info) info.textContent = "Phụ trợ: chưa cập nhật";
+      if (btn) btn.title = "Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK và cấu hình hóa đơn. Ảnh hướng dẫn tự làm mới sau 12h.";
+    }
+  }
+
+  async function auxUpdate() {
+    const btn = document.getElementById("auxUpdateBtn");
+    const info = document.getElementById("auxUpdateInfo");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Đang cập nhật..."; }
+    if (info) info.textContent = "Đang tải phụ trợ...";
+
+    // Đổi version trước để mọi ảnh/config dùng URL mới ngay trong lần cập nhật này.
+    bumpAuxAssetVersion();
+    const jobs = [
+      ["VAT", async () => {
+        const cfg = await vatLoadConfigFile();
+        if (!cfg.ok) return cfg;
+        return vatFetchFromSheet(true);
+      }],
+      ["Hướng dẫn", () => PackageGuides.refresh()],
+      ["Tồn kho", () => StockOverflow.refresh()],
+      ["STK", () => loadStkConfig()],
+      ["Cấu hình", async () => {
+        const values = await Promise.all([Invoice.refreshConfig(), PaymentRequest.refreshConfig()]);
+        return { ok: values.every(x => x && x.ok) };
+      }],
+    ];
+
+    try {
+      const results = await Promise.all(jobs.map(async ([label, run]) => {
+        try {
+          const value = await run();
+          return { label, ...(value || { ok: true }) };
+        } catch (e) {
+          return { label, ok: false, error: e.message };
+        }
+      }));
+      const okItems = results.filter(x => x.ok);
+      const failed = results.filter(x => !x.ok);
+      const summaryParts = okItems.map(x => `${x.label}${Number.isFinite(x.count) ? " " + x.count : " ✓"}`);
+      const summary = summaryParts.join(" · ") + (failed.length ? ` · Lỗi: ${failed.map(x => x.label).join(", ")}` : "");
+      const meta = { at: Date.now(), summary, ok: okItems.length, total: results.length };
+      try { localStorage.setItem(AUX_UPDATE_META_KEY, JSON.stringify(meta)); } catch (e) {}
+      auxUpdateBadgeUI();
+      try { render(); } catch (e) {}
+      try { draftRender(); sharedDraftRender(); } catch (e) {}
+      const st = document.getElementById("slStatus");
+      if (st) st.textContent = failed.length
+        ? `⚠️ Đã cập nhật ${okItems.length}/${results.length} nhóm phụ trợ. ${summary}`
+        : `✅ Đã cập nhật phụ trợ: ${summary}`;
+    } catch (e) {
+      if (info) info.textContent = "Phụ trợ: cập nhật lỗi";
+      const st = document.getElementById("slStatus");
+      if (st) st.textContent = "❌ Không cập nhật được phụ trợ: " + e.message;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Cập nhật phụ trợ"; }
+    }
+  }
+
   /* ===== DRAFTS (đơn nháp) ===== */
   const DRAFT_KEY = "combo_bill_drafts_v3"; // v3: local-only (v10.2), không còn online
   const CUST2B_STATE_KEY = "combo_bill_cust2b_state_v1"; // v10.9.59: persist tên/tag/VAT khi reload
@@ -7827,7 +8051,10 @@ const App = (() => {
       const r = ComboLogic.calc(d.cart || [], opts);
       const text = r.bill || "";
       const ok = await copyText(text);
-      if (ok) _draftViewStatus(`✅ Đã copy Bill của "${d.name}" vào clipboard. Paste vào Zalo/FB.`, "success");
+      if (ok) {
+        _draftViewStatus(`✅ Đã copy Bill của "${d.name}" vào clipboard. Paste vào Zalo/FB.`, "success");
+        showGuideReminderForItems(r.parsedItems);
+      }
       else _draftViewStatus("⚠️ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
       _draftViewStatus("⚠️ Không tính được bill: " + e.message, "error");
@@ -9020,20 +9247,21 @@ const App = (() => {
 
   async function loadStkConfig() {
     try {
-      const res = await fetch("./STK.json", { cache: "no-cache" });
-      if (res.ok) {
-        const data = await res.json();
-        // Support cả format cũ (object đơn) và format mới (array)
-        if (Array.isArray(data)) {
-          stkList = data.map((d, i) => ({ ...DEFAULT_STK_LIST[i] || {}, ...d }));
-        } else {
-          // Format cũ: chỉ override STK1
-          stkList[0] = { ...stkList[0], ...data };
-        }
-        stkConfig = stkList[currentStkIdx];
-        renderStkToggle();
+      const data = await fetchAuxJson("STK.json");
+      // Support cả format cũ (object đơn) và format mới (array)
+      if (Array.isArray(data)) {
+        stkList = data.map((d, i) => ({ ...DEFAULT_STK_LIST[i] || {}, ...d }));
+      } else {
+        // Format cũ: chỉ override STK1
+        stkList[0] = { ...stkList[0], ...data };
       }
-    } catch(e) { console.warn("STK.json load fail:", e); }
+      stkConfig = stkList[currentStkIdx];
+      renderStkToggle();
+      return { ok: true, count: stkList.length };
+    } catch(e) {
+      console.warn("STK.json load fail:", e);
+      return { ok: false, count: stkList.length, error: e.message };
+    }
   }
 
   function genOrderCode() {
@@ -9291,7 +9519,7 @@ const App = (() => {
 
     // Pre-load logo + QR để biết tỉ lệ
     let logoImg = null, qrImg = null;
-    try { logoImg = await loadImage("./logo.png"); } catch(e) { /* fallback below */ }
+    try { logoImg = await loadImage(auxVersionedUrl("./logo.png")); } catch(e) { /* fallback below */ }
     try { qrImg = await loadImage(state.qrUrl); } catch(e) { /* fallback below */ }
 
     // Layout zones cố định
@@ -10218,28 +10446,33 @@ const App = (() => {
       }
       // Background fetch (luôn refresh nếu cache expired hoặc null)
       if (!cached || Date.now() - lastFetchAt > CACHE_TTL_MS) {
-        try {
-          const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
-          if (!csvUrl) return;
-          const csvText = await gsFetch(csvUrl);
-          const rows = gsParseCsv(csvText);
-          const count = _buildFromRows(rows);
-          lastFetchAt = Date.now();
-          _saveCache(rows);
-          console.log(`[StockOverflow] Loaded ${count} gói thừa tồn kho.`);
-          // Re-render cart + draft list để show tô tím
-          try { render(); } catch (e) {}
-          try { draftRender(); sharedDraftRender(); } catch (e) {}
-        } catch (e) {
-          console.warn("[StockOverflow] Fetch failed:", e.message);
-        }
+        await refresh();
+      }
+    }
+
+    async function refresh() {
+      try {
+        const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
+        if (!csvUrl) return { ok: false, count: stockSet.size, error: "URL tồn kho không hợp lệ" };
+        const csvText = await gsFetch(forceFreshUrl(csvUrl));
+        const rows = gsParseCsv(csvText);
+        const count = _buildFromRows(rows);
+        lastFetchAt = Date.now();
+        _saveCache(rows);
+        console.log(`[StockOverflow] Loaded ${count} gói thừa tồn kho.`);
+        try { render(); } catch (e) {}
+        try { draftRender(); sharedDraftRender(); } catch (e) {}
+        return { ok: true, count };
+      } catch (e) {
+        console.warn("[StockOverflow] Fetch failed:", e.message);
+        return { ok: false, count: stockSet.size, error: e.message };
       }
     }
 
     function getSheetUrl() { return SHEET_URL; }
     function getCount() { return stockSet.size; }
 
-    return { init, check, getSheetUrl, getCount };
+    return { init, refresh, check, getSheetUrl, getCount };
   })();
 
   // ─── v10.8.21: PackageGuides — hướng dẫn gói (modal ảnh) ─────────────
@@ -10335,7 +10568,7 @@ const App = (() => {
       // Clear cache + re-fetch
       try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
       lastFetchAt = 0;
-      init();
+      refresh();
     }
 
     async function init() {
@@ -10350,33 +10583,40 @@ const App = (() => {
         return;
       }
       if (!cached || Date.now() - lastFetchAt > CACHE_TTL_MS) {
-        try {
-          const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
-          if (!csvUrl) return;
-          const csvText = await gsFetch(csvUrl);
-          const rows = gsParseCsv(csvText);
-          const count = _buildFromRows(rows);
-          lastFetchAt = Date.now();
-          _saveCache(rows);
-          console.log(`[PackageGuides] Loaded ${count} guides.`);
-          try { render(); } catch (e) {}
-          try { draftRender(); sharedDraftRender(); } catch (e) {}
-        } catch (e) {
-          console.warn("[PackageGuides] Fetch failed:", e.message);
-        }
+        await refresh();
+      }
+    }
+
+    async function refresh() {
+      if (!SHEET_URL) return { ok: false, count: entries.length, error: "Chưa cấu hình URL hướng dẫn" };
+      try {
+        const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
+        if (!csvUrl) return { ok: false, count: entries.length, error: "URL hướng dẫn không hợp lệ" };
+        const csvText = await gsFetch(forceFreshUrl(csvUrl));
+        const rows = gsParseCsv(csvText);
+        const count = _buildFromRows(rows);
+        lastFetchAt = Date.now();
+        _saveCache(rows);
+        console.log(`[PackageGuides] Loaded ${count} guides.`);
+        try { render(); } catch (e) {}
+        try { draftRender(); sharedDraftRender(); } catch (e) {}
+        return { ok: true, count };
+      } catch (e) {
+        console.warn("[PackageGuides] Fetch failed:", e.message);
+        return { ok: false, count: entries.length, error: e.message };
       }
     }
 
     function getImageUrl(file) {
       if (!file) return "";
       // Nếu file đã là URL đầy đủ → trả về như vậy. Ngược lại ghép base.
-      if (/^https?:\/\//i.test(file)) return file;
-      return IMG_BASE + file;
+      if (/^https?:\/\//i.test(file)) return auxVersionedUrl(file);
+      return auxVersionedUrl(IMG_BASE + file);
     }
 
     function getCount() { return entries.length; }
 
-    return { init, lookup, setSheetUrl, getImageUrl, getCount };
+    return { init, refresh, lookup, setSheetUrl, getImageUrl, getCount };
   })();
 
   // ─── Modal Xem hướng dẫn ─────────────
@@ -11081,9 +11321,7 @@ const App = (() => {
 
   async function vatLoadConfigFile() {
     try {
-      const res = await fetch("./vat-config.json", { cache: "no-cache" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
+      const data = await fetchAuxJson("vat-config.json");
       vatRuntimeCfg = {
         csvUrl: String(data.csvUrl || "").trim(),
         webAppUrl: String(data.webAppUrl || "").trim(),
@@ -11092,9 +11330,11 @@ const App = (() => {
         csvUrl: vatRuntimeCfg.csvUrl ? "✓ " + vatRuntimeCfg.csvUrl.slice(0, 60) + "..." : "✗ EMPTY",
         webAppUrl: vatRuntimeCfg.webAppUrl ? "✓ " + vatRuntimeCfg.webAppUrl.slice(0, 60) + "..." : "✗ EMPTY",
       });
+      return { ok: true };
     } catch (e) {
       console.warn("[VAT] vat-config.json không load được:", e.message);
       vatRuntimeCfg = { csvUrl: "", webAppUrl: "" };
+      return { ok: false, error: e.message };
     }
   }
   function vatCacheLoad() {
@@ -11177,7 +11417,7 @@ const App = (() => {
     const cfg = vatGetCfg();
     if (!cfg.csvUrl) {
       vatSetStatus("⚠️ Chưa cấu hình CSV URL. Bấm ⚙ Cấu hình.");
-      return;
+      return { ok: false, count: vatList.length, error: "Chưa cấu hình CSV VAT" };
     }
     if (!force) {
       const cached = vatCacheLoad();
@@ -11185,20 +11425,23 @@ const App = (() => {
         vatList = cached.list;
         const ageMin = Math.round((Date.now() - cached.ts) / 60000);
         vatSetStatus(`📂 ${vatList.length} dòng VAT (cache ${ageMin} phút trước).`);
-        return;
+        return { ok: true, count: vatList.length, cached: true };
       }
     }
     vatSetStatus("⏳ Đang tải VAT từ Google Sheet…");
     try {
-      const res = await fetch(cfg.csvUrl, { cache: "no-cache" });
+      const fetchUrl = force ? forceFreshUrl(cfg.csvUrl) : cfg.csvUrl;
+      const res = await fetch(fetchUrl, { cache: force ? "no-store" : "no-cache" });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const text = await res.text();
       const rows = vatParseCsv(text);
       vatList = vatRowsToList(rows);
       vatCacheSave(vatList);
       vatSetStatus(`✅ Đã tải ${vatList.length} dòng VAT.`);
+      return { ok: true, count: vatList.length };
     } catch (e) {
       vatSetStatus("❌ Lỗi tải VAT: " + e.message);
+      return { ok: false, count: vatList.length, error: e.message };
     }
   }
   function vatRefreshHistory() { vatFetchFromSheet(true); }
@@ -12249,6 +12492,8 @@ const App = (() => {
   try { DateRangeCalc.init(); } catch (e) { console.error("DRC init fail:", e); }
   // v10.8.33: init CountrySearch UI badge
   try { csUpdateBadgeUI(); } catch (e) { console.error("CS init fail:", e); }
+  // v10.9.83: hiển thị lần cập nhật phụ trợ gần nhất.
+  try { auxUpdateBadgeUI(); } catch (e) { console.error("Aux badge init fail:", e); }
   // Khi render lần đầu, gắn share param vào Cust2B nếu có pendingImportPayload đã được decode trước đó
 
   // v10.8.25: Init StockOverflow + PackageGuides — phải đặt TRƯỚC `return` của IIFE
@@ -12291,20 +12536,23 @@ const App = (() => {
     async function loadCfg() {
       if (cfg) return cfg;
       try {
-        const res = await fetch("./hoadonle.json", { cache: "no-cache" });
-        if (res.ok) {
-          const d = await res.json();
-          cfg = {
-            company: Object.assign({}, DEFAULT_CFG.company, d.company || {}),
-            simVatLyFullVatK: Number(d.simVatLyFullVatK) || DEFAULT_CFG.simVatLyFullVatK,
-            vatRate: (typeof d.vatRate === "number") ? d.vatRate : DEFAULT_CFG.vatRate,
-          };
-        } else cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+        const d = await fetchAuxJson("hoadonle.json");
+        cfg = {
+          company: Object.assign({}, DEFAULT_CFG.company, d.company || {}),
+          simVatLyFullVatK: Number(d.simVatLyFullVatK) || DEFAULT_CFG.simVatLyFullVatK,
+          vatRate: (typeof d.vatRate === "number") ? d.vatRate : DEFAULT_CFG.vatRate,
+        };
       } catch (e) {
         console.warn("[Invoice] hoadonle.json không load được:", e.message);
         cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
       }
       return cfg;
+    }
+
+    async function refreshConfig() {
+      cfg = null;
+      await loadCfg();
+      return { ok: true };
     }
 
     // Làm tròn 3 số lẻ theo đơn vị "k" = làm tròn đến đồng (1k = 1000đ → 3 số lẻ).
@@ -12447,9 +12695,9 @@ const App = (() => {
 
       // Pre-load images
       let logoImg = null, stampCty = null, stampPaid = null;
-      try { logoImg = await loadImage("./logoctyngang.png"); } catch (e) {}
-      try { stampCty = await loadImage("./dau-cong-ty.png"); } catch (e) {}
-      if (opt.showPaid) { try { stampPaid = await loadImage("./dau-thanh-toan.png"); } catch (e) {} }
+      try { logoImg = await loadImage(auxVersionedUrl("./logoctyngang.png")); } catch (e) {}
+      try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
+      if (opt.showPaid) { try { stampPaid = await loadImage(auxVersionedUrl("./dau-thanh-toan.png")); } catch (e) {} }
 
       // ─── Đo chiều cao động ───
       // Header cty (~115) + tiêu đề (~70) + KH 2 dòng (~78) + bảng (header + rows) + footer (~150)
@@ -12772,7 +13020,7 @@ const App = (() => {
       }
     }
 
-    return { open, close, render, download, copy };
+    return { open, close, render, download, copy, refreshConfig };
   })();
 
   /* ===== GIẤY ĐỀ NGHỊ THANH TOÁN (v10.9.58) ===== */
@@ -12791,16 +13039,19 @@ const App = (() => {
     async function loadCfg() {
       if (cfg) return cfg;
       try {
-        const res = await fetch("./hoadonle.json", { cache: "no-cache" });
-        if (res.ok) {
-          const d = await res.json();
-          cfg = { company: Object.assign({}, DEFAULT_CFG.company, d.company || {}) };
-        } else cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+        const d = await fetchAuxJson("hoadonle.json");
+        cfg = { company: Object.assign({}, DEFAULT_CFG.company, d.company || {}) };
       } catch (e) {
         console.warn("[PaymentRequest] hoadonle.json không load được:", e.message);
         cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
       }
       return cfg;
+    }
+
+    async function refreshConfig() {
+      cfg = null;
+      await loadCfg();
+      return { ok: true };
     }
 
     function todayInputValue() {
@@ -12959,8 +13210,8 @@ const App = (() => {
       ctx.fillRect(0, 0, W, H);
 
       let logoImg = null, stampCty = null;
-      try { logoImg = await loadImage("./logo.png"); } catch (e) {}
-      try { stampCty = await loadImage("./dau-cong-ty.png"); } catch (e) {}
+      try { logoImg = await loadImage(auxVersionedUrl("./logo.png")); } catch (e) {}
+      try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
 
       ctx.fillStyle = "#111827";
       if (logoImg) {
@@ -13114,7 +13365,7 @@ const App = (() => {
       else if (st) st.textContent = "⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải ảnh.";
     }
 
-    return { open, close, render, download, copy };
+    return { open, close, render, download, copy, refreshConfig };
   })();
 
   return {
@@ -13166,6 +13417,8 @@ const App = (() => {
     drcCopyResult: () => DateRangeCalc.copyResult(),
     // v10.8.33: CountrySearch
     csUpdate,
+    auxUpdate,
+    closeGuideReminder,
     // v10.9.14: csClear đã bỏ
     // v10.8.35
     pkgInfoOpen: (text) => PkgInfo.open(text),
@@ -13299,5 +13552,14 @@ const App = (() => {
 </script>
 <!-- v10.9.49: Draft delete toast -->
 <div id="draftDeleteToast"><div id="draftDeleteToastMsg"></div></div>
+<!-- v10.9.83: Nhắc gửi kèm hướng dẫn riêng sau khi copy bill -->
+<div id="guideReminderBanner" role="status" aria-live="polite">
+  <div class="guide-reminder-icon">📘</div>
+  <div>
+    <div id="guideReminderTitle" class="guide-reminder-title">Đơn này có hướng dẫn riêng</div>
+    <div class="guide-reminder-text">Nhớ gửi kèm ảnh hướng dẫn cho khách.</div>
+  </div>
+  <button class="guide-reminder-close" onclick="App.closeGuideReminder()" title="Tắt thông báo" aria-label="Tắt thông báo">✕</button>
+</div>
 </body>
 </html>
