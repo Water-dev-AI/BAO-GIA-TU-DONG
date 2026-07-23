@@ -71,11 +71,18 @@
    Header lookup theo TÊN row 2. Mapping NƯỚC + GÓI (regex RE: / exact / ASK).
  - highlight-sheet.gs: trigger onSheetEdit/onSheetChange, highlight XUẤT LẺ.
  - vat-sheet.gs: Web App. Actions: ping/upsert/delete/drafts_list/drafts_upsert/
-   drafts_delete. 2 tabs: VAT, DRAFTS. Auto-purge drafts >7d khi list.
+   drafts_delete/quick_prices_get/quick_prices_upsert. 3 tabs: VAT, DRAFTS,
+   BẢNG GIÁ NHANH. Auto-purge drafts >15d khi list.
 
 ═══════════════════════════════════════════════════════════════════════════════
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
+
+ v10.9.85 · 23/07/2026 · (GMT+7)
+ - Thêm bảng giá Trung Quốc, Hồng Kông, Ma Cao vào `sheets.json` (tổng 43 preset).
+ - Tùy chỉnh pill bảng giá nhanh có thêm `Lưu chung`: đồng bộ qua tab BẢNG GIÁ NHANH
+   của VAT Sheet; cache 12 giờ, lỗi mạng dùng cache cũ hoặc bộ mặc định và báo trên app.
+ - `vat-sheet.gs` v10.9.85 thêm API đọc/lưu cấu hình pill chung và hiển thị version script.
 
  v10.9.84 · 18/07/2026 · (GMT+7)
  - Phóng lớn banner nhắc gửi ảnh hướng dẫn khoảng 4 lần diện tích: nền cảnh báo đỏ nhạt,
@@ -1618,7 +1625,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.84
+    Version 10.9.85
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1682,7 +1689,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
           <span id="slUpdateInfo" style="font-size:11.5px;color:var(--muted);"></span>
           <button id="slCapNhatGiaBtn" onclick="App.csUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#eef2f7;color:#444;border:none;border-radius:7px;cursor:pointer;" title="Tải lại tất cả bảng giá (1 lần/12h, tự cập nhật ở nền sau 12h)">🔄 Cập nhật giá</button>
           <span id="auxUpdateInfo" style="font-size:11.5px;color:var(--muted);"></span>
-          <button id="auxUpdateBtn" onclick="App.auxUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:7px;cursor:pointer;" title="Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK và cấu hình hóa đơn">🔄 Cập nhật phụ trợ</button>
+          <button id="auxUpdateBtn" onclick="App.auxUpdate()" style="margin:0;padding:6px 11px;font-size:12px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:7px;cursor:pointer;" title="Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK, nút bảng giá nhanh và cấu hình hóa đơn">🔄 Cập nhật phụ trợ</button>
         </div>
       </div>
       <div style="color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5;">
@@ -1711,12 +1718,13 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <div id="slSearchDropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:#fff;border:1px solid var(--line);border-radius:10px;max-height:360px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.12);"></div>
       </div>
 
-      <!-- Nút bảng giá nhanh — cấu hình local theo từng trình duyệt -->
+      <!-- Nút bảng giá nhanh — cấu hình local hoặc đồng bộ chung qua VAT Sheet -->
       <div class="sl-favorites-row">
         <div id="slFavorites" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
         <button class="sl-quick-settings-btn" onclick="App.slQuickConfigOpen()"
           title="Tùy chỉnh nút bảng giá nhanh" aria-label="Tùy chỉnh nút bảng giá nhanh">⚙</button>
       </div>
+      <div id="slQuickSyncInfo" style="margin-top:6px;font-size:11.5px;color:var(--muted);line-height:1.4;"></div>
 
       <div id="slRestoreWrap" style="margin-top:10px;display:none;">
         <button class="light" onclick="App.slRestorePresets()" style="margin:0;font-size:12px;padding:7px 12px;">
@@ -2050,14 +2058,17 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
     <div class="picker-body" style="padding:14px 16px;">
       <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;">
         Tick bảng muốn hiện thành nút. Kéo thả dòng để sắp xếp và sửa tên viết tắt ngay trong ô.
+        Lưu máy này chỉ áp dụng trình duyệt hiện tại; Lưu chung sẽ đồng bộ mặc định cho các máy.
       </div>
+      <div id="slQuickConfigSyncStatus" style="font-size:12px;font-weight:650;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:8px 10px;margin-bottom:10px;"></div>
       <div id="slQuickConfigList" class="sl-quick-config-list"></div>
     </div>
     <div class="picker-footer">
       <button class="light" onclick="App.slQuickConfigReset()" style="margin:0;">↺ Mặc định</button>
       <span style="flex:1;"></span>
       <button class="light" onclick="App.slQuickConfigClose()" style="margin:0;">Huỷ</button>
-      <button class="blue" onclick="App.slQuickConfigSave()" style="margin:0;">💾 Lưu</button>
+      <button class="blue" onclick="App.slQuickConfigSave()" style="margin:0;">💾 Lưu máy này</button>
+      <button id="slQuickSaveSharedBtn" onclick="App.slQuickConfigSaveShared()" style="margin:0;background:#d97706;color:#fff;">☁️ Lưu chung</button>
     </div>
   </div>
 </div>
@@ -4857,9 +4868,15 @@ const App = (() => {
   const SL_KEY = "combo_bill_sheet_list_v1";
   const PRESET_BLACKLIST_KEY = "combo_bill_preset_blacklist_v1";
   const QUICK_SHEETS_KEY = "combo_bill_quick_sheets_v1";
+  const QUICK_SHEETS_MODE_KEY = "combo_bill_quick_sheets_mode_v1";
+  const QUICK_SHARED_CACHE_KEY = "combo_bill_quick_sheets_shared_v1";
+  const QUICK_SHARED_TTL_MS = 12 * 60 * 60 * 1000;
 
   // In-memory presets loaded từ sheets.json
   let presetSheets = [];
+  let slQuickSharedItems = null;
+  let slQuickSharedUpdatedAt = "";
+  let slQuickSharedCacheAt = 0;
 
   function slLoad() {
     try { return JSON.parse(localStorage.getItem(SL_KEY) || "[]"); } catch { return []; }
@@ -4981,7 +4998,7 @@ const App = (() => {
       .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
   }
 
-  function slQuickReadSaved() {
+  function slQuickReadLocalSaved() {
     try {
       const raw = JSON.parse(localStorage.getItem(QUICK_SHEETS_KEY) || "null");
       const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.items) ? raw.items : null);
@@ -4991,9 +5008,142 @@ const App = (() => {
     }
   }
 
+  function slQuickGetMode() {
+    try { return localStorage.getItem(QUICK_SHEETS_MODE_KEY) === "local" ? "local" : "shared"; }
+    catch (e) { return "shared"; }
+  }
+
+  function slQuickSetMode(mode) {
+    try { localStorage.setItem(QUICK_SHEETS_MODE_KEY, mode === "local" ? "local" : "shared"); }
+    catch (e) {}
+  }
+
+  function slQuickReadSaved() {
+    if (slQuickGetMode() === "local") return slQuickReadLocalSaved();
+    return Array.isArray(slQuickSharedItems) && slQuickSharedItems.length ? slQuickSharedItems : null;
+  }
+
   function slQuickCleanLabel(label, fallback) {
     const clean = String(label || "").replace(/\s+/g, " ").trim();
     return (clean || fallback || "Bảng giá").slice(0, 32);
+  }
+
+  function slQuickNormalizeItems(items) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : []).slice(0, 200).map(item => ({
+      key: String(item && item.key || "").trim().slice(0, 220),
+      label: slQuickCleanLabel(item && item.label, "Bảng giá"),
+      enabled: item && item.enabled !== false,
+    })).filter(item => {
+      if (!item.key || seen.has(item.key)) return false;
+      seen.add(item.key);
+      return true;
+    });
+  }
+
+  function slQuickSharedCacheLoad() {
+    try {
+      const obj = JSON.parse(localStorage.getItem(QUICK_SHARED_CACHE_KEY) || "null");
+      if (!obj || !Array.isArray(obj.items)) return null;
+      return {
+        items: slQuickNormalizeItems(obj.items),
+        cachedAt: Number(obj.cachedAt) || 0,
+        updatedAt: String(obj.updatedAt || ""),
+        scriptVersion: String(obj.scriptVersion || ""),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function slQuickSharedCacheSave(items, meta) {
+    const obj = {
+      version: 1,
+      items: slQuickNormalizeItems(items),
+      cachedAt: Date.now(),
+      updatedAt: String(meta && meta.updatedAt || ""),
+      scriptVersion: String(meta && meta.scriptVersion || ""),
+    };
+    try { localStorage.setItem(QUICK_SHARED_CACHE_KEY, JSON.stringify(obj)); } catch (e) {}
+    slQuickSharedCacheAt = obj.cachedAt;
+    slQuickSharedUpdatedAt = obj.updatedAt;
+  }
+
+  function slQuickSetSyncInfo(text, isError) {
+    const info = document.getElementById("slQuickSyncInfo");
+    if (info) {
+      info.textContent = text || "";
+      info.style.color = isError ? "#b91c1c" : "var(--muted)";
+      info.style.fontWeight = isError ? "700" : "500";
+    }
+    const modalInfo = document.getElementById("slQuickConfigSyncStatus");
+    if (modalInfo) {
+      modalInfo.textContent = text || "";
+      modalInfo.style.color = isError ? "#b91c1c" : "#92400e";
+      modalInfo.style.borderColor = isError ? "#fecaca" : "#fde68a";
+      modalInfo.style.background = isError ? "#fef2f2" : "#fffbeb";
+    }
+  }
+
+  function slQuickSyncSummary(prefix) {
+    if (slQuickGetMode() === "local") return "💻 Đang dùng cấu hình riêng của máy này.";
+    const updatedMs = slQuickSharedUpdatedAt ? new Date(slQuickSharedUpdatedAt).getTime() : 0;
+    const stamp = Number.isFinite(updatedMs) && updatedMs > 0 ? formatAuxTime(updatedMs) : "";
+    const count = Array.isArray(slQuickSharedItems) ? slQuickSharedItems.filter(x => x.enabled !== false).length : 0;
+    if (count) return `${prefix || "☁️ Đang dùng cấu hình chung"}: ${count} nút${stamp ? ` · lưu ${stamp}` : ""}.`;
+    return "☁️ Chưa có cấu hình chung, đang dùng bộ pill mặc định gốc.";
+  }
+
+  async function slQuickSharedFetch(options) {
+    const force = !!(options && options.force);
+    const silent = !!(options && options.silent);
+    const cached = slQuickSharedCacheLoad();
+    if (!force && cached && cached.cachedAt && Date.now() - cached.cachedAt < QUICK_SHARED_TTL_MS) {
+      slQuickSharedItems = cached.items.length ? cached.items : null;
+      slQuickSharedCacheAt = cached.cachedAt;
+      slQuickSharedUpdatedAt = cached.updatedAt;
+      const text = slQuickSyncSummary("☁️ Đang dùng cấu hình chung (cache 12h)");
+      slQuickSetSyncInfo(text, false);
+      return { ok: true, cached: true, count: cached.items.filter(x => x.enabled !== false).length, text };
+    }
+
+    try {
+      const url = await _sharedDraftWebAppUrl();
+      if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json");
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "quick_prices_get" }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Web App không trả dữ liệu hợp lệ");
+      const items = slQuickNormalizeItems(data.items);
+      slQuickSharedItems = items.length ? items : null;
+      slQuickSharedCacheSave(items, data);
+      const text = slQuickSyncSummary("☁️ Đã tải cấu hình chung");
+      slQuickSetSyncInfo(text, false);
+      if (!silent) slRender();
+      return { ok: true, count: items.filter(x => x.enabled !== false).length, text, scriptVersion: data.scriptVersion || "" };
+    } catch (e) {
+      if (cached) {
+        slQuickSharedItems = cached.items.length ? cached.items : null;
+        slQuickSharedCacheAt = cached.cachedAt;
+        slQuickSharedUpdatedAt = cached.updatedAt;
+      } else {
+        slQuickSharedItems = null;
+        slQuickSharedCacheAt = 0;
+        slQuickSharedUpdatedAt = "";
+      }
+      const fallback = cached ? "cache gần nhất" : "bộ pill mặc định gốc";
+      const text = `❌ Không tải được cấu hình nút nhanh chung: ${e.message}. Đang dùng ${fallback}.`;
+      slQuickSetSyncInfo(text, true);
+      if (!silent) slRender();
+      return { ok: false, count: 0, error: e.message, text };
+    }
+  }
+
+  function slQuickSharedInit() {
+    return slQuickSharedFetch({ force: false, silent: true });
   }
 
   function slQuickDefaultLabel(item) {
@@ -5201,6 +5351,7 @@ const App = (() => {
     }
     slQuickConfigDraft = slQuickBuildConfig();
     slQuickConfigRender();
+    slQuickSetSyncInfo(slQuickSyncSummary(), false);
     const overlay = document.getElementById("slQuickConfigOverlay");
     if (overlay) overlay.classList.add("open");
   }
@@ -5210,14 +5361,19 @@ const App = (() => {
     if (overlay) overlay.classList.remove("open");
   }
 
-  function slQuickConfigSave() {
-    const payload = slQuickConfigDraft.map(entry => ({
+  function slQuickConfigPayload() {
+    return slQuickConfigDraft.map(entry => ({
       key: entry.key,
       label: slQuickCleanLabel(entry.label, slQuickDefaultLabel(entry.item)),
       enabled: !!entry.enabled,
     }));
+  }
+
+  function slQuickConfigSave() {
+    const payload = slQuickConfigPayload();
     try {
       localStorage.setItem(QUICK_SHEETS_KEY, JSON.stringify({ version: 1, items: payload }));
+      slQuickSetMode("local");
     } catch (e) {
       alert("Không lưu được tùy chỉnh trên trình duyệt này.");
       return;
@@ -5231,20 +5387,66 @@ const App = (() => {
 
     slQuickConfigClose();
     slRender();
+    slQuickSetSyncInfo("💻 Đang dùng cấu hình riêng của máy này.", false);
     const st = document.getElementById("slStatus");
     if (st) st.textContent = `✅ Đã lưu ${payload.filter(x => x.enabled).length} nút bảng giá nhanh trên máy này.`;
   }
 
+  async function slQuickConfigSaveShared() {
+    const payload = slQuickConfigPayload();
+    const btn = document.getElementById("slQuickSaveSharedBtn");
+    if (!payload.length) {
+      slQuickSetSyncInfo("❌ Không có cấu hình hợp lệ để lưu chung.", true);
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Đang lưu..."; }
+    slQuickSetSyncInfo("⏳ Đang lưu cấu hình chung lên VAT Sheet...", false);
+    try {
+      const url = await _sharedDraftWebAppUrl();
+      if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json");
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "quick_prices_upsert", items: payload }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Web App không lưu được cấu hình");
+      if (!data.scriptVersion) throw new Error("vat-sheet.gs đang là bản cũ; cần deploy lại v10.9.85");
+
+      slQuickSharedItems = slQuickNormalizeItems(data.items && data.items.length ? data.items : payload);
+      slQuickSharedCacheSave(slQuickSharedItems, data);
+      slQuickSetMode("shared");
+
+      const blacklist = loadPresetBlacklist();
+      payload.filter(x => x.enabled && x.key.startsWith("preset:"))
+        .forEach(x => blacklist.delete(x.key.slice(7)));
+      savePresetBlacklist(blacklist);
+
+      slQuickConfigClose();
+      slRender();
+      const text = slQuickSyncSummary("☁️ Đã lưu cấu hình chung");
+      slQuickSetSyncInfo(`${text} · GS v${data.scriptVersion}`, false);
+      const st = document.getElementById("slStatus");
+      if (st) st.textContent = `✅ Đã lưu chung ${payload.filter(x => x.enabled).length} nút bảng giá nhanh. Các máy khác sẽ nhận theo cache 12 giờ.`;
+    } catch (e) {
+      slQuickSetSyncInfo(`❌ Lưu chung thất bại: ${e.message}`, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "☁️ Lưu chung"; }
+    }
+  }
+
   function slQuickConfigReset() {
-    if (!confirm("Khôi phục danh sách nút bảng giá nhanh mặc định?")) return;
+    if (!confirm("Quay về cấu hình chung? Nếu chưa có bản chung, app sẽ dùng bộ pill mặc định gốc.")) return;
     try { localStorage.removeItem(QUICK_SHEETS_KEY); } catch (e) {}
+    slQuickSetMode("shared");
     const blacklist = loadPresetBlacklist();
     FAVORITE_COUNTRIES.forEach(f => blacklist.delete(f.id));
     savePresetBlacklist(blacklist);
     slQuickConfigClose();
     slRender();
+    slQuickSetSyncInfo(slQuickSyncSummary(), false);
     const st = document.getElementById("slStatus");
-    if (st) st.textContent = "✅ Đã khôi phục nút bảng giá nhanh mặc định.";
+    if (st) st.textContent = "✅ Đã quay về cấu hình nút nhanh chung/mặc định.";
   }
 
   // Bấm pill → mở picker thẳng (không filter list, không animation)
@@ -6406,10 +6608,10 @@ const App = (() => {
     if (meta && Number(meta.at) > 0) {
       const stamp = formatAuxTime(Number(meta.at));
       if (info) info.textContent = `Phụ trợ: ${stamp}`;
-      if (btn) btn.title = `${meta.summary || "Đã cập nhật phụ trợ"} · ${stamp} (GMT+7). Ảnh hướng dẫn tự làm mới sau 12h.`;
+      if (btn) btn.title = `${meta.summary || "Đã cập nhật phụ trợ"} · ${stamp} (GMT+7). Ảnh hướng dẫn và nút bảng giá nhanh tự làm mới sau 12h.`;
     } else {
       if (info) info.textContent = "Phụ trợ: chưa cập nhật";
-      if (btn) btn.title = "Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK và cấu hình hóa đơn. Ảnh hướng dẫn tự làm mới sau 12h.";
+      if (btn) btn.title = "Ép tải mới VAT, hướng dẫn gói/ảnh, tồn kho, STK, nút bảng giá nhanh và cấu hình hóa đơn. Ảnh hướng dẫn và nút nhanh tự làm mới sau 12h.";
     }
   }
 
@@ -6430,6 +6632,7 @@ const App = (() => {
       ["Hướng dẫn", () => PackageGuides.refresh()],
       ["Tồn kho", () => StockOverflow.refresh()],
       ["STK", () => loadStkConfig()],
+      ["Nút nhanh", () => slQuickSharedFetch({ force: true, silent: true })],
       ["Cấu hình", async () => {
         const values = await Promise.all([Invoice.refreshConfig(), PaymentRequest.refreshConfig()]);
         return { ok: values.every(x => x && x.ok) };
@@ -10102,9 +10305,12 @@ const App = (() => {
   slRender();
   loadSheetPresets().then(async presets => {
     presetSheets = presets;
+    const quickResult = await slQuickSharedInit();
     if (presets.length) {
       slRender();
-      document.getElementById("slStatus").textContent = `✅ Đã load ${presets.length} preset từ sheets.json.`;
+      document.getElementById("slStatus").textContent = quickResult && !quickResult.ok
+        ? `⚠️ Đã load ${presets.length} preset. ${quickResult.text}`
+        : `✅ Đã load ${presets.length} preset từ sheets.json.`;
       try { await CountrySearch.hydrate(); } catch (e) { console.warn("[CountrySearch] hydrate fail:", e); }
       csUpdateBadgeUI();
       if (CountrySearch.isStale()) {
@@ -13417,6 +13623,7 @@ const App = (() => {
     slQuickConfigOpen,
     slQuickConfigClose,
     slQuickConfigSave,
+    slQuickConfigSaveShared,
     slQuickConfigReset,
     slDropdownPick,
     slRefreshAll: () => csUpdate(false), // v10.9.14: alias backward-compat, gọi csUpdate
