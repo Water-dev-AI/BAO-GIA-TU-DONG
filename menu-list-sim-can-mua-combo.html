@@ -78,6 +78,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.86 · 27/07/2026 · (GMT+7)
+ - Thêm checkbox `Chọn tất cả` cho Đơn nháp và Đơn lưu chung khi xoá hàng loạt;
+   chỉ chọn/bỏ các đơn đang hiển thị theo bộ lọc và tự cập nhật trạng thái chọn.
+ - Tăng vùng danh sách: Đơn nháp hiển thị tối đa 10 hàng, Đơn lưu chung 7 hàng
+   trước khi cuộn; chiều cao tự tính theo các dòng thực tế để không cắt nội dung.
+
  v10.9.85 · 23/07/2026 · (GMT+7)
  - Thêm bảng giá Trung Quốc, Hồng Kông, Ma Cao vào `sheets.json` (tổng 43 preset).
  - Tùy chỉnh pill bảng giá nhanh có thêm `Lưu chung`: đồng bộ qua tab BẢNG GIÁ NHANH
@@ -1625,7 +1631,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.85
+    Version 10.9.86
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1971,7 +1977,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <input id="draftSearch" type="text" placeholder="🔍 Tìm tên khách hoặc mã đơn (DH...)..."
         oninput="App.draftFilter()"
         style="width:100%;padding:9px 11px;border:1px solid #cfd5df;border-radius:10px;font-size:13px;margin-bottom:10px;" />
-      <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
+      <div id="draftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:900px;overflow-y:auto;padding-right:4px;"></div>
     </div>
 
     <!-- ====== Đơn lưu chung online ====== -->
@@ -1986,7 +1992,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <input id="sharedDraftSearch" type="text" placeholder="🔍 Tìm đơn lưu chung hoặc mã đơn (DH...)..."
         oninput="App.sharedDraftFilter()"
         style="width:100%;padding:9px 11px;border:1px solid #fbbf24;border-radius:10px;font-size:13px;margin-bottom:10px;background:#fff;" />
-      <div id="sharedDraftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;padding-right:4px;"></div>
+      <div id="sharedDraftListWrap" style="display:flex;flex-direction:column;gap:6px;max-height:650px;overflow-y:auto;padding-right:4px;"></div>
     </div>
   </div>
 </div>
@@ -7786,6 +7792,17 @@ const App = (() => {
     // Sort mới nhất lên trên (theo updatedAt nếu có, fallback createdAt)
     filtered.sort((a, b) => ((b.updatedAt || b.createdAt) || 0) - ((a.updatedAt || a.createdAt) || 0));
 
+    // v10.9.86: Checkbox chọn tất cả chỉ tác động các đơn đang hiển thị theo bộ lọc.
+    const selectAllHtml = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 10px;background:${isShared ? '#fffbeb' : '#f8fafc'};border:1px solid ${isShared ? '#fde68a' : '#dbe3ec'};border-radius:8px;margin-bottom:2px;">
+        <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:${isShared ? '#92400e' : '#334155'};cursor:pointer;user-select:none;">
+          <input id="${isShared ? 'sharedDraftSelectAll' : 'draftSelectAll'}" type="checkbox"
+            onchange="App.draftBatchSelectAll(this.checked, '${scope}')"
+            style="width:17px;height:17px;margin:0;cursor:pointer;accent-color:#dc2626;" />
+          Chọn tất cả ${filtered.length} đơn đang hiển thị
+        </label>
+      </div>`;
+
     // v10.9.49: Batch bar (hiện khi có chọn)
     const batchBarHtml = `
       <div id="${isShared ? "sharedDraftBatchBar" : "draftBatchBar"}" class="${selected.size ? 'show' : ''}">
@@ -7794,7 +7811,7 @@ const App = (() => {
         <button onclick="App.draftBatchClear('${scope}')" style="padding:6px 10px;background:#eef2f7;color:#444;border:none;border-radius:7px;font-size:12px;cursor:pointer;">Bỏ chọn tất cả</button>
       </div>`;
 
-    wrap.innerHTML = batchBarHtml + filtered.map(d => {
+    wrap.innerHTML = selectAllHtml + batchBarHtml + filtered.map(d => {
       const domKey = _draftDomKey(scope, d.id);
       const itemCount = (d.cart || []).length;
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
@@ -7842,7 +7859,7 @@ const App = (() => {
       const rowBg = isShared ? "#fffaf0" : "#f9fafb";
       const rowBorder = isShared ? "#fbbf24" : "var(--line)";
       return `
-        <div style="display:flex;align-items:center;gap:8px;background:${rowBg};border:1px solid ${rowBorder};border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
+        <div class="draft-list-item" style="display:flex;align-items:center;gap:8px;background:${rowBg};border:1px solid ${rowBorder};border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
           <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
             <div id="draftNameRow_${domKey}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
@@ -7877,24 +7894,82 @@ const App = (() => {
       const chk = wrap.querySelector(`.draft-sel-chk[data-id="${id}"]`);
       if (chk) chk.checked = true;
     });
+    _syncDraftSelectAllUI(scope);
+    _sizeDraftListVisibleRows(scope);
   }
 
   // v10.9.49: Set lưu các id đang chọn để xoá batch
   const _draftSelected = new Set();
   const _sharedDraftSelected = new Set();
 
-  function draftBatchToggle(id, checked, scope) {
+  function _sizeDraftListVisibleRows(scope) {
+    scope = _draftScope(scope);
+    const wrap = document.getElementById(scope === "shared" ? "sharedDraftListWrap" : "draftListWrap");
+    if (!wrap) return;
+    requestAnimationFrame(() => {
+      const limit = scope === "shared" ? 7 : 10;
+      const rows = Array.from(wrap.querySelectorAll(".draft-list-item"));
+      if (!rows.length) return;
+      let usedRows = 0;
+      const included = Array.from(wrap.children).filter(el => {
+        if (el.classList.contains("draft-list-item")) {
+          usedRows += 1;
+          return usedRows <= limit;
+        }
+        return el.offsetHeight > 0;
+      });
+      const gap = parseFloat(getComputedStyle(wrap).rowGap || getComputedStyle(wrap).gap) || 6;
+      const height = included.reduce((sum, el) => sum + el.offsetHeight, 0)
+        + Math.max(0, included.length - 1) * gap + 2;
+      wrap.style.maxHeight = Math.ceil(height) + "px";
+    });
+  }
+
+  function _syncDraftSelectAllUI(scope) {
+    scope = _draftScope(scope);
+    const wrap = document.getElementById(scope === "shared" ? "sharedDraftListWrap" : "draftListWrap");
+    const master = document.getElementById(scope === "shared" ? "sharedDraftSelectAll" : "draftSelectAll");
+    if (!wrap || !master) return;
+    const boxes = Array.from(wrap.querySelectorAll(".draft-sel-chk"));
+    const checkedCount = boxes.filter(chk => chk.checked).length;
+    master.checked = boxes.length > 0 && checkedCount === boxes.length;
+    master.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+  }
+
+  function _updateDraftBatchBar(scope) {
     scope = _draftScope(scope);
     const selected = scope === "shared" ? _sharedDraftSelected : _draftSelected;
-    if (checked) selected.add(id);
-    else selected.delete(id);
-    // Update batch bar
     const bar = document.getElementById(scope === "shared" ? "sharedDraftBatchBar" : "draftBatchBar");
     if (bar) {
       bar.className = selected.size ? "show" : "";
       const cnt = bar.querySelector("span");
       if (cnt) cnt.textContent = `Đã chọn ${selected.size} đơn`;
     }
+    _syncDraftSelectAllUI(scope);
+    _sizeDraftListVisibleRows(scope);
+  }
+
+  function draftBatchToggle(id, checked, scope) {
+    scope = _draftScope(scope);
+    const selected = scope === "shared" ? _sharedDraftSelected : _draftSelected;
+    if (checked) selected.add(id);
+    else selected.delete(id);
+    _updateDraftBatchBar(scope);
+  }
+
+  function draftBatchSelectAll(checked, scope) {
+    scope = _draftScope(scope);
+    const selected = scope === "shared" ? _sharedDraftSelected : _draftSelected;
+    const wrap = document.getElementById(scope === "shared" ? "sharedDraftListWrap" : "draftListWrap");
+    if (!wrap) return;
+    wrap.querySelectorAll(".draft-sel-chk").forEach(chk => {
+      const id = String(chk.dataset.id || "");
+      if (!id) return;
+      chk.checked = !!checked;
+      if (checked) selected.add(id);
+      else selected.delete(id);
+    });
+    _updateDraftBatchBar(scope);
   }
 
   function draftBatchClear(scope) {
@@ -13749,6 +13824,7 @@ const App = (() => {
     sharedDraftsManualRefresh,
     draftDelete,
     draftBatchToggle,
+    draftBatchSelectAll,
     draftBatchDelete,
     draftBatchClear,
     draftShare,
