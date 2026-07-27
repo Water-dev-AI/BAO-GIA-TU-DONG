@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.87 · 27/07/2026 · (GMT+7)
+ - Chuyển nút `Chọn tất cả` vào thanh xoá hàng loạt của Đơn nháp và Đơn lưu chung;
+   thanh thao tác chỉ hiện sau khi tick ít nhất một đơn và không còn chiếm chỗ thường trực.
+
  v10.9.86 · 27/07/2026 · (GMT+7)
  - Thêm checkbox `Chọn tất cả` cho Đơn nháp và Đơn lưu chung khi xoá hàng loạt;
    chỉ chọn/bỏ các đơn đang hiển thị theo bộ lọc và tự cập nhật trạng thái chọn.
@@ -1631,7 +1635,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.86
+    Version 10.9.87
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7792,26 +7796,20 @@ const App = (() => {
     // Sort mới nhất lên trên (theo updatedAt nếu có, fallback createdAt)
     filtered.sort((a, b) => ((b.updatedAt || b.createdAt) || 0) - ((a.updatedAt || a.createdAt) || 0));
 
-    // v10.9.86: Checkbox chọn tất cả chỉ tác động các đơn đang hiển thị theo bộ lọc.
-    const selectAllHtml = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 10px;background:${isShared ? '#fffbeb' : '#f8fafc'};border:1px solid ${isShared ? '#fde68a' : '#dbe3ec'};border-radius:8px;margin-bottom:2px;">
-        <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:${isShared ? '#92400e' : '#334155'};cursor:pointer;user-select:none;">
-          <input id="${isShared ? 'sharedDraftSelectAll' : 'draftSelectAll'}" type="checkbox"
-            onchange="App.draftBatchSelectAll(this.checked, '${scope}')"
-            style="width:17px;height:17px;margin:0;cursor:pointer;accent-color:#dc2626;" />
-          Chọn tất cả ${filtered.length} đơn đang hiển thị
-        </label>
-      </div>`;
-
     // v10.9.49: Batch bar (hiện khi có chọn)
     const batchBarHtml = `
       <div id="${isShared ? "sharedDraftBatchBar" : "draftBatchBar"}" class="${selected.size ? 'show' : ''}">
         <span style="font-size:13px;font-weight:600;color:#b91c1c;">Đã chọn ${selected.size} đơn</span>
         <button onclick="App.draftBatchDelete('${scope}')" style="padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;">🗑️ Xoá các đơn đã chọn</button>
         <button onclick="App.draftBatchClear('${scope}')" style="padding:6px 10px;background:#eef2f7;color:#444;border:none;border-radius:7px;font-size:12px;cursor:pointer;">Bỏ chọn tất cả</button>
+        <button id="${isShared ? 'sharedDraftSelectAllBtn' : 'draftSelectAllBtn'}"
+          onclick="App.draftBatchSelectAll(true, '${scope}')"
+          style="padding:6px 10px;background:#fff;color:#b91c1c;border:1px solid #fca5a5;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+          Chọn tất cả ${filtered.length} đơn
+        </button>
       </div>`;
 
-    wrap.innerHTML = selectAllHtml + batchBarHtml + filtered.map(d => {
+    wrap.innerHTML = batchBarHtml + filtered.map(d => {
       const domKey = _draftDomKey(scope, d.id);
       const itemCount = (d.cart || []).length;
       const vatBadge = d.vat && (d.vat.mst || d.vat.name)
@@ -7928,12 +7926,12 @@ const App = (() => {
   function _syncDraftSelectAllUI(scope) {
     scope = _draftScope(scope);
     const wrap = document.getElementById(scope === "shared" ? "sharedDraftListWrap" : "draftListWrap");
-    const master = document.getElementById(scope === "shared" ? "sharedDraftSelectAll" : "draftSelectAll");
-    if (!wrap || !master) return;
+    const selectAllBtn = document.getElementById(scope === "shared" ? "sharedDraftSelectAllBtn" : "draftSelectAllBtn");
+    if (!wrap || !selectAllBtn) return;
     const boxes = Array.from(wrap.querySelectorAll(".draft-sel-chk"));
     const checkedCount = boxes.filter(chk => chk.checked).length;
-    master.checked = boxes.length > 0 && checkedCount === boxes.length;
-    master.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+    selectAllBtn.style.display = checkedCount > 0 && checkedCount < boxes.length ? "inline-flex" : "none";
+    selectAllBtn.textContent = `Chọn tất cả ${boxes.length} đơn`;
   }
 
   function _updateDraftBatchBar(scope) {
