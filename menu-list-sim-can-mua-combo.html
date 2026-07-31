@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.89 · 31/07/2026 · (GMT+7)
+ - QR nhanh mở sẵn số tiền `000` với con trỏ ở đầu để gõ `23` thành 23.000 VND;
+   ba số 0 không bị khoá, có thể xoá hoặc sửa để nhập số lẻ như 2.500 VND.
+
  v10.9.88 · 31/07/2026 · (GMT+7)
  - QR nhanh đổi ô số tiền sang nhập theo nghìn đồng với hậu tố `000` cố định:
    nhập `23` tạo QR 23.000 VND, nhập `1.200` tạo QR 1.200.000 VND.
@@ -1639,7 +1643,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.88
+    Version 10.9.89
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2370,13 +2374,10 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
     <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Số tiền (VND) *</div>
-        <div style="display:flex;align-items:center;width:100%;border:1px solid #cfd5df;border-radius:10px;background:#fff;overflow:hidden;box-sizing:border-box;">
-          <input id="qrCustomAmount" type="text" inputmode="numeric" placeholder="VD: 23"
-            oninput="App.qrCustomFormatAmount(this); App.qrCustomRender()"
-            style="min-width:0;flex:1;padding:10px 2px 10px 12px;border:none;outline:none;font-size:14px;font-family:inherit;text-align:right;" />
-          <span aria-hidden="true" style="padding:10px 12px 10px 0;font-size:14px;font-weight:700;color:#1f2937;user-select:none;">.000</span>
-        </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Nhập 23 = 23.000 VND</div>
+        <input id="qrCustomAmount" type="text" inputmode="numeric" placeholder="VD: 23.000"
+          oninput="App.qrCustomFormatAmount(this); App.qrCustomRender()"
+          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Gõ 23 trước số 000 có sẵn = 23.000 VND; có thể sửa toàn bộ số.</div>
         <div id="qrCustomAmountWarn" style="font-size:11.5px;color:#dc2626;margin-top:4px;display:none;">⚠️ Số tiền nhỏ hơn 10.000 VND — kiểm tra lại xem có thiếu số 0?</div>
       </div>
       <div>
@@ -10276,19 +10277,23 @@ const App = (() => {
 
   /* ===== QR Custom (tạo nhanh theo số tiền + nội dung tuỳ chọn) ===== */
   function qrCustomOpen() {
-    document.getElementById("qrCustomAmount").value = "";
+    const amountInput = document.getElementById("qrCustomAmount");
+    amountInput.value = "000";
     document.getElementById("qrCustomNote").value = "";
     document.getElementById("qrCustomPreview").style.display = "none";
     document.getElementById("qrCustomAmountWarn").style.display = "none";
     document.getElementById("qrCustomOverlay").classList.add("open");
-    setTimeout(() => document.getElementById("qrCustomAmount").focus(), 50);
+    setTimeout(() => {
+      amountInput.focus();
+      try { amountInput.setSelectionRange(0, 0); } catch (e) {}
+    }, 50);
   }
 
   function qrCustomClose() {
     document.getElementById("qrCustomOverlay").classList.remove("open");
   }
 
-  // v10.9.88: Người dùng nhập theo nghìn đồng; hậu tố .000 được cố định trên giao diện.
+  // v10.9.89: Ô mở sẵn 000 nhưng toàn bộ số vẫn chỉnh sửa được.
   function qrCustomFormatAmount(input) {
     const raw = (input.value || "").replace(/\D+/g, "");
     if (!raw) { input.value = ""; document.getElementById("qrCustomAmountWarn").style.display = "none"; return; }
@@ -10304,14 +10309,14 @@ const App = (() => {
       pos++;
     }
     try { input.setSelectionRange(pos, pos); } catch (e) {}
-    // Cảnh báo nếu số tiền sau khi nhân nghìn vẫn nhỏ hơn 10.000 VND.
+    // Cảnh báo nếu số tiền nhỏ hơn 10.000 VND.
     const warnEl = document.getElementById("qrCustomAmountWarn");
-    warnEl.style.display = (n > 0 && n < 10) ? "block" : "none";
+    warnEl.style.display = (n > 0 && n < 10000) ? "block" : "none";
   }
 
   function qrCustomGetAmount() {
     const raw = (document.getElementById("qrCustomAmount").value || "").replace(/\D+/g, "");
-    return raw ? parseInt(raw, 10) * 1000 : NaN;
+    return raw ? parseInt(raw, 10) : NaN;
   }
 
   function qrCustomRender() {
