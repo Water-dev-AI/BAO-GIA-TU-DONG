@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.88 · 31/07/2026 · (GMT+7)
+ - QR nhanh đổi ô số tiền sang nhập theo nghìn đồng với hậu tố `000` cố định:
+   nhập `23` tạo QR 23.000 VND, nhập `1.200` tạo QR 1.200.000 VND.
+
  v10.9.87 · 27/07/2026 · (GMT+7)
  - Chuyển nút `Chọn tất cả` vào thanh xoá hàng loạt của Đơn nháp và Đơn lưu chung;
    thanh thao tác chỉ hiện sau khi tick ít nhất một đơn và không còn chiếm chỗ thường trực.
@@ -1635,7 +1639,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.87
+    Version 10.9.88
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2366,10 +2370,14 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
     <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Số tiền (VND) *</div>
-        <input id="qrCustomAmount" type="text" inputmode="numeric" placeholder="VD: 500,000"
-          oninput="App.qrCustomFormatAmount(this); App.qrCustomRender()"
-          style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
-        <div id="qrCustomAmountWarn" style="font-size:11.5px;color:#dc2626;margin-top:4px;display:none;">⚠️ Số tiền nhỏ hơn 10,000 VND — kiểm tra lại xem có thiếu số 0?</div>
+        <div style="display:flex;align-items:center;width:100%;border:1px solid #cfd5df;border-radius:10px;background:#fff;overflow:hidden;box-sizing:border-box;">
+          <input id="qrCustomAmount" type="text" inputmode="numeric" placeholder="VD: 23"
+            oninput="App.qrCustomFormatAmount(this); App.qrCustomRender()"
+            style="min-width:0;flex:1;padding:10px 2px 10px 12px;border:none;outline:none;font-size:14px;font-family:inherit;text-align:right;" />
+          <span aria-hidden="true" style="padding:10px 12px 10px 0;font-size:14px;font-weight:700;color:#1f2937;user-select:none;">.000</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Nhập 23 = 23.000 VND</div>
+        <div id="qrCustomAmountWarn" style="font-size:11.5px;color:#dc2626;margin-top:4px;display:none;">⚠️ Số tiền nhỏ hơn 10.000 VND — kiểm tra lại xem có thiếu số 0?</div>
       </div>
       <div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Nội dung CK *</div>
@@ -10280,7 +10288,7 @@ const App = (() => {
     document.getElementById("qrCustomOverlay").classList.remove("open");
   }
 
-  // Format input số tiền có dấu , ngăn 3 số 0. Giữ cursor đúng vị trí.
+  // v10.9.88: Người dùng nhập theo nghìn đồng; hậu tố .000 được cố định trên giao diện.
   function qrCustomFormatAmount(input) {
     const raw = (input.value || "").replace(/\D+/g, "");
     if (!raw) { input.value = ""; document.getElementById("qrCustomAmountWarn").style.display = "none"; return; }
@@ -10288,7 +10296,7 @@ const App = (() => {
     // Đo cursor: số ký tự không phải digit trước cursor
     const before = input.selectionStart;
     const digitsBeforeCursor = (input.value.substring(0, before).match(/\d/g) || []).length;
-    input.value = n.toLocaleString("en-US");
+    input.value = n.toLocaleString("vi-VN");
     // Đặt cursor lại sau số ký số = digitsBeforeCursor
     let pos = 0, seen = 0;
     while (pos < input.value.length && seen < digitsBeforeCursor) {
@@ -10296,14 +10304,14 @@ const App = (() => {
       pos++;
     }
     try { input.setSelectionRange(pos, pos); } catch (e) {}
-    // Cảnh báo nhỏ hơn 10,000
+    // Cảnh báo nếu số tiền sau khi nhân nghìn vẫn nhỏ hơn 10.000 VND.
     const warnEl = document.getElementById("qrCustomAmountWarn");
-    warnEl.style.display = (n > 0 && n < 10000) ? "block" : "none";
+    warnEl.style.display = (n > 0 && n < 10) ? "block" : "none";
   }
 
   function qrCustomGetAmount() {
     const raw = (document.getElementById("qrCustomAmount").value || "").replace(/\D+/g, "");
-    return raw ? parseInt(raw, 10) : NaN;
+    return raw ? parseInt(raw, 10) * 1000 : NaN;
   }
 
   function qrCustomRender() {
