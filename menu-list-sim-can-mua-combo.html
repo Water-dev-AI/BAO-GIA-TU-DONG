@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.91 · 05/08/2026 · (GMT+7)
+ - Lưu nháp phần chỉnh Hóa đơn lẻ (tên hàng và 0–3 hàng ghi chú) theo giỏ hiện tại;
+   đóng/mở lại hoặc reload vẫn giữ, tự xoá khi thêm, xoá hoặc thay gói trong giỏ.
+
  v10.9.90 · 05/08/2026 · (GMT+7)
  - Hóa đơn lẻ thêm `Cộng tiền hàng (Sub total)` trước VAT 10%; đổi dòng cuối thành
    `Tổng cộng tiền thanh toán (Total payment)` nhưng giữ nguyên công thức FullVAT cũ.
@@ -1649,7 +1653,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.90
+    Version 10.9.91
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3190,7 +3194,44 @@ const ComboLogic = (() => {
 
 const App = (() => {
   const STORAGE_KEY = "combo_bill_esim_sim_cart_v1";
+  const INVOICE_DRAFT_KEY = "simglobe_invoice_edit_draft_v1";
   let cart = loadCart();
+
+  // Bản chỉnh hóa đơn gắn theo danh sách gói; qty/note thay đổi vẫn là cùng đơn.
+  function invoiceCartSignature(items) {
+    try { return JSON.stringify((items || []).map(x => String(x.line || ""))); }
+    catch (e) { return ""; }
+  }
+
+  function loadInvoiceEditDraft() {
+    try {
+      const d = JSON.parse(localStorage.getItem(INVOICE_DRAFT_KEY) || "null");
+      if (!d || d.cartSig !== invoiceCartSignature(cart)) return null;
+      return d;
+    } catch (e) { return null; }
+  }
+
+  function saveInvoiceEditDraft(data) {
+    if (!cart.length) {
+      try { localStorage.removeItem(INVOICE_DRAFT_KEY); } catch (e) {}
+      return;
+    }
+    try {
+      localStorage.setItem(INVOICE_DRAFT_KEY, JSON.stringify(Object.assign({
+        cartSig: invoiceCartSignature(cart),
+        updatedAt: Date.now(),
+      }, data || {})));
+    } catch (e) {}
+  }
+
+  function clearInvoiceEditDraftIfCartChanged() {
+    try {
+      const d = JSON.parse(localStorage.getItem(INVOICE_DRAFT_KEY) || "null");
+      if (d && d.cartSig !== invoiceCartSignature(cart)) localStorage.removeItem(INVOICE_DRAFT_KEY);
+    } catch (e) {
+      try { localStorage.removeItem(INVOICE_DRAFT_KEY); } catch (_) {}
+    }
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -3278,6 +3319,7 @@ const App = (() => {
 
   function saveCart() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+    clearInvoiceEditDraftIfCartChanged();
     liveRecalc();
   }
 
@@ -12861,9 +12903,16 @@ const App = (() => {
     };
     // Góc xoay random cho 2 con dấu (giữ cố định trong 1 lần mở modal, đổi mỗi lần open)
     let rotStamp1 = 0, rotStamp2 = 0;
-    // v10.9.90: Tên hàng sửa tay và 0-3 hàng ghi chú chỉ tồn tại trong lần mở modal hiện tại.
+    // v10.9.91: Tên hàng sửa tay và 0-3 hàng ghi chú được lưu theo giỏ hiện tại.
     let rowNameOverrides = [];
     let extraNoteRows = [];
+
+    function persistEditDraft() {
+      saveInvoiceEditDraft({
+        rowNameOverrides: rowNameOverrides.slice(),
+        extraNoteRows: extraNoteRows.slice(0, 3),
+      });
+    }
 
     function syncItemEditors(baseRows) {
       const wrap = document.getElementById("invItemEditor");
@@ -12875,7 +12924,7 @@ const App = (() => {
       wrap.innerHTML = baseRows.map((r, idx) => `
         <label style="display:flex;align-items:center;gap:7px;min-width:0;">
           <span style="flex:0 0 auto;font-size:11.5px;font-weight:700;color:#64748b;">${idx + 1}.</span>
-          <input type="text" value="${escapeHtml(rowNameOverrides[idx] || r.name || "")}"
+          <input type="text" value="${escapeHtml(rowNameOverrides[idx] !== undefined ? rowNameOverrides[idx] : (r.name || ""))}"
             oninput="App.invoiceEditRowName(${idx}, this.value)"
             aria-label="Tên hàng hóa ${idx + 1}"
             style="min-width:0;flex:1;padding:8px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:12.5px;font-family:inherit;box-sizing:border-box;" />
@@ -12897,6 +12946,7 @@ const App = (() => {
     function editRowName(idx, value) {
       if (idx < 0 || idx >= rowNameOverrides.length) return;
       rowNameOverrides[idx] = String(value || "");
+      persistEditDraft();
       render();
     }
 
@@ -12905,12 +12955,14 @@ const App = (() => {
       while (extraNoteRows.length < count) extraNoteRows.push("");
       extraNoteRows.length = count;
       renderExtraNoteEditors();
+      persistEditDraft();
       render();
     }
 
     function editExtraNote(idx, value) {
       if (idx < 0 || idx >= extraNoteRows.length) return;
       extraNoteRows[idx] = String(value || "");
+      persistEditDraft();
       render();
     }
 
@@ -13006,14 +13058,18 @@ const App = (() => {
 
     function open() {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
-      rowNameOverrides = [];
-      extraNoteRows = [];
+      const savedEdit = loadInvoiceEditDraft();
+      rowNameOverrides = savedEdit && Array.isArray(savedEdit.rowNameOverrides)
+        ? savedEdit.rowNameOverrides.map(x => String(x || "")) : [];
+      extraNoteRows = savedEdit && Array.isArray(savedEdit.extraNoteRows)
+        ? savedEdit.extraNoteRows.slice(0, 3).map(x => String(x || "")) : [];
       const itemEditor = document.getElementById("invItemEditor");
       const noteEditor = document.getElementById("invExtraNoteEditor");
       const noteCount = document.getElementById("invExtraNoteCount");
       if (itemEditor) itemEditor.innerHTML = "";
       if (noteEditor) noteEditor.innerHTML = "";
-      if (noteCount) noteCount.value = "0";
+      if (noteCount) noteCount.value = String(extraNoteRows.length);
+      renderExtraNoteEditors();
       // Random góc xoay 2 dấu (-10..10 độ), khác nhau mỗi lần mở
       rotStamp1 = (Math.random() * 20 - 10) * Math.PI / 180;
       rotStamp2 = (Math.random() * 60 - 30) * Math.PI / 180;
