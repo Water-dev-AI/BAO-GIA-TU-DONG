@@ -78,6 +78,12 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.90 · 05/08/2026 · (GMT+7)
+ - Hóa đơn lẻ thêm `Cộng tiền hàng (Sub total)` trước VAT 10%; đổi dòng cuối thành
+   `Tổng cộng tiền thanh toán (Total payment)` nhưng giữ nguyên công thức FullVAT cũ.
+ - Cho sửa tay tên từng hàng hóa trên hóa đơn và chọn thêm 0–3 hàng ghi chú tự nhập;
+   ghi chú nằm cuối bảng trước các dòng tổng và không tham gia tính tiền.
+
  v10.9.89 · 31/07/2026 · (GMT+7)
  - QR nhanh mở sẵn số tiền `000` với con trỏ ở đầu để gõ `23` thành 23.000 VND;
    ba số 0 không bị khoá, có thể xoá hoặc sửa để nhập số lẻ như 2.500 VND.
@@ -1643,7 +1649,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.89
+    Version 10.9.90
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2433,6 +2439,22 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
           oninput="App.invoiceRender()"
           style="padding:8px 10px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
       </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:7px;">Tên hàng hóa trên hóa đơn</div>
+        <div id="invItemEditor" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label for="invExtraNoteCount" style="font-size:12px;font-weight:700;color:#374151;">Thêm hàng ghi chú:</label>
+        <select id="invExtraNoteCount" onchange="App.invoiceSetExtraNoteCount(this.value)"
+          style="padding:8px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;">
+          <option value="0">Không thêm</option>
+          <option value="1">1 hàng</option>
+          <option value="2">2 hàng</option>
+          <option value="3">3 hàng</option>
+        </select>
+        <span style="font-size:11.5px;color:var(--muted);">Các hàng này nằm cuối bảng và không tính tiền.</span>
+      </div>
+      <div id="invExtraNoteEditor" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
         <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
         <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
@@ -12839,6 +12861,58 @@ const App = (() => {
     };
     // Góc xoay random cho 2 con dấu (giữ cố định trong 1 lần mở modal, đổi mỗi lần open)
     let rotStamp1 = 0, rotStamp2 = 0;
+    // v10.9.90: Tên hàng sửa tay và 0-3 hàng ghi chú chỉ tồn tại trong lần mở modal hiện tại.
+    let rowNameOverrides = [];
+    let extraNoteRows = [];
+
+    function syncItemEditors(baseRows) {
+      const wrap = document.getElementById("invItemEditor");
+      if (!wrap) return;
+      if (rowNameOverrides.length !== baseRows.length) {
+        rowNameOverrides = baseRows.map(r => r.name || "");
+      }
+      if (wrap.children.length === baseRows.length) return;
+      wrap.innerHTML = baseRows.map((r, idx) => `
+        <label style="display:flex;align-items:center;gap:7px;min-width:0;">
+          <span style="flex:0 0 auto;font-size:11.5px;font-weight:700;color:#64748b;">${idx + 1}.</span>
+          <input type="text" value="${escapeHtml(rowNameOverrides[idx] || r.name || "")}"
+            oninput="App.invoiceEditRowName(${idx}, this.value)"
+            aria-label="Tên hàng hóa ${idx + 1}"
+            style="min-width:0;flex:1;padding:8px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:12.5px;font-family:inherit;box-sizing:border-box;" />
+        </label>`).join("");
+    }
+
+    function renderExtraNoteEditors() {
+      const wrap = document.getElementById("invExtraNoteEditor");
+      if (!wrap) return;
+      wrap.innerHTML = extraNoteRows.map((text, idx) => `
+        <label style="display:flex;align-items:center;gap:7px;min-width:0;">
+          <span style="flex:0 0 auto;font-size:11.5px;font-weight:700;color:#92400e;">Ghi chú ${idx + 1}</span>
+          <input type="text" value="${escapeHtml(text)}" placeholder="Nhập nội dung hàng ghi chú ${idx + 1}"
+            oninput="App.invoiceEditExtraNote(${idx}, this.value)"
+            style="min-width:0;flex:1;padding:8px 10px;border:1px solid #fbbf24;border-radius:8px;font-size:12.5px;font-family:inherit;box-sizing:border-box;background:#fffbeb;" />
+        </label>`).join("");
+    }
+
+    function editRowName(idx, value) {
+      if (idx < 0 || idx >= rowNameOverrides.length) return;
+      rowNameOverrides[idx] = String(value || "");
+      render();
+    }
+
+    function setExtraNoteCount(value) {
+      const count = Math.max(0, Math.min(3, parseInt(value, 10) || 0));
+      while (extraNoteRows.length < count) extraNoteRows.push("");
+      extraNoteRows.length = count;
+      renderExtraNoteEditors();
+      render();
+    }
+
+    function editExtraNote(idx, value) {
+      if (idx < 0 || idx >= extraNoteRows.length) return;
+      extraNoteRows[idx] = String(value || "");
+      render();
+    }
 
     async function loadCfg() {
       if (cfg) return cfg;
@@ -12932,6 +13006,14 @@ const App = (() => {
 
     function open() {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
+      rowNameOverrides = [];
+      extraNoteRows = [];
+      const itemEditor = document.getElementById("invItemEditor");
+      const noteEditor = document.getElementById("invExtraNoteEditor");
+      const noteCount = document.getElementById("invExtraNoteCount");
+      if (itemEditor) itemEditor.innerHTML = "";
+      if (noteEditor) noteEditor.innerHTML = "";
+      if (noteCount) noteCount.value = "0";
       // Random góc xoay 2 dấu (-10..10 độ), khác nhau mỗi lần mở
       rotStamp1 = (Math.random() * 20 - 10) * Math.PI / 180;
       rotStamp2 = (Math.random() * 60 - 30) * Math.PI / 180;
@@ -12971,7 +13053,11 @@ const App = (() => {
         if (statusEl) statusEl.textContent = "❌ Chưa có dòng hợp lệ để xuất hóa đơn.";
         return;
       }
-      const rows = buildRows(r.parsedItems, r.discShares, c);
+      const baseRows = buildRows(r.parsedItems, r.discShares, c);
+      syncItemEditors(baseRows);
+      const rows = baseRows.map((row, idx) => Object.assign({}, row, {
+        name: rowNameOverrides[idx] !== undefined ? rowNameOverrides[idx] : row.name,
+      }));
       const fullVatK = r.summary.fullVatK || 0;
       // VAT 10% = 1/11 của FullVAT
       const vatK = round3(fullVatK / 11);
@@ -12990,11 +13076,11 @@ const App = (() => {
       if (dm) dateStr = `Ngày ${parseInt(dm[3], 10)} tháng ${parseInt(dm[2], 10)} năm ${dm[1]}`;
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
-      await draw(canvas, c, rows, vatK, congK, { custName, custPhone, custAddr, showPaid, dateStr });
-      if (statusEl) statusEl.textContent = `✅ ${rows.length} dòng · CỘNG: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
+      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, congK, { custName, custPhone, custAddr, showPaid, dateStr });
+      if (statusEl) statusEl.textContent = `✅ ${rows.length} hàng hóa · ${extraNoteRows.length} ghi chú · Tổng thanh toán: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
     }
 
-    async function draw(canvas, c, rows, vatK, congK, opt) {
+    async function draw(canvas, c, rows, extraNotes, subTotalK, vatK, congK, opt) {
       const DPR = 2;
       const W = 1000;
       const pad = 48;
@@ -13017,14 +13103,20 @@ const App = (() => {
         let h = Math.max(lines.length, 1) * 22 + (rw.note ? 18 : 0) + 16;
         return Math.max(h, 46);
       });
+      const noteRowHeights = (extraNotes || []).map(note => {
+        const lines = wrapText(ctxM, note || "", innerW - 24);
+        return Math.max(Math.max(lines.length, 1) * 21 + 14, 42);
+      });
       const tableHeaderH = 44;
-      const totalRowsH = rowHeights.reduce((s, h) => s + h, 0);
-      const vatRowH = 40, congRowH = 46;
+      const totalRowsH = rowHeights.reduce((s, h) => s + h, 0)
+        + noteRowHeights.reduce((s, h) => s + h, 0);
+      const subTotalRowH = 40, vatRowH = 40, congRowH = 50;
       const headerCtyH = 200;
       const titleH = 76;
       const custH = 86;
       const footerH = 230;
-      const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH + vatRowH + congRowH + footerH + pad;
+      const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH
+        + subTotalRowH + vatRowH + congRowH + footerH + pad;
       // v10.9.51: Khổ dọc A4 (1:1.414). Nếu content > 1 trang → chia nhiều trang A4 xếp dọc,
       // đánh dấu ranh giới + số trang. H = số trang × A4_H.
       const A4_H = Math.round(W * 297 / 210); // 1414 với W=1000
@@ -13214,7 +13306,25 @@ const App = (() => {
         y += rowH;
       });
 
-      // Dòng VAT 10%
+      // Các hàng ghi chú tự nhập: gộp toàn chiều rộng bảng, không có STT và không tính tiền.
+      (extraNotes || []).forEach(note => {
+        const noteLines = wrapText(ctx, note || "", innerW - 24);
+        const rowH = Math.max(Math.max(noteLines.length, 1) * 21 + 14, 42);
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx0, y, innerW, rowH);
+        ctx.fillStyle = "#374151";
+        ctx.font = "italic 13.5px Arial, sans-serif";
+        ctx.textAlign = "left";
+        let noteY = y + (rowH - Math.max(noteLines.length, 1) * 21) / 2 + 15;
+        (noteLines.length ? noteLines : [""]).forEach(line => {
+          ctx.fillText(line, cx0 + 12, noteY);
+          noteY += 21;
+        });
+        y += rowH;
+      });
+
+      // Các dòng tổng
       const drawTotalRow = (label, valK, h, bold) => {
         ctx.strokeStyle = "#cbd5e1";
         ctx.lineWidth = 1;
@@ -13229,23 +13339,24 @@ const App = (() => {
         ctx.fillText(fmtVnd(valK), colX.amount + wAmount - 8, y + h / 2 + 5);
         y += h;
       };
+      drawTotalRow("Cộng tiền hàng (Sub total):", subTotalK, 40, false);
       drawTotalRow("VAT 10%:", vatK, 40, false);
-      // Dòng CỘNG
+      // Dòng Tổng cộng tiền thanh toán
       ctx.fillStyle = "#f8fafc";
-      ctx.fillRect(cx0, y, innerW, 46);
+      ctx.fillRect(cx0, y, innerW, 50);
       ctx.strokeStyle = "#374151";
       ctx.lineWidth = 1.2;
-      ctx.strokeRect(cx0, y, innerW, 46);
+      ctx.strokeRect(cx0, y, innerW, 50);
       [colX.amount].forEach(vx => {
-        ctx.beginPath(); ctx.moveTo(vx, y); ctx.lineTo(vx, y + 46); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(vx, y); ctx.lineTo(vx, y + 50); ctx.stroke();
       });
       ctx.fillStyle = "#b91c1c";
-      ctx.font = "bold 17px Arial, sans-serif";
+      ctx.font = "bold 15px Arial, sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText("CỘNG:", cx0 + 14, y + 30);
+      ctx.fillText("Tổng cộng tiền thanh toán (Total payment):", cx0 + 14, y + 31);
       ctx.textAlign = "right";
-      ctx.fillText(fmtVnd(congK) + " đ", colX.amount + wAmount - 8, y + 30);
-      y += 46;
+      ctx.fillText(fmtVnd(congK) + " đ", colX.amount + wAmount - 8, y + 31);
+      y += 50;
 
       // === Footer === (v10.9.51: nằm ngay sau bảng, KHÔNG đẩy xuống đáy)
       y += 22;
@@ -13327,7 +13438,10 @@ const App = (() => {
       }
     }
 
-    return { open, close, render, download, copy, refreshConfig };
+    return {
+      open, close, render, editRowName, setExtraNoteCount, editExtraNote,
+      download, copy, refreshConfig,
+    };
   })();
 
   /* ===== GIẤY ĐỀ NGHỊ THANH TOÁN (v10.9.58) ===== */
@@ -13763,6 +13877,9 @@ const App = (() => {
     invoiceOpen: () => Invoice.open(),
     invoiceClose: () => Invoice.close(),
     invoiceRender: () => Invoice.render(),
+    invoiceEditRowName: (idx, value) => Invoice.editRowName(idx, value),
+    invoiceSetExtraNoteCount: value => Invoice.setExtraNoteCount(value),
+    invoiceEditExtraNote: (idx, value) => Invoice.editExtraNote(idx, value),
     invoiceDownload: () => Invoice.download(),
     invoiceCopy: () => Invoice.copy(),
     payReqOpen: () => PaymentRequest.open(),
