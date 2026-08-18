@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.92 · 17/08/2026 · (GMT+7)
+ - Picker chọn gói thêm nút `Thêm giỏ mới` bên phải `Thêm vào giỏ`: xác nhận rồi xoá
+   sạch giỏ cũ, khách/VAT, ship, giảm giá, mã đơn và trạng thái draft trước khi thêm gói đã chọn.
+
  v10.9.91 · 05/08/2026 · (GMT+7)
  - Lưu nháp phần chỉnh Hóa đơn lẻ (tên hàng và 0–3 hàng ghi chú) theo giỏ hiện tại;
    đóng/mở lại hoặc reload vẫn giữ, tự xoá khi thêm, xoá hoặc thay gói trong giỏ.
@@ -1653,7 +1657,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.91
+    Version 10.9.92
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2071,6 +2075,7 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
       <button class="blue" onclick="App.pickerCopyText(event)" style="margin:0;" title="Copy text các gói đã tick (hoặc tất cả nếu chưa tick), không kèm cột #">📋 Copy text</button>
       <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#444;cursor:pointer;user-select:none;" title="Khi tick: copy kèm note (nếu gói có note). Khi bỏ tick: chỉ copy Tên/Loại/Ngày/Giá."><input type="checkbox" id="pickerCopyNoteChk" checked onchange="App.pickerToggleCopyNote()" style="margin:0;cursor:pointer;"> Copy note</label>
       <button class="green" onclick="App.pickerConfirm()">✅ Thêm vào giỏ</button>
+      <button class="amber" onclick="App.pickerConfirmNewCart()" title="Xoá sạch đơn hiện tại rồi thêm các gói đã chọn vào một giỏ mới">🆕 Thêm giỏ mới</button>
       <button class="light" onclick="App.pickerClose()">Huỷ</button>
     </div>
   </div>
@@ -4936,6 +4941,11 @@ const App = (() => {
     if (oc) oc.value = "";
     // Clear Cust2B (DOM + state)
     Cust2B.clear();
+    // Clear dữ liệu từng nhập trực tiếp trong modal Hóa đơn lẻ; ngày sẽ tự về hôm nay khi mở lại.
+    ["invCustName", "invCustPhone", "invCustAddr", "invDate"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
     // Clear extras (ship/discount/shipVat)
     resetCartExtras();
     // Render 1 lần duy nhất
@@ -6190,8 +6200,7 @@ const App = (() => {
   function pickerDeselectAll() { pickerChecked.clear(); pickerRender(); }
   function pickerClose() { document.getElementById("pickerOverlay").classList.remove("open"); }
 
-  function pickerConfirm() {
-    if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
+  function pickerGetSelectedItems() {
     // v10.9.33: Giữ THỨ TỰ trong picker modal (không sort ABC theo tên).
     // Sort theo (tabIdx, itemIdx) — tức thứ tự gói hiển thị trên picker từ trên xuống.
     const keys = Array.from(pickerChecked).sort((a, b) => {
@@ -6210,8 +6219,27 @@ const App = (() => {
         });
       }
     });
+    return selected;
+  }
+
+  function pickerConfirm() {
+    if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
+    const selected = pickerGetSelectedItems();
     const added = addItems(selected);
     document.getElementById("slStatus").textContent = "Da them " + added + " goi vao gio!";
+    pickerClose();
+  }
+
+  function pickerConfirmNewCart() {
+    if (!pickerChecked.size) { alert("Chua chon goi nao!"); return; }
+    const selected = pickerGetSelectedItems();
+    if (cart.length && !confirm(
+      "Tạo giỏ mới sẽ xoá toàn bộ giỏ hiện tại, thông tin khách/VAT, ship và giảm giá.\n\nTiếp tục?"
+    )) return;
+    clearCart();
+    const added = addItems(selected);
+    document.getElementById("slStatus").textContent = "Da tao gio moi va them " + added + " goi!";
+    showStatus("✅ Đã tạo giỏ mới sạch và thêm " + added + " gói.");
     pickerClose();
   }
 
@@ -13948,6 +13976,7 @@ const App = (() => {
     pickerDeselectAll,
     pickerClose,
     pickerConfirm,
+    pickerConfirmNewCart,
     pickerCopyText,
     pickerToggleCopyNote,
     pickerSwitchTab,
