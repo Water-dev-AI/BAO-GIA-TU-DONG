@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.94 · 21/08/2026 · (GMT+7)
+ - Copy/Tải QR thanh toán bằng STK Công ty phải đóng cảnh báo đỏ rồi thao tác lại.
+   Cảnh báo chỉ hiện một lần cho cùng mã đơn, tự yêu cầu lại khi đổi mã; áp dụng
+   cho giỏ hiện tại, QR nhanh và QR trong Đơn nháp/Đơn lưu chung.
+
  v10.9.93 · 21/08/2026 · (GMT+7)
  - Picker thêm checkbox `+Tổng` mặc định bật ngay sau ô lọc ngày. Khi lọc ngày,
    bổ sung gói tổng data ở mốc gần nhất không nhỏ hơn ngày tìm; nhận diện bằng tên
@@ -1393,6 +1398,25 @@
   #guideReminderBanner.show {
     display: flex; animation: guideReminderIn .22s ease-out;
   }
+  #companyQrWarningOverlay { z-index: 11050; }
+  .company-qr-warning-modal {
+    width: min(92vw, 560px); border: 3px solid #dc2626; border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(127, 29, 29, .42); overflow: hidden;
+  }
+  .company-qr-warning-head {
+    padding: 18px 22px; background: #b91c1c; color: #fff;
+    font-size: 22px; line-height: 1.25; font-weight: 850; text-align: center;
+  }
+  .company-qr-warning-body {
+    padding: 24px 24px 18px; background: #fff7f7; color: #7f1d1d;
+    text-align: center; font-size: 15px; line-height: 1.55;
+  }
+  .company-qr-warning-code {
+    margin: 14px 0 10px; padding: 11px 12px; border: 2px solid #ef4444;
+    border-radius: 7px; background: #fff; color: #b91c1c;
+    font-family: "Roboto Mono", ui-monospace, monospace; font-size: 19px; font-weight: 800;
+  }
+  .company-qr-warning-bank { color: #991b1b; font-size: 16px; font-weight: 800; }
   .guide-reminder-icon { font-size: 56px; line-height: 1; flex: 0 0 auto; }
   .guide-reminder-title {
     font-size: 26px; line-height: 1.25; font-weight: 850; color: #b91c1c;
@@ -1671,7 +1695,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.93
+    Version 10.9.94
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2393,6 +2417,23 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <span style="flex:1;min-width:8px;"></span>
       <button class="green" onclick="App.draftViewImport()" style="margin:0;padding:8px 14px;font-size:12.5px;font-weight:700;">📥 Import để chỉnh sửa</button>
       <button class="light" onclick="App.draftViewClose()" style="margin:0;padding:8px 11px;font-size:12px;">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cảnh báo STK Công ty trước khi Copy/Tải QR thanh toán -->
+<div class="picker-overlay" id="companyQrWarningOverlay">
+  <div class="picker-modal company-qr-warning-modal" role="alertdialog" aria-modal="true" aria-labelledby="companyQrWarningTitle">
+    <div class="company-qr-warning-head" id="companyQrWarningTitle">⚠ CẢNH BÁO STK CÔNG TY</div>
+    <div class="company-qr-warning-body">
+      <div>Đơn hàng này đang tạo QR nhận tiền vào <b>tài khoản công ty</b>.</div>
+      <div class="company-qr-warning-code" id="companyQrWarningOrderCode">MÃ ĐƠN</div>
+      <div class="company-qr-warning-bank" id="companyQrWarningBank">NGÂN HÀNG · SỐ TÀI KHOẢN</div>
+      <div style="margin-top:14px;font-weight:650;">Kiểm tra đúng loại thanh toán trước khi tiếp tục.</div>
+      <div style="margin-top:5px;font-size:13px;color:#991b1b;">Đóng cảnh báo, sau đó bấm lại thao tác Copy/Tải QR.</div>
+    </div>
+    <div class="picker-footer" style="justify-content:center;background:#fff7f7;border-top-color:#fecaca;padding:14px 20px 18px;">
+      <button onclick="App.companyQrWarningClose()" style="margin:0;background:#b91c1c;color:#fff;padding:10px 18px;font-size:14px;font-weight:800;">Đã kiểm tra · Đóng cảnh báo</button>
     </div>
   </div>
 </div>
@@ -8594,6 +8635,7 @@ const App = (() => {
     if (!d.orderCode) { _draftViewStatus("⚠️ Đơn nháp chưa có mã đơn. Mở Import để cấp mã.", "error"); return; }
     const amountVnd = _calcDraftPaymentVnd(d);
     if (amountVnd <= 0) { _draftViewStatus("⚠️ Tổng thanh toán = 0, không tạo QR.", "error"); return; }
+    if (!companyQrWarningGuard(d.orderCode)) return;
     slShowLoading("🎨 Đang tạo QR...");
     try {
       const url = buildVietQRUrl(amountVnd, d.orderCode);
@@ -9672,6 +9714,35 @@ const App = (() => {
   // Proxy giữ tương thích code cũ dùng `stkConfig.xxx`
   let stkConfig = stkList[0];
   let currentOrderCode = "";
+  let companyQrWarningAcknowledgedCode = "";
+  let companyQrWarningPendingCode = "";
+
+  function isCompanyStkActive() {
+    const label = ComboLogic.norm(stkConfig && stkConfig.label || "");
+    return currentStkIdx === 1 || label.includes("cong ty");
+  }
+
+  // Trả false ở lần đầu để chặn thao tác. User phải đóng cảnh báo rồi bấm lại.
+  function companyQrWarningGuard(orderCode) {
+    if (!isCompanyStkActive()) return true;
+    const code = String(orderCode || currentOrderCode || "").trim().toUpperCase();
+    if (!code || companyQrWarningAcknowledgedCode === code) return true;
+    companyQrWarningPendingCode = code;
+    const codeEl = document.getElementById("companyQrWarningOrderCode");
+    const bankEl = document.getElementById("companyQrWarningBank");
+    if (codeEl) codeEl.textContent = code;
+    if (bankEl) bankEl.textContent = `${stkConfig.bankName || "STK Công ty"} · ${stkConfig.accountNo || ""}`;
+    document.getElementById("companyQrWarningOverlay").classList.add("open");
+    return false;
+  }
+
+  function companyQrWarningClose() {
+    if (companyQrWarningPendingCode) {
+      companyQrWarningAcknowledgedCode = companyQrWarningPendingCode;
+    }
+    companyQrWarningPendingCode = "";
+    document.getElementById("companyQrWarningOverlay").classList.remove("open");
+  }
 
   function setActiveStk(idx) {
     if (idx < 0 || idx >= stkList.length) return;
@@ -9735,6 +9806,8 @@ const App = (() => {
 
   function regenOrderCode() {
     currentOrderCode = genOrderCode();
+    companyQrWarningAcknowledgedCode = "";
+    companyQrWarningPendingCode = "";
     const el = document.getElementById("orderCode");
     if (el) el.value = currentOrderCode;
     // Re-render bill nếu đã hiển thị (để mã đơn mới phản ánh vào header)
@@ -9749,7 +9822,12 @@ const App = (() => {
   // Cập nhật state + input field + re-render bill để khớp.
   function setOrderCode(code) {
     if (!code) return;
-    currentOrderCode = String(code);
+    const nextCode = String(code);
+    if (nextCode !== currentOrderCode) {
+      companyQrWarningAcknowledgedCode = "";
+      companyQrWarningPendingCode = "";
+    }
+    currentOrderCode = nextCode;
     const el = document.getElementById("orderCode");
     if (el) el.value = currentOrderCode;
     const billEl = document.getElementById("billOutput");
@@ -10299,6 +10377,7 @@ const App = (() => {
   }
 
   async function qrDownload(which) {
+    if (which === "simple" && !companyQrWarningGuard(currentOrderCode)) return false;
     try {
       const blob = await qrCanvasOrImageToBlob(which);
       const url = URL.createObjectURL(blob);
@@ -10308,12 +10387,15 @@ const App = (() => {
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       qrShowStatus("✅ Đã tải ảnh.");
+      return true;
     } catch(e) {
       qrShowStatus("❌ Lỗi tải: " + e.message);
+      return false;
     }
   }
 
   async function qrCopyImage(which) {
+    if (which === "simple" && !companyQrWarningGuard(currentOrderCode)) return false;
     const ok = await copyImageToClipboardSafe(async () => {
       const blob = await qrCanvasOrImageToBlob(which);
       if (!blob) throw new Error("Tạo ảnh thất bại");
@@ -10324,10 +10406,12 @@ const App = (() => {
     } else {
       qrShowStatus("⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải về.");
     }
+    return ok;
   }
 
   // Tải ảnh + tự đóng cột tương ứng sau khi tải (v10.0)
   async function qrDownloadAndClose(which) {
+    if (which === "simple" && !companyQrWarningGuard(currentOrderCode)) return false;
     try {
       const blob = await qrCanvasOrImageToBlob(which);
       const url = URL.createObjectURL(blob);
@@ -10340,8 +10424,10 @@ const App = (() => {
       // Tự đóng cột tương ứng để gọn UI
       if (which === "full") qrCloseFull();
       else qrCloseSimple();
+      return true;
     } catch(e) {
       qrShowStatus("❌ Lỗi tải: " + e.message);
+      return false;
     }
   }
 
@@ -10350,6 +10436,7 @@ const App = (() => {
   async function qrCopyQuick() {
     const s = qrGetState();
     if (!s) return;
+    if (!companyQrWarningGuard(currentOrderCode)) return;
     slShowLoading("🎨 Đang tạo QR…");
     const produce = async () => {
       const img = await loadImage(s.qrUrl);
@@ -10491,12 +10578,14 @@ const App = (() => {
   }
 
   async function qrCustomDownload() {
+    const img = document.getElementById("qrCustomImg");
+    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
+    if (!currentOrderCode) regenOrderCode();
+    if (!companyQrWarningGuard(currentOrderCode)) return;
     const amount = qrCustomGetAmount();
     if (Number.isFinite(amount) && amount > 0 && amount < 10000) {
       if (!confirm(`⚠️ Số tiền chỉ ${amount.toLocaleString("vi-VN")} VND (< 10,000).\n\nCó phải bạn quên số 0 không?\n\nOK = vẫn tải QR  ·  Cancel = sửa lại.`)) return;
     }
-    const img = document.getElementById("qrCustomImg");
-    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
     try {
       const blob = await (await fetch(img.src)).blob();
       const url = URL.createObjectURL(blob);
@@ -10513,12 +10602,14 @@ const App = (() => {
   }
 
   async function qrCustomCopy() {
+    const img = document.getElementById("qrCustomImg");
+    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
+    if (!currentOrderCode) regenOrderCode();
+    if (!companyQrWarningGuard(currentOrderCode)) return;
     const amount = qrCustomGetAmount();
     if (Number.isFinite(amount) && amount > 0 && amount < 10000) {
       if (!confirm(`⚠️ Số tiền chỉ ${amount.toLocaleString("vi-VN")} VND (< 10,000).\n\nCó phải bạn quên số 0 không?\n\nOK = vẫn copy QR  ·  Cancel = sửa lại.`)) return;
     }
-    const img = document.getElementById("qrCustomImg");
-    if (!img.src) { qrShowStatus("⚠️ Chưa có QR."); return; }
     try {
       const ok = await copyImageToClipboardSafe(async () => {
         const blob = await (await fetch(img.src)).blob();
@@ -14020,6 +14111,7 @@ const App = (() => {
     qrCustomFormatAmount,
     qrCustomDownload,
     qrCustomCopy,
+    companyQrWarningClose,
     invoiceOpen: () => Invoice.open(),
     invoiceClose: () => Invoice.close(),
     invoiceRender: () => Invoice.render(),
