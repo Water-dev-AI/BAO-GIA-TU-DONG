@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.93 · 21/08/2026 · (GMT+7)
+ - Picker thêm checkbox `+Tổng` mặc định bật ngay sau ô lọc ngày. Khi lọc ngày,
+   bổ sung gói tổng data ở mốc gần nhất không nhỏ hơn ngày tìm; nhận diện bằng tên
+   có `GB` + ngày và không có `/day`, đồng thời vẫn áp dụng search chữ và lọc loại SIM.
+
  v10.9.92 · 17/08/2026 · (GMT+7)
  - Picker chọn gói thêm nút `Thêm giỏ mới` bên phải `Thêm vào giỏ`: xác nhận rồi xoá
    sạch giỏ cũ, khách/VAT, ship, giảm giá, mã đơn và trạng thái draft trước khi thêm gói đã chọn.
@@ -1327,6 +1332,15 @@
     flex-wrap: wrap;
   }
   .picker-header-controls input { max-width: 100%; }
+  .picker-total-search-toggle {
+    min-height: 34px; box-sizing: border-box; display: inline-flex;
+    align-items: center; gap: 6px; flex: 0 0 auto; padding: 6px 8px;
+    color: #344054; font-size: 12px; font-weight: 650;
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .picker-total-search-toggle input {
+    width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--blue);
+  }
   .picker-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .picker-footer {
     padding: 12px 18px; border-top: 1px solid var(--line);
@@ -1657,7 +1671,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.92
+    Version 10.9.93
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2039,6 +2053,10 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
           title="Lọc theo số ngày — nhập 1-5 số phân cách bằng dấu phẩy/khoảng trắng/dấu /. Vd: 5, 7, 10"
           style="padding:7px 12px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;width:170px;font-family:inherit;"
           oninput="App.pickerFilter()" />
+        <label class="picker-total-search-toggle" title="Kèm gói tổng data ở mốc ngày gần nhất, có GB trong tên và không có /day">
+          <input id="pickerTotalSearchChk" type="checkbox" checked onchange="App.pickerFilter()" />
+          <span>+Tổng</span>
+        </label>
         <button class="light" onclick="App.pickerSelectAll()" style="margin:0;">☑ Chọn tất cả</button>
         <button class="light" onclick="App.pickerDeselectAll()" style="margin:0;">☐ Bỏ chọn</button>
         <button class="light" onclick="App.pickerRefresh()" style="margin:0;" title="Tải lại từ Google Sheet (bỏ qua cache)">🔄</button>
@@ -5907,11 +5925,14 @@ const App = (() => {
     pickerChecked = new Set();
     pickerSearchKw = "";
     pickerDaysFilter = []; // v10.5: reset filter ngày
+    pickerTotalSearchEnabled = true;
     pickerActiveTab = 0;
     pickerTypeFilter = "ALL";
     document.getElementById("pickerSearch").value = "";
     const dfInp = document.getElementById("pickerDaysFilter");
     if (dfInp) dfInp.value = "";
+    const totalSearchChk = document.getElementById("pickerTotalSearchChk");
+    if (totalSearchChk) totalSearchChk.checked = true;
     const totalGoi = pickerTables.reduce((s, t) => s + t.items.length, 0);
     const cacheNote = cached && !forceRefresh ? " ⚡" : "";
     document.getElementById("pickerTitle").textContent = item.name + " — " + pickerTables.length + " bộ, " + totalGoi + " gói" + cacheNote;
@@ -6018,6 +6039,7 @@ const App = (() => {
   // v10.5: parse input ngày → array số.
   // Hỗ trợ split bằng `[,\s/]+`. Mỗi số 1-2 chữ số. Max 5 số.
   let pickerDaysFilter = []; // array số ngày để match (rỗng = không filter ngày)
+  let pickerTotalSearchEnabled = true;
   function pickerParseDaysInput(raw) {
     if (!raw) return [];
     const parts = String(raw).split(/[,\s/]+/).map(s => s.trim()).filter(Boolean);
@@ -6052,7 +6074,7 @@ const App = (() => {
     return false;
   }
 
-  function pickerItemMatches(item, kw) {
+  function pickerItemMatchesBase(item, kw) {
     const p = item.parsed;
     const text = (p.name + " " + p.type + " " + p.days + " " + p.price + " " + (p.note || "")).toLowerCase();
     if (kw && !text.includes(kw)) return false;
@@ -6061,9 +6083,44 @@ const App = (() => {
       if (pickerTypeFilter === "ESIM" && !typeNorm.includes("esim")) return false;
       if (pickerTypeFilter === "PHYSICAL" && !(typeNorm.includes("sim vat ly") || typeNorm === "sim")) return false;
     }
-    // v10.5: filter số ngày (AND với search)
-    if (pickerDaysFilter.length && !pickerMatchDays(item, pickerDaysFilter)) return false;
     return true;
+  }
+
+  // Gói tổng: ngày nằm trong tên gốc, tên có GB và tuyệt đối không có /day.
+  function pickerGetTotalPackageDay(item) {
+    const rawName = String(item && item.line || "").split("\t")[0].trim()
+      || String(item && item.parsed && item.parsed.name || "").trim();
+    if (!/GB(?=[^a-z]|$)/i.test(rawName) || /\/\s*day\b/i.test(rawName)) return null;
+    const dayMatch = rawName.match(/(?:^|[^\d])0*(\d{1,2})\s*(?:days?|d|ng[aà]y)(?=[^a-z\u00c0-\u1ef9]|$)/i);
+    if (!dayMatch) return null;
+    const day = parseInt(dayMatch[1], 10);
+    return Number.isFinite(day) && day > 0 ? day : null;
+  }
+
+  // Với mỗi ngày tìm, lấy đúng mốc gói tổng gần nhất >= ngày đó trong tab hiện tại.
+  function pickerBuildTotalDayTargets(items, kw) {
+    const targets = new Set();
+    if (!pickerTotalSearchEnabled || !pickerDaysFilter.length) return targets;
+    const available = [];
+    items.forEach(item => {
+      if (!pickerItemMatchesBase(item, kw)) return;
+      const day = pickerGetTotalPackageDay(item);
+      if (day !== null && !available.includes(day)) available.push(day);
+    });
+    available.sort((a, b) => a - b);
+    pickerDaysFilter.forEach(wanted => {
+      const nearest = available.find(day => day >= wanted);
+      if (nearest !== undefined) targets.add(nearest);
+    });
+    return targets;
+  }
+
+  function pickerItemMatches(item, kw, totalDayTargets) {
+    if (!pickerItemMatchesBase(item, kw)) return false;
+    if (!pickerDaysFilter.length) return true;
+    if (pickerMatchDays(item, pickerDaysFilter)) return true;
+    const totalDay = pickerGetTotalPackageDay(item);
+    return !!(totalDayTargets && totalDayTargets.has(totalDay));
   }
 
   function pickerRenderFilterButtons() {
@@ -6090,9 +6147,10 @@ const App = (() => {
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) return;
     const items = tbl.items;
+    const totalDayTargets = pickerBuildTotalDayTargets(items, kw);
     let shown = 0;
     items.forEach((item, idx) => {
-      if (!pickerItemMatches(item, kw)) return;
+      if (!pickerItemMatches(item, kw, totalDayTargets)) return;
       shown++;
       const p = item.parsed;
       const key = pickerActiveTab + "_" + idx;
@@ -6181,6 +6239,8 @@ const App = (() => {
     pickerSearchKw = document.getElementById("pickerSearch").value;
     const daysInp = document.getElementById("pickerDaysFilter");
     pickerDaysFilter = pickerParseDaysInput(daysInp ? daysInp.value : "");
+    const totalChk = document.getElementById("pickerTotalSearchChk");
+    pickerTotalSearchEnabled = !totalChk || totalChk.checked;
     pickerRender();
   }
 
@@ -6188,9 +6248,10 @@ const App = (() => {
     const kw = pickerSearchKw.toLowerCase();
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) return;
+    const totalDayTargets = pickerBuildTotalDayTargets(tbl.items, kw);
     // Chỉ chọn những item match filter hiện tại (search + type)
     tbl.items.forEach((item, idx) => {
-      if (pickerItemMatches(item, kw)) {
+      if (pickerItemMatches(item, kw, totalDayTargets)) {
         pickerChecked.add(pickerActiveTab + "_" + idx);
       }
     });
@@ -6262,7 +6323,8 @@ const App = (() => {
     } else {
       // Chưa tick → lấy toàn bộ items đang match filter ở tab hiện tại
       const kw = (pickerSearchKw || "").toLowerCase();
-      rows = tbl.items.filter(item => pickerItemMatches(item, kw));
+      const totalDayTargets = pickerBuildTotalDayTargets(tbl.items, kw);
+      rows = tbl.items.filter(item => pickerItemMatches(item, kw, totalDayTargets));
     }
     if (!rows.length) {
       document.getElementById("slStatus").textContent = "⚠️ Không có gói nào để copy.";
