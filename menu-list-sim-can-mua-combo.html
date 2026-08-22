@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.97 · 22/08/2026 · (GMT+7)
+ - Rút dấu phân cách bill về `-------------`, không kéo dài theo dòng FullVAT.
+ - `Duy trì SIM` cho nhập số lượng; giá là đơn giá, lưu/parse ngược và nhập sổ
+   giữ đúng SL trong khi vẫn không tăng số SIM giao và không tính vào VAT.
+
  v10.9.96 · 22/08/2026 · (GMT+7)
  - Dòng `Duy trì SIM` không chịu VAT và không nhận phân bổ giảm giá/phụ thu VAT.
    FullVAT loại giá duy trì, bill ghi thêm `không bao gồm duy trì SIM`.
@@ -1713,7 +1718,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.96
+    Version 10.9.97
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -3204,10 +3209,10 @@ const ComboLogic = (() => {
       }
     }
 
-    const sepLen = Math.max(6, ...summaryLines.map(x => x.length));
-    outLines.push("-".repeat(sepLen));
+    const summarySeparator = "-------------";
+    outLines.push(summarySeparator);
     outLines.push(...summaryLines);
-    outLinesShort.push("-".repeat(sepLen));
+    outLinesShort.push(summarySeparator);
     outLinesShort.push(...summaryLines);
 
     if (errors.length) {
@@ -3338,7 +3343,10 @@ const App = (() => {
         hasMaintenance = true;
         item.maintenance = true;
         item.line = maintenanceLine(maintenancePriceK(item));
-        item.qty = "1";
+        const qtyParsed = ComboLogic.parseQtyExpression(item.qty);
+        item.qty = qtyParsed.valid && qtyParsed.recharge === 0 && qtyParsed.regular > 0
+          ? String(qtyParsed.regular)
+          : "1";
         item.note = item.note || "";
       }
       out.push(item);
@@ -3529,13 +3537,17 @@ const App = (() => {
     items.forEach(item => {
       if (isMaintenanceItem(item)) {
         const priceK = maintenancePriceK(item);
+        const parsedQty = ComboLogic.parseQtyExpression(item.qty);
+        const qty = parsedQty.valid && parsedQty.recharge === 0 && parsedQty.regular > 0
+          ? String(parsedQty.regular)
+          : "1";
         const foundMaintenance = cart.find(isMaintenanceItem);
         if (foundMaintenance) {
           foundMaintenance.line = maintenanceLine(priceK);
-          foundMaintenance.qty = "1";
+          foundMaintenance.qty = qty;
           foundMaintenance.maintenance = true;
         } else {
-          cart.push({ line: maintenanceLine(priceK), qty: "1", note: item.note || "", maintenance: true });
+          cart.push({ line: maintenanceLine(priceK), qty, note: item.note || "", maintenance: true });
         }
         added += 1;
         return;
@@ -4425,7 +4437,6 @@ const App = (() => {
       const existing = cart.find(isMaintenanceItem);
       if (existing) {
         existing.line = maintenanceLine(priceK);
-        existing.qty = "1";
         existing.maintenance = true;
       } else {
         cart.push({ line: maintenanceLine(priceK), qty: "1", note: "", maintenance: true });
@@ -4445,7 +4456,6 @@ const App = (() => {
     const item = cart.find(isMaintenanceItem);
     if (!item) return;
     item.line = maintenanceLine(priceK);
-    item.qty = "1";
     item.maintenance = true;
     saveCart();
     render();
@@ -4595,16 +4605,16 @@ const App = (() => {
       qty.value = item.qty ?? 1;
       qty.placeholder = "1";
       qty.title = isMaintenance
-        ? "Dòng Duy trì SIM luôn có số lượng 1"
+        ? "Nhập số lượng Duy trì SIM (số nguyên từ 1)"
         : "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
-      if (isMaintenance) {
-        qty.readOnly = true;
-        qty.style.background = "#f3f4f6";
-        qty.style.color = "#6b7280";
-      }
       const validateQty = () => {
         if (isMaintenance) {
-          qty.classList.remove("invalid");
+          const parsed = ComboLogic.parseQtyExpression(qty.value);
+          const invalid = !parsed.valid || parsed.recharge > 0 || parsed.regular < 1;
+          qty.classList.toggle("invalid", invalid);
+          qty.title = invalid
+            ? "❌ Duy trì SIM chỉ nhận số lượng nguyên từ 1."
+            : "Số lượng Duy trì SIM; không cộng vào SIM cần giao/Tổng SL.";
           return;
         }
         const parsed = ComboLogic.parseQtyExpression(qty.value);
@@ -4619,7 +4629,6 @@ const App = (() => {
         else qty.title = "Cú pháp: 2 | N3 | 2+N3 | N2+3 (max 6 ký tự)";
       };
       qty.oninput = () => {
-        if (isMaintenance) return;
         cart[idx].qty = qty.value;
         saveCart();
         validateQty();
@@ -11851,16 +11860,20 @@ const App = (() => {
     for (const cartItem of cart) {
       if (isMaintenanceItem(cartItem)) {
         const unitK = maintenancePriceK(cartItem);
+        const qtyParsed = ComboLogic.parseQtyExpression(cartItem.qty);
+        const qty = qtyParsed.valid && qtyParsed.recharge === 0 && qtyParsed.regular > 0
+          ? qtyParsed.regular
+          : 1;
         items.push({
           country: "Bangladesh",
           packageRaw: "Bangladesh 1 ngày 500MB/ngày",
           type: "NẠP GÓI",
           days: "1 ngày",
-          qty: 1,
+          qty,
           isRecharge: true,
           maintenance: true,
           unitPriceK: unitK,
-          amountK: unitK,
+          amountK: unitK * qty,
           rowNote: "",
           productNote: "",
         });
