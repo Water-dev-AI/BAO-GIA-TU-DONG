@@ -78,6 +78,18 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.96 · 22/08/2026 · (GMT+7)
+ - Dòng `Duy trì SIM` không chịu VAT và không nhận phân bổ giảm giá/phụ thu VAT.
+   FullVAT loại giá duy trì, bill ghi thêm `không bao gồm duy trì SIM`.
+ - Apps Script chỉ merge/tick/điền thông tin VAT trên các hàng không phải duy trì;
+   hàng Bangladesh `Nạp duy trì trước` đứng ngoài toàn bộ vùng VAT.
+
+ v10.9.95 · 22/08/2026 · (GMT+7)
+ - Thêm tuỳ chọn `Duy trì SIM` giá mặc định 15k: cộng vào bill nhưng không tăng số SIM,
+   lưu/khôi phục cùng giỏ, đơn nháp local/online, link share và parse ngược từ bill text.
+ - Payload nhập sổ đánh dấu riêng để ghi Bangladesh · NẠP GÓI · 1 ngày · 500MB/ngày,
+   đồng thời điền MÃ ORDER ID của dòng là `Nạp duy trì trước`.
+
  v10.9.94 · 21/08/2026 · (GMT+7)
  - Copy/Tải QR thanh toán bằng STK Công ty phải đóng cảnh báo đỏ rồi thao tác lại.
    Cảnh báo chỉ hiện một lần cho cùng mã đơn, tự yêu cầu lại khi đổi mã; áp dụng
@@ -1070,6 +1082,12 @@
   .row-action-bar .mini-label {
     font-size: 10.5px; color: var(--muted); margin-right: -2px; font-weight: 600;
   }
+  .maintenance-toggle {
+    display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px;
+    border: 1px solid #f6c453; border-radius: 6px; background: #fffbeb;
+    color: #92400e; font-size: 11px; font-weight: 700; cursor: pointer; user-select: none;
+  }
+  .maintenance-toggle input { margin: 0; cursor: pointer; }
   .row-action-bar > .spacer { flex: 1; }
 
   /* Notes phân bổ inline expand (toggle) */
@@ -1695,7 +1713,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.94
+    Version 10.9.96
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -1865,6 +1883,13 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
         <input id="manualDiscK" class="mini" type="number" min="0" value="" placeholder="—" oninput="App.onManualDiscChange('k')" />
         <span class="mini-label">💸 Giảm (%, ≤15)</span>
         <input id="manualDiscPct" class="mini" type="number" min="0" max="15" step="0.1" value="" placeholder="—" oninput="App.onManualDiscChange('pct')" />
+        <label class="maintenance-toggle" title="Thêm một dòng Duy trì SIM vào bill; không tính vào số SIM cần giao">
+          <input id="maintenanceToggle" type="checkbox" onchange="App.toggleMaintenance(this.checked)" />
+          <span>Duy trì SIM</span>
+        </label>
+        <span class="mini-label">Giá</span>
+        <input id="maintenancePriceK" class="mini" type="number" min="1" step="1" value="15" oninput="App.updateMaintenancePrice()" onblur="App.normalizeMaintenancePrice()" style="width:58px;" />
+        <span class="mini-label">k</span>
         <span class="spacer"></span>
         <button class="blue" onclick="App.calcAndCopyBill(event)" style="margin:0;padding:8px 12px;font-size:12.5px;">📋 Copy Bill khách</button>
         <button class="blue" onclick="App.calcAndCopyBillShort(event)" style="margin:0;padding:8px 12px;font-size:12.5px;background:#0ea5e9;" title="Bill không kèm note sản phẩm — gọn cho chat mobile">📱 Copy Bill (gọn)</button>
@@ -2678,6 +2703,11 @@ const ComboLogic = (() => {
     return stripAccents(s).toLowerCase().trim();
   }
 
+  function isMaintenanceLine(line) {
+    const withoutPrice = String(line || "").replace(priceRe, "").replace(/\s+/g, " ").trim();
+    return norm(withoutPrice) === "duy tri sim";
+  }
+
   function parseK(s) {
     const n = parseInt(String(s || "").replace(/[^\d]/g, ""), 10);
     return Number.isFinite(n) ? n : 0;
@@ -2895,22 +2925,30 @@ const ComboLogic = (() => {
   }
 
   function largestRemainderShares(items, discountK) {
-    const total = items.reduce((sum, item) => sum + item.amountK, 0);
+    // Duy trì SIM là khoản ngoài VAT, không nhận phân bổ giảm giá/phụ thu VAT.
+    // Nếu giỏ chỉ có duy trì SIM thì fallback về toàn bộ items để tổng tiền vẫn khép kín.
+    const eligible = items
+      .map((item, idx) => ({ item, idx }))
+      .filter(row => row.item.maintenance !== true);
+    const source = eligible.length ? eligible : items.map((item, idx) => ({ item, idx }));
+    const total = source.reduce((sum, row) => sum + row.item.amountK, 0);
     if (!discountK || total <= 0) return items.map(() => 0);
     // v10.8.27: Hỗ trợ discountK âm (phụ thu khi shipVat ON + ship > discount gốc).
     //   Phân bổ |discountK| theo largest remainder, sau đó flip sign nếu input âm.
     const sign = discountK < 0 ? -1 : 1;
     const absK = Math.abs(discountK);
 
-    const rows = items.map((item, idx) => {
+    const rows = source.map(row => {
+      const item = row.item;
       const exact = item.amountK * absK / total;
       const floor = Math.floor(exact);
-      return { idx, floor, frac: exact - floor, amountK: item.amountK };
+      return { idx: row.idx, floor, frac: exact - floor, amountK: item.amountK };
     });
 
     let used = rows.reduce((sum, row) => sum + row.floor, 0);
     let remain = absK - used;
-    const shares = rows.map(row => row.floor);
+    const shares = items.map(() => 0);
+    rows.forEach(row => { shares[row.idx] = row.floor; });
 
     rows
       .slice()
@@ -3004,6 +3042,7 @@ const ComboLogic = (() => {
       }
 
       const unitK = parseK(m[1]);
+      const isMaintenance = item.maintenance === true || isMaintenanceLine(line);
       const isLegacyRechargeName = isRechargeLine(line);
       const isPhysical = isPhysicalLine(line);
       const isEsim = isEsimLine(line);
@@ -3034,13 +3073,15 @@ const ComboLogic = (() => {
       if (isEsim || isPhysical) totalQtyForShip += regular;
       if (isPhysical) regularPhysicalQty += regular;
 
-      const parts = splitPackageParts(line);
+      const parts = isMaintenance
+        ? { packageName: "Duy trì SIM", productType: "" }
+        : splitPackageParts(line);
       const { lineCore, productNote } = splitLineAndProductNote(line);
       const productNoteFlat = formatProductNoteSingleLine(productNote);
 
       // v10.9.0: Tên đầy đủ cho Hóa đơn lẻ — GIỮ kbps, ghép các cột (trừ cột loại) bằng ", ".
       // lineCore dạng: "tên<TAB>loại<TAB>ngày<TAB>giá" hoặc inline "tên ... giá".
-      const invNameBase = buildInvoiceName(lineCore, parts.productType);
+      const invNameBase = isMaintenance ? "Duy trì SIM" : buildInvoiceName(lineCore, parts.productType);
 
       // Dòng SIM thường
       if (regular > 0) {
@@ -3057,6 +3098,7 @@ const ComboLogic = (() => {
           unitK: unitK,
           isRecharge: false,
           isPhysical: isPhysical,
+          maintenance: isMaintenance,
           invName: invNameBase,
           note: rowNote,
         });
@@ -3108,15 +3150,19 @@ const ComboLogic = (() => {
     const remainK = totalK - discount.amount;
     // v10.8.27: Tổng thanh toán = remain + ship + (ship*50% nếu shipVat)
     const finalPayK = remainK + shipFeeK + shipVatExtraK;
-    // FullVAT giá trị xuất hoá đơn:
-    //   - shipVat OFF: FullVAT = remainK (không gồm ship)
-    //   - shipVat ON:  FullVAT = finalPayK = remainK + ship + ship*0.5
-    const fullVatK = shipVat ? finalPayK : remainK;
     // Discount hiệu dụng để PHÂN BỔ vào sheet (cột tiền từng gói khi tick shipVat phải gộp ship):
     //   - shipVat OFF: effectiveDiscK = discount.amount
     //   - shipVat ON:  effectiveDiscK = discount.amount - shipFeeK - shipVatExtraK (có thể âm = phụ thu)
     // Verify: totalK - effectiveDiscK = totalK - D + S + V = FullVAT khi tick ✓
     const effectiveDiscK = shipVat ? (discount.amount - shipFeeK - shipVatExtraK) : discount.amount;
+    const effectiveDiscShares = largestRemainderShares(parsedItems, effectiveDiscK);
+    const maintenanceTotalK = parsedItems.reduce((sum, item) => sum + (item.maintenance ? item.amountK : 0), 0);
+    // FullVAT chỉ là tổng net của các dòng chịu VAT. Duy trì SIM luôn đứng ngoài,
+    // còn ship/phụ thu VAT đã nằm trong effectiveDiscK khi shipVat bật.
+    const fullVatK = Math.max(0, parsedItems.reduce((sum, item, idx) => {
+      if (item.maintenance) return sum;
+      return sum + item.amountK - (effectiveDiscShares[idx] || 0);
+    }, 0));
 
     // shipText
     //   - shipFeeK > 0: "+ Xk (phí ship)" [+ "+ Xk*50%" nếu shipVat]
@@ -3149,11 +3195,12 @@ const ComboLogic = (() => {
     // v10.9.22: Dòng note FullVAT ship CHỈ hiện khi đơn có SIM VẬT LÝ (khôi phục rule cũ).
     // Không có SIM vật lý → không liên quan ship → bỏ note.
     const hasVatInfo = vatInfo && (vatInfo.mst || vatInfo.name || vatInfo.addr || vatInfo.email);
-    if (hasVatInfo && regularPhysicalQty > 0) {
+    if (hasVatInfo && (regularPhysicalQty > 0 || maintenanceTotalK > 0)) {
+      const maintenanceVatText = maintenanceTotalK > 0 ? ", không bao gồm duy trì SIM" : "";
       if (shipVat && shipFeeK > 0) {
-        summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", đã bao gồm phí ship)");
+        summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", đã bao gồm phí ship" + maintenanceVatText + ")");
       } else {
-        summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", không bao gồm phí ship)");
+        summaryLines.push("(FullVAT là: " + fmtK(fullVatK) + ", không bao gồm phí ship" + maintenanceVatText + ")");
       }
     }
 
@@ -3191,7 +3238,7 @@ const ComboLogic = (() => {
     // v10.8.27: Phân bổ giảm dùng effectiveDiscK (có thể âm khi shipVat ON + ship > discount)
     const notes = buildDiscountNotes(parsedItems, effectiveDiscK);
     // v10.9.0: shares phân bổ giảm cho từng parsedItem (dùng cho Hóa đơn lẻ).
-    const discShares = largestRemainderShares(parsedItems, effectiveDiscK);
+    const discShares = effectiveDiscShares;
     const full = notes && !notes.startsWith("Không có")
       ? bill + "\n\nNotes phân bố giảm giá:\n" + notes
       : bill;
@@ -3213,6 +3260,7 @@ const ComboLogic = (() => {
         shipFeeK,
         shipVat,
         shipVatExtraK,
+        maintenanceTotalK,
         fullVatK,
         finalPayK,
         totalQty: totalQtyForShip + rechargeQty,
@@ -3227,7 +3275,8 @@ const ComboLogic = (() => {
   function buildDiscountNotes(items, discountK) {
     if (!discountK || discountK === 0) return "Không có giảm giá để phân bố.";
     const shares = largestRemainderShares(items, discountK);
-    return items.map((item, idx) => {
+    const lines = items.map((item, idx) => {
+      if (item.maintenance) return "";
       const typeLabel = item.isRecharge ? "NẠP GÓI" : item.productType;
       // v10.8.27: share âm = phụ thu (do shipVat). Hiển thị "+Xk" thay vì "-(-Xk)".
       const share = shares[idx];
@@ -3235,12 +3284,14 @@ const ComboLogic = (() => {
       let line = `${item.packageName} ${item.qty} ${typeLabel} (${shareStr})`;
       if (item.note) line += " - " + item.note;
       return line;
-    }).join("\n");
+    }).filter(Boolean);
+    return lines.length ? lines.join("\n") : "Không có giảm giá để phân bố.";
   }
 
   return {
     priceRe,
     norm,
+    isMaintenanceLine,
     parseK,
     fmtK,
     shouldSkipLine,
@@ -3259,6 +3310,42 @@ const ComboLogic = (() => {
 const App = (() => {
   const STORAGE_KEY = "combo_bill_esim_sim_cart_v1";
   const INVOICE_DRAFT_KEY = "simglobe_invoice_edit_draft_v1";
+  const MAINTENANCE_DEFAULT_PRICE_K = 15;
+
+  function isMaintenanceItem(item) {
+    return !!(item && (item.maintenance === true || ComboLogic.isMaintenanceLine(item.line)));
+  }
+
+  function maintenancePriceK(item) {
+    const m = String(item && item.line || "").match(ComboLogic.priceRe);
+    const parsed = m ? ComboLogic.parseK(m[1]) : 0;
+    return parsed > 0 ? parsed : MAINTENANCE_DEFAULT_PRICE_K;
+  }
+
+  function maintenanceLine(priceK) {
+    const k = Math.max(1, parseInt(priceK, 10) || MAINTENANCE_DEFAULT_PRICE_K);
+    return `Duy trì SIM\t\t\t${ComboLogic.fmtK(k)}`;
+  }
+
+  function normalizeCartItems(items) {
+    if (!Array.isArray(items)) return [];
+    let hasMaintenance = false;
+    return items.reduce((out, raw) => {
+      if (!raw || typeof raw !== "object") return out;
+      const item = { ...raw };
+      if (isMaintenanceItem(item)) {
+        if (hasMaintenance) return out;
+        hasMaintenance = true;
+        item.maintenance = true;
+        item.line = maintenanceLine(maintenancePriceK(item));
+        item.qty = "1";
+        item.note = item.note || "";
+      }
+      out.push(item);
+      return out;
+    }, []);
+  }
+
   let cart = loadCart();
 
   // Bản chỉnh hóa đơn gắn theo danh sách gói; qty/note thay đổi vẫn là cùng đơn.
@@ -3377,7 +3464,7 @@ const App = (() => {
   scheduleAuxAssetRefresh();
 
   function loadCart() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    try { return normalizeCartItems(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]")); }
     catch { return []; }
   }
 
@@ -3440,6 +3527,19 @@ const App = (() => {
   function addItems(items) {
     let added = 0;
     items.forEach(item => {
+      if (isMaintenanceItem(item)) {
+        const priceK = maintenancePriceK(item);
+        const foundMaintenance = cart.find(isMaintenanceItem);
+        if (foundMaintenance) {
+          foundMaintenance.line = maintenanceLine(priceK);
+          foundMaintenance.qty = "1";
+          foundMaintenance.maintenance = true;
+        } else {
+          cart.push({ line: maintenanceLine(priceK), qty: "1", note: item.note || "", maintenance: true });
+        }
+        added += 1;
+        return;
+      }
       const found = cart.find(x => x.line === item.line);
       if (found) {
         // Merge regular + recharge của cả 2 bên để không mất N syntax
@@ -4310,7 +4410,59 @@ const App = (() => {
     updateQuickTotals();
   }
 
+  function syncMaintenanceControlsFromCart() {
+    const item = cart.find(isMaintenanceItem);
+    const toggle = document.getElementById("maintenanceToggle");
+    const price = document.getElementById("maintenancePriceK");
+    if (toggle) toggle.checked = !!item;
+    if (price) price.value = String(item ? maintenancePriceK(item) : (parseInt(price.value, 10) || MAINTENANCE_DEFAULT_PRICE_K));
+  }
+
+  function toggleMaintenance(checked) {
+    if (checked) {
+      const priceEl = document.getElementById("maintenancePriceK");
+      const priceK = Math.max(1, parseInt(priceEl && priceEl.value, 10) || MAINTENANCE_DEFAULT_PRICE_K);
+      const existing = cart.find(isMaintenanceItem);
+      if (existing) {
+        existing.line = maintenanceLine(priceK);
+        existing.qty = "1";
+        existing.maintenance = true;
+      } else {
+        cart.push({ line: maintenanceLine(priceK), qty: "1", note: "", maintenance: true });
+      }
+    } else {
+      cart = cart.filter(item => !isMaintenanceItem(item));
+    }
+    _maybeReGroupCart();
+    saveCart();
+    render();
+  }
+
+  function updateMaintenancePrice() {
+    const priceEl = document.getElementById("maintenancePriceK");
+    const priceK = parseInt(priceEl && priceEl.value, 10);
+    if (!Number.isFinite(priceK) || priceK <= 0) return;
+    const item = cart.find(isMaintenanceItem);
+    if (!item) return;
+    item.line = maintenanceLine(priceK);
+    item.qty = "1";
+    item.maintenance = true;
+    saveCart();
+    render();
+  }
+
+  function normalizeMaintenancePrice() {
+    const priceEl = document.getElementById("maintenancePriceK");
+    if (!priceEl) return;
+    const priceK = Math.max(1, parseInt(priceEl.value, 10) || MAINTENANCE_DEFAULT_PRICE_K);
+    priceEl.value = String(priceK);
+    const item = cart.find(isMaintenanceItem);
+    if (item && maintenancePriceK(item) !== priceK) updateMaintenancePrice();
+  }
+
   function render() {
+    cart = normalizeCartItems(cart);
+    syncMaintenanceControlsFromCart();
     // v10.6: Sync UI toggle gộp phân loại (mỗi lần render đảm bảo trạng thái đúng)
     const tgInp = document.getElementById("groupToggleInput");
     const tgLbl = document.getElementById("groupToggleLabel");
@@ -4322,6 +4474,7 @@ const App = (() => {
     const tbody = $("tbody");
     tbody.innerHTML = "";
     cart.forEach((item, idx) => {
+      const isMaintenance = isMaintenanceItem(item);
       const rowNum = idx + 2; // bắt đầu từ 2 như google sheet
       const p = parseLineForDisplay(item.line);
       const tr = document.createElement("tr");
@@ -4414,7 +4567,7 @@ const App = (() => {
       tdPrice.textContent = p.price;
 
       // v10.9.9: Cảnh báo giá lệch — so với giá đúng từ sheet đã tải (PriceIndex).
-      const _sheetPriceK = PriceIndex.lookup(p.name, p.type, p.days);
+      const _sheetPriceK = isMaintenance ? null : PriceIndex.lookup(p.name, p.type, p.days);
       const _curPriceK = ComboLogic.parseK(p.price);
       if (_sheetPriceK !== null && Number.isFinite(_curPriceK) && _sheetPriceK !== _curPriceK) {
         tdPrice.classList.add("price-mismatch"); // nhấp nháy (CSS)
@@ -4441,8 +4594,19 @@ const App = (() => {
       qty.maxLength = 6; // SL tối đa 6 ký tự (đủ cho "2+N3", "12+N5", "99+N99")
       qty.value = item.qty ?? 1;
       qty.placeholder = "1";
-      qty.title = "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
+      qty.title = isMaintenance
+        ? "Dòng Duy trì SIM luôn có số lượng 1"
+        : "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
+      if (isMaintenance) {
+        qty.readOnly = true;
+        qty.style.background = "#f3f4f6";
+        qty.style.color = "#6b7280";
+      }
       const validateQty = () => {
+        if (isMaintenance) {
+          qty.classList.remove("invalid");
+          return;
+        }
         const parsed = ComboLogic.parseQtyExpression(qty.value);
         const typeNorm = (p.type || "").toLowerCase();
         const isPhysical = typeNorm.includes("sim vat ly") || typeNorm.includes("sim vật lý");
@@ -4454,7 +4618,13 @@ const App = (() => {
         if (nOnEsim) qty.title = "❌ Nạp gói (N) chỉ áp dụng cho SIM VẬT LÝ.";
         else qty.title = "Cú pháp: 2 | N3 | 2+N3 | N2+3 (max 6 ký tự)";
       };
-      qty.oninput = () => { cart[idx].qty = qty.value; saveCart(); validateQty(); updateQuickTotals(); };
+      qty.oninput = () => {
+        if (isMaintenance) return;
+        cart[idx].qty = qty.value;
+        saveCart();
+        validateQty();
+        updateQuickTotals();
+      };
       validateQty();
       tdQty.appendChild(qty);
 
@@ -4538,6 +4708,10 @@ const App = (() => {
     if (mp) mp.value = "";
     const sv = document.getElementById("shipVatToggle");
     if (sv) sv.checked = false;
+    const mt = document.getElementById("maintenanceToggle");
+    if (mt) mt.checked = false;
+    const mkp = document.getElementById("maintenancePriceK");
+    if (mkp) mkp.value = String(MAINTENANCE_DEFAULT_PRICE_K);
   }
   // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat} vào DOM
   function applyCartExtras(extras) {
@@ -7739,8 +7913,8 @@ const App = (() => {
         const raw = localStorage.getItem(DRAFT_KEY);
         if (!raw) return [];
         const obj = JSON.parse(raw);
-        if (Array.isArray(obj)) return obj;       // legacy format (array thẳng)
-        if (obj && Array.isArray(obj.list)) return obj.list; // v2 format ({list, ts})
+        if (Array.isArray(obj)) return obj.map(d => ({ ...d, cart: normalizeCartItems(d.cart) }));
+        if (obj && Array.isArray(obj.list)) return obj.list.map(d => ({ ...d, cart: normalizeCartItems(d.cart) }));
         return [];
       } catch { return []; }
     }
@@ -7805,7 +7979,7 @@ const App = (() => {
       tag: String(src.tag || "ZALO"),
       customTag: String(src.customTag || ""),
       orderCode: String(src.orderCode || ""),
-      cart: Array.isArray(src.cart) ? src.cart : [],
+      cart: normalizeCartItems(src.cart),
       vat: src.vat || null,
       codes,
       extras: src.extras || null,
@@ -8725,7 +8899,7 @@ const App = (() => {
     try {
       const savedCart = cart;
       const savedOrderCode = currentOrderCode;
-      cart = JSON.parse(JSON.stringify(d.cart));
+      cart = normalizeCartItems(JSON.parse(JSON.stringify(d.cart)));
       if (d.orderCode) currentOrderCode = d.orderCode;
       const items = buildSheetPayloadItems(d.extras || {});
       cart = savedCart;
@@ -8756,6 +8930,7 @@ const App = (() => {
           p: it.packageRaw, t: it.type, d: it.days, q: it.qty,
           u: it.unitPriceK, g: it.discountAllocK,
           r: it.isRecharge ? 1 : 0,
+          m: it.maintenance ? 1 : 0,
           n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
         })),
       };
@@ -9210,7 +9385,7 @@ const App = (() => {
     if (!d) return;
     if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng ${_draftScopeName(scope)} "${d.name}"?`)) return;
     _loadingDraft = true; // chặn auto-regen mã đơn trong liveRecalc
-    cart = JSON.parse(JSON.stringify(d.cart || []));
+    cart = normalizeCartItems(JSON.parse(JSON.stringify(d.cart || [])));
     saveCart();
     // v10.7: Restore toggle groupByType từ draft (nếu draft có lưu — không thì giữ nguyên)
     if (typeof d.groupByType === "boolean") {
@@ -9343,6 +9518,7 @@ const App = (() => {
       c: (cartData || []).map(it => {
         const o = { l: it.line, q: it.qty };
         if (it.note) o.nt = it.note;
+        if (isMaintenanceItem(it)) o.m = 1;
         return o;
       })
     };
@@ -9420,11 +9596,12 @@ const App = (() => {
         extras,
         imported: data.im === 1,
         groupByType: data.gbt === 1 ? true : (data.gbt === 0 ? false : null),
-        cart: (data.c || []).map(x => ({
+        cart: normalizeCartItems((data.c || []).map(x => ({
           line: String(x.l || ""),
           qty: x.q == null ? "1" : String(x.q),
-          note: String(x.nt || "")
-        }))
+          note: String(x.nt || ""),
+          maintenance: x.m === 1,
+        })))
       };
     } catch (e) {
       console.warn("parseSharePayload failed:", e);
@@ -9517,7 +9694,7 @@ const App = (() => {
     draftImportClose();
 
     _loadingDraft = true; // chặn auto-regen mã đơn (sẽ dùng mã của link)
-    cart = p.cart;
+    cart = normalizeCartItems(p.cart);
     saveCart();
     // v10.8.35: restore groupByType + extras BEFORE render
     if (typeof p.groupByType === "boolean") _setGroupToggle(p.groupByType);
@@ -11592,6 +11769,7 @@ const App = (() => {
           p: it.packageRaw, t: it.type, d: it.days, q: it.qty,
           u: it.unitPriceK, g: it.discountAllocK,
           r: it.isRecharge ? 1 : 0,
+          m: it.maintenance ? 1 : 0,
           n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
         })),
       };
@@ -11671,6 +11849,23 @@ const App = (() => {
   function buildSheetPayloadItems(extrasOverride) {
     const items = [];
     for (const cartItem of cart) {
+      if (isMaintenanceItem(cartItem)) {
+        const unitK = maintenancePriceK(cartItem);
+        items.push({
+          country: "Bangladesh",
+          packageRaw: "Bangladesh 1 ngày 500MB/ngày",
+          type: "NẠP GÓI",
+          days: "1 ngày",
+          qty: 1,
+          isRecharge: true,
+          maintenance: true,
+          unitPriceK: unitK,
+          amountK: unitK,
+          rowNote: "",
+          productNote: "",
+        });
+        continue;
+      }
       const line = String(cartItem.line || "");
       if (ComboLogic.shouldSkipLine(line)) continue;
       const parts = parseLineForDisplay(line);
@@ -11806,6 +12001,7 @@ const App = (() => {
         u: it.unitPriceK,
         g: it.discountAllocK,
         r: it.isRecharge ? 1 : 0,
+        m: it.maintenance ? 1 : 0,
         n: [it.rowNote, it.productNote].filter(Boolean).join(" | "),
       })),
     };
@@ -14067,6 +14263,9 @@ const App = (() => {
     slRestorePresets,
     updateShipFee,
     toggleShipVat,
+    toggleMaintenance,
+    updateMaintenancePrice,
+    normalizeMaintenancePrice,
     // v10.8.33: DateRangeCalc exports
     drcReset: () => DateRangeCalc.reset(),
     drcNavMonth: (side, delta) => DateRangeCalc.navMonth(side, delta),
