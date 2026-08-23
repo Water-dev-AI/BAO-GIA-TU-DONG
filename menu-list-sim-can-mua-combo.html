@@ -78,6 +78,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.98 · 23/08/2026 · (GMT+7)
+ - Giấy đề nghị thanh toán thêm checkbox `Sửa số tiền`: mặc định tắt và lấy FullVAT;
+   khi bật cho sửa chính xác từng đồng, đồng bộ cả số hiển thị và số tiền bằng chữ.
+ - Trạng thái sửa tiền được lưu trong extras của đơn nháp local/online và link share;
+   import lại đơn sẽ khôi phục, đơn đang chỉnh tự lưu khi rời ô tiền.
+ - Hóa đơn lẻ và Giấy đề nghị thanh toán thêm checkbox `Hiện dấu công ty`;
+   mặc định bật mỗi lần mở và có thể tắt để xuất ảnh không có con dấu.
+
  v10.9.97 · 22/08/2026 · (GMT+7)
  - Rút dấu phân cách bill về `-------------`, không kéo dài theo dòng FullVAT.
  - `Duy trì SIM` cho nhập số lượng; giá là đơn giá, lưu/parse ngược và nhập sổ
@@ -1718,7 +1726,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.97
+    Version 10.9.98
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2553,10 +2561,16 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         <span style="font-size:11.5px;color:var(--muted);">Các hàng này nằm cuối bảng và không tính tiền.</span>
       </div>
       <div id="invExtraNoteEditor" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-        <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
-        <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
-      </label>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="invCompanyStampToggle" checked onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Hiện dấu công ty</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
+        </label>
+      </div>
       <div style="background:white;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;">
         <canvas id="invoiceCanvas" style="max-width:100%;height:auto;display:block;margin:0 auto;"></canvas>
       </div>
@@ -2615,9 +2629,20 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
             <span>Tiền mặt</span>
           </label>
         </div>
-        <div style="font-size:13px;color:#374151;display:flex;align-items:center;">
-          <b>Số tiền:</b>&nbsp;<span id="payReqAmountPreview">0 vnđ</span>
+        <div style="font-size:13px;color:#374151;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <b>Số tiền:</b><span id="payReqAmountPreview">0 vnđ</span>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none;color:#1d4ed8;">
+            <input id="payReqAmountEditToggle" type="checkbox" onchange="App.payReqToggleAmountEdit(this.checked)" style="width:16px;height:16px;cursor:pointer;" />
+            <span>Sửa số tiền</span>
+          </label>
+          <input id="payReqAmountInput" type="number" min="1" step="1" disabled oninput="App.payReqRender()" onblur="App.payReqAmountBlur()" aria-label="Số tiền đề nghị thanh toán chỉnh tay"
+            style="width:150px;padding:7px 9px;border:1px solid #cfd5df;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;" />
         </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input id="payReqCompanyStampToggle" type="checkbox" checked onchange="App.payReqRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Hiện dấu công ty</span>
+        </label>
+        <div></div>
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên chủ TK</div>
           <input id="payReqAccountName" type="text" value="CÔNG TY TNHH SIMGLOBE OFFICIAL" oninput="App.payReqRender()"
@@ -4721,6 +4746,10 @@ const App = (() => {
     if (mt) mt.checked = false;
     const mkp = document.getElementById("maintenancePriceK");
     if (mkp) mkp.value = String(MAINTENANCE_DEFAULT_PRICE_K);
+    const pre = document.getElementById("payReqAmountEditToggle");
+    if (pre) pre.checked = false;
+    const pra = document.getElementById("payReqAmountInput");
+    if (pra) { pra.value = ""; pra.disabled = true; }
   }
   // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat} vào DOM
   function applyCartExtras(extras) {
@@ -4736,15 +4765,32 @@ const App = (() => {
     if (mp) mp.value = (manualPct > 0) ? String(manualPct) : "";
     const sv = document.getElementById("shipVatToggle");
     if (sv) sv.checked = extras.shipVat === true;
+    const payReqAmountDong = Math.max(0, parseInt(extras.payReqAmountDong, 10) || 0);
+    const payReqEdit = extras.payReqAmountEdit === true && payReqAmountDong > 0;
+    const pre = document.getElementById("payReqAmountEditToggle");
+    if (pre) pre.checked = payReqEdit;
+    const pra = document.getElementById("payReqAmountInput");
+    if (pra) {
+      pra.value = payReqEdit ? String(payReqAmountDong) : "";
+      pra.disabled = !payReqEdit;
+    }
   }
   // Đọc extras hiện tại từ DOM → cho save draft
   function readCartExtras() {
+    const payReqEditEl = document.getElementById("payReqAmountEditToggle");
+    const payReqAmountEl = document.getElementById("payReqAmountInput");
+    const payReqAmountEdit = !!(payReqEditEl && payReqEditEl.checked);
+    const payReqAmountDong = payReqAmountEdit
+      ? Math.max(0, parseInt(payReqAmountEl && payReqAmountEl.value, 10) || 0)
+      : 0;
     return {
       shipFeeK: getShipFeeK(),
       manualDiscK: getManualDiscountK(),
       manualDiscPct: getManualDiscountPct(),
       manualDiscOverride: hasManualDiscountOverride(),
       shipVat: getShipVat(),
+      payReqAmountEdit: payReqAmountEdit && payReqAmountDong > 0,
+      payReqAmountDong,
     };
   }
 
@@ -9552,7 +9598,9 @@ const App = (() => {
     if (opts.extras && typeof opts.extras === "object") {
       const ex = opts.extras;
       const manualOverride = ex.manualDiscOverride === true || ex.manualDiscK > 0 || ex.manualDiscPct > 0;
-      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true;
+      const payReqAmountDong = Math.max(0, parseInt(ex.payReqAmountDong, 10) || 0);
+      const payReqEdit = ex.payReqAmountEdit === true && payReqAmountDong > 0;
+      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit;
       if (hasExtras) {
         payload.ex = {};
         if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
@@ -9560,6 +9608,10 @@ const App = (() => {
         if (ex.manualDiscK > 0 || (manualOverride && !(ex.manualDiscPct > 0))) payload.ex.dk = ex.manualDiscK || 0;
         if (ex.manualDiscPct > 0) payload.ex.dp = ex.manualDiscPct;
         if (ex.shipVat === true) payload.ex.sv = 1;
+        if (payReqEdit) {
+          payload.ex.pe = 1;
+          payload.ex.pa = payReqAmountDong;
+        }
       }
     }
     if (opts.imported === true) payload.im = 1;
@@ -9588,6 +9640,8 @@ const App = (() => {
             manualDiscPct: parseFloat(data.ex.dp) || 0,
             manualDiscOverride: data.ex.mo === 1 || Object.prototype.hasOwnProperty.call(data.ex, "dk") || Object.prototype.hasOwnProperty.call(data.ex, "dp"),
             shipVat: data.ex.sv === 1,
+            payReqAmountEdit: data.ex.pe === 1 && (parseInt(data.ex.pa, 10) || 0) > 0,
+            payReqAmountDong: Math.max(0, parseInt(data.ex.pa, 10) || 0),
           }
         : null;
       return {
@@ -13473,6 +13527,8 @@ const App = (() => {
       // Uncheck dấu đã thanh toán mỗi lần mở (mặc định)
       const paidEl = document.getElementById("invStampPaid");
       if (paidEl) paidEl.checked = false;
+      const companyStampEl = document.getElementById("invCompanyStampToggle");
+      if (companyStampEl) companyStampEl.checked = true;
       // Ngày mặc định = hôm nay (chỉ set khi ô đang trống)
       const dateEl = document.getElementById("invDate");
       if (dateEl && !dateEl.value) {
@@ -13515,6 +13571,7 @@ const App = (() => {
       const custPhone = (document.getElementById("invCustPhone") || {}).value || "";
       const custAddr = (document.getElementById("invCustAddr") || {}).value || "";
       const showPaid = (document.getElementById("invStampPaid") || {}).checked;
+      const showCompanyStamp = !!((document.getElementById("invCompanyStampToggle") || {}).checked);
       // Ngày: từ input (yyyy-mm-dd) → "Ngày d tháng m năm yyyy"; fallback hôm nay
       let dateStr;
       const dv = (document.getElementById("invDate") || {}).value || "";
@@ -13522,7 +13579,7 @@ const App = (() => {
       if (dm) dateStr = `Ngày ${parseInt(dm[3], 10)} tháng ${parseInt(dm[2], 10)} năm ${dm[1]}`;
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
-      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, congK, { custName, custPhone, custAddr, showPaid, dateStr });
+      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, congK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, dateStr });
       if (statusEl) statusEl.textContent = `✅ ${rows.length} hàng hóa · ${extraNoteRows.length} ghi chú · Tổng thanh toán: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
     }
 
@@ -13615,7 +13672,7 @@ const App = (() => {
 
       // Con dấu công ty — TO (gấp đôi), lệch phải, CHỈ góc 1/4 dưới-phải của dấu đè lên text.
       // Phần lớn dấu nằm phía trên + bên trái khối chữ; chỉ góc dưới-phải chạm chữ.
-      if (stampCty) {
+      if (stampCty && opt.showCompanyStamp) {
         const sW = 176; // v10.9.65: đồng bộ size với dấu Giấy đề nghị thanh toán
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
@@ -13980,10 +14037,60 @@ const App = (() => {
       }
       return capFirst(parts.join(" ").replace(/\s+/g, " ").trim()) + " đồng chẵn";
     }
-    function getAmountDong() {
+    function getAutoAmountDong() {
       const r = ComboLogic.calc(cart, getCalcOpts());
       if (!r.ok) return 0;
       return Math.round((r.summary.fullVatK || 0) * 1000);
+    }
+    function isAmountEditEnabled() {
+      return !!((document.getElementById("payReqAmountEditToggle") || {}).checked);
+    }
+    function getAmountDong() {
+      if (isAmountEditEnabled()) {
+        const raw = (document.getElementById("payReqAmountInput") || {}).value;
+        const edited = Math.round(Number(raw));
+        return Number.isFinite(edited) && edited > 0 ? edited : 0;
+      }
+      return getAutoAmountDong();
+    }
+    async function persistAmountEdit() {
+      if (!draftEditingId) return false;
+      try {
+        await _syncEditingDraftFromCurrent();
+        const statusEl = document.getElementById("payReqStatus");
+        if (statusEl) statusEl.textContent += ` · Đã lưu cùng ${_draftScopeName(draftEditingScope)}`;
+        return true;
+      } catch (e) {
+        const statusEl = document.getElementById("payReqStatus");
+        if (statusEl) statusEl.textContent = "⚠️ Chưa lưu được số tiền vào đơn: " + e.message;
+        return false;
+      }
+    }
+    function toggleAmountEdit(checked) {
+      const toggleEl = document.getElementById("payReqAmountEditToggle");
+      const inputEl = document.getElementById("payReqAmountInput");
+      if (toggleEl) toggleEl.checked = !!checked;
+      if (inputEl) {
+        inputEl.disabled = !checked;
+        if (checked) {
+          const current = Math.round(Number(inputEl.value));
+          if (!Number.isFinite(current) || current <= 0) inputEl.value = String(getAutoAmountDong());
+          setTimeout(() => { try { inputEl.focus(); inputEl.select(); } catch (e) {} }, 0);
+        } else {
+          inputEl.value = String(getAutoAmountDong());
+        }
+      }
+      render();
+      if (!checked) persistAmountEdit();
+    }
+    async function amountBlur() {
+      if (!isAmountEditEnabled()) return;
+      const inputEl = document.getElementById("payReqAmountInput");
+      if (!inputEl) return;
+      const edited = Math.round(Number(inputEl.value));
+      inputEl.value = String(Number.isFinite(edited) && edited > 0 ? edited : getAutoAmountDong());
+      await render();
+      await persistAmountEdit();
     }
     function getOpt() {
       const amountDong = getAmountDong();
@@ -14000,6 +14107,7 @@ const App = (() => {
         bank: pick("payReqBank").trim(),
         accountNo: pick("payReqAccountNo").trim(),
         branch: pick("payReqBranch").trim(),
+        showCompanyStamp: !!((document.getElementById("payReqCompanyStampToggle") || {}).checked),
         amountDong,
         amountText: numberToVietnameseDong(amountDong),
       };
@@ -14024,6 +14132,9 @@ const App = (() => {
       const bankEl = document.getElementById("payReqBank");
       const accNoEl = document.getElementById("payReqAccountNo");
       const branchEl = document.getElementById("payReqBranch");
+      const amountEditEl = document.getElementById("payReqAmountEditToggle");
+      const amountInputEl = document.getElementById("payReqAmountInput");
+      const companyStampEl = document.getElementById("payReqCompanyStampToggle");
       if (dateEl) dateEl.value = todayInputValue();
       if (recipientEl) recipientEl.value = v.name || "";
       if (requesterEl) requesterEl.value = "Nguyễn Phấn Hoàn";
@@ -14035,6 +14146,14 @@ const App = (() => {
       if (bankEl) bankEl.value = "Techcombank";
       if (accNoEl) accNoEl.value = "250891";
       if (branchEl) branchEl.value = "";
+      if (companyStampEl) companyStampEl.checked = true;
+      const restoredAmount = Math.round(Number(amountInputEl && amountInputEl.value));
+      const hasRestoredAmount = !!(amountEditEl && amountEditEl.checked && restoredAmount > 0);
+      if (amountEditEl) amountEditEl.checked = hasRestoredAmount;
+      if (amountInputEl) {
+        amountInputEl.value = String(hasRestoredAmount ? restoredAmount : getAutoAmountDong());
+        amountInputEl.disabled = !hasRestoredAmount;
+      }
       document.getElementById("payReqOverlay").classList.add("open");
       document.body.style.overflow = "hidden";
       render();
@@ -14052,11 +14171,13 @@ const App = (() => {
       const opt = getOpt();
       if (amountPreview) amountPreview.textContent = `${fmtDong(opt.amountDong)} vnđ`;
       if (!opt.amountDong) {
-        if (statusEl) statusEl.textContent = "❌ Không đọc được FullVAT của đơn.";
+        if (statusEl) statusEl.textContent = isAmountEditEnabled()
+          ? "❌ Số tiền chỉnh tay không hợp lệ."
+          : "❌ Không đọc được FullVAT của đơn.";
         return;
       }
       await draw(canvas, c, opt);
-      if (statusEl) statusEl.textContent = `✅ FullVAT: ${fmtDong(opt.amountDong)} vnđ · ${opt.amountText}`;
+      if (statusEl) statusEl.textContent = `✅ ${isAmountEditEnabled() ? "Số tiền chỉnh tay" : "FullVAT"}: ${fmtDong(opt.amountDong)} vnđ · ${opt.amountText}`;
     }
 
     async function draw(canvas, c, opt) {
@@ -14188,7 +14309,7 @@ const App = (() => {
         ctx.fillText(opt.branch, padX + 730, y);
       }
 
-      if (stampCty) {
+      if (stampCty && opt.showCompanyStamp) {
         const sW = 176;
         const sH = sW * stampCty.height / stampCty.width;
         ctx.save();
@@ -14232,7 +14353,7 @@ const App = (() => {
       else if (st) st.textContent = "⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải ảnh.";
     }
 
-    return { open, close, render, download, copy, refreshConfig };
+    return { open, close, render, toggleAmountEdit, amountBlur, download, copy, refreshConfig };
   })();
 
   return {
@@ -14335,6 +14456,8 @@ const App = (() => {
     payReqOpen: () => PaymentRequest.open(),
     payReqClose: () => PaymentRequest.close(),
     payReqRender: () => PaymentRequest.render(),
+    payReqToggleAmountEdit: checked => PaymentRequest.toggleAmountEdit(checked),
+    payReqAmountBlur: () => PaymentRequest.amountBlur(),
     payReqDownload: () => PaymentRequest.download(),
     payReqCopy: () => PaymentRequest.copy(),
     pickerFilter,
