@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.100 · 24/08/2026 · (GMT+7)
+ - Hóa đơn lẻ thêm tùy chọn `Phí vận chuyển` nhập theo VND, mặc định tắt.
+ - Khi bật, phí nằm trước Tổng thanh toán và chỉ cộng vào tổng cuối, không tính VAT;
+   trạng thái + số tiền được giữ theo giỏ khi đóng/mở lại.
+
  v10.9.99 · 23/08/2026 · (GMT+7)
  - Ngày tự chỉnh và trạng thái con dấu của Hóa đơn lẻ được giữ theo giỏ khi đóng/mở lại.
  - Giấy đề nghị thanh toán giữ ngày + con dấu trong extras; đơn nháp local/online
@@ -1731,7 +1736,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.99
+    Version 10.9.100
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2566,6 +2571,16 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         <span style="font-size:11.5px;color:var(--muted);">Các hàng này nằm cuối bảng và không tính tiền.</span>
       </div>
       <div id="invExtraNoteEditor" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="invShippingToggle" onchange="App.invoiceShippingChanged()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Phí vận chuyển</span>
+        </label>
+        <input id="invShippingAmount" type="number" min="0" step="1" inputmode="numeric" disabled
+          placeholder="Nhập phí" oninput="App.invoiceOptionChanged()" aria-label="Phí vận chuyển trên hóa đơn bán lẻ"
+          style="width:140px;padding:8px 10px;border:1px solid #cfd5df;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;" />
+        <span style="font-size:12px;color:var(--muted);">đ · không tính VAT</span>
+      </div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="invCompanyStampToggle" checked onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
@@ -13383,18 +13398,32 @@ const App = (() => {
 
     function persistEditDraft() {
       const dateValue = String((document.getElementById("invDate") || {}).value || "");
+      const shippingDong = Math.max(0, Math.round(Number((document.getElementById("invShippingAmount") || {}).value) || 0));
       saveInvoiceEditDraft({
         rowNameOverrides: rowNameOverrides.slice(),
         extraNoteRows: extraNoteRows.slice(0, 3),
         date: /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : "",
         showCompanyStamp: !!((document.getElementById("invCompanyStampToggle") || { checked: true }).checked),
         showPaidStamp: !!((document.getElementById("invStampPaid") || {}).checked),
+        shippingEnabled: !!((document.getElementById("invShippingToggle") || {}).checked),
+        shippingDong,
       });
     }
 
     function optionChanged() {
       persistEditDraft();
       render();
+    }
+
+    function shippingChanged() {
+      const toggleEl = document.getElementById("invShippingToggle");
+      const amountEl = document.getElementById("invShippingAmount");
+      const enabled = !!(toggleEl && toggleEl.checked);
+      if (amountEl) {
+        amountEl.disabled = !enabled;
+        if (enabled) setTimeout(() => amountEl.focus(), 0);
+      }
+      optionChanged();
     }
 
     function syncItemEditors(baseRows) {
@@ -13566,11 +13595,20 @@ const App = (() => {
       const paidEl = document.getElementById("invStampPaid");
       const companyStampEl = document.getElementById("invCompanyStampToggle");
       const dateEl = document.getElementById("invDate");
+      const shippingToggleEl = document.getElementById("invShippingToggle");
+      const shippingAmountEl = document.getElementById("invShippingAmount");
       if (paidEl) paidEl.checked = !!(savedEdit && savedEdit.showPaidStamp === true);
       if (companyStampEl) companyStampEl.checked = !savedEdit || savedEdit.showCompanyStamp !== false;
       if (dateEl) dateEl.value = savedEdit && /^\d{4}-\d{2}-\d{2}$/.test(String(savedEdit.date || ""))
         ? String(savedEdit.date)
         : invoiceTodayValue();
+      const shippingEnabled = !!(savedEdit && savedEdit.shippingEnabled === true);
+      const shippingDong = Math.max(0, Math.round(Number(savedEdit && savedEdit.shippingDong) || 0));
+      if (shippingToggleEl) shippingToggleEl.checked = shippingEnabled;
+      if (shippingAmountEl) {
+        shippingAmountEl.value = shippingDong > 0 ? String(shippingDong) : "";
+        shippingAmountEl.disabled = !shippingEnabled;
+      }
       document.getElementById("invoiceOverlay").classList.add("open");
       document.body.style.overflow = "hidden";
       render();
@@ -13601,6 +13639,12 @@ const App = (() => {
       // CỘNG = tổng các dòng (theo yêu cầu — có thể lệch vài đồng vs fullVAT)
       const sumRowsK = rows.reduce((s, x) => s + x.amountK, 0);
       const congK = round3(sumRowsK + vatK);
+      const showShipping = !!((document.getElementById("invShippingToggle") || {}).checked);
+      const shippingDong = showShipping
+        ? Math.max(0, Math.round(Number((document.getElementById("invShippingAmount") || {}).value) || 0))
+        : 0;
+      const shippingK = shippingDong / 1000;
+      const totalPaymentK = round3(congK + shippingK);
 
       const custName = (document.getElementById("invCustName") || {}).value || "";
       const custPhone = (document.getElementById("invCustPhone") || {}).value || "";
@@ -13614,8 +13658,8 @@ const App = (() => {
       if (dm) dateStr = `Ngày ${parseInt(dm[3], 10)} tháng ${parseInt(dm[2], 10)} năm ${dm[1]}`;
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
-      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, congK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, dateStr });
-      if (statusEl) statusEl.textContent = `✅ ${rows.length} hàng hóa · ${extraNoteRows.length} ghi chú · Tổng thanh toán: ${fmtVnd(congK)}đ (FullVAT: ${fmtVnd(fullVatK)}đ)`;
+      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showShipping, shippingK, dateStr });
+      if (statusEl) statusEl.textContent = `✅ ${rows.length} hàng hóa · ${extraNoteRows.length} ghi chú${showShipping ? ` · Phí vận chuyển: ${fmtVnd(shippingK)}đ` : ""} · Tổng thanh toán: ${fmtVnd(totalPaymentK)}đ (VAT chỉ tính trên hàng hóa: ${fmtVnd(fullVatK)}đ)`;
     }
 
     async function draw(canvas, c, rows, extraNotes, subTotalK, vatK, congK, opt) {
@@ -13648,13 +13692,13 @@ const App = (() => {
       const tableHeaderH = 44;
       const totalRowsH = rowHeights.reduce((s, h) => s + h, 0)
         + noteRowHeights.reduce((s, h) => s + h, 0);
-      const subTotalRowH = 40, vatRowH = 40, congRowH = 50;
+      const subTotalRowH = 40, vatRowH = 40, shippingRowH = opt.showShipping ? 40 : 0, congRowH = 50;
       const headerCtyH = 200;
       const titleH = 76;
       const custH = 86;
       const footerH = 230;
       const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH
-        + subTotalRowH + vatRowH + congRowH + footerH + pad;
+        + subTotalRowH + vatRowH + shippingRowH + congRowH + footerH + pad;
       // v10.9.51: Khổ dọc A4 (1:1.414). Nếu content > 1 trang → chia nhiều trang A4 xếp dọc,
       // đánh dấu ranh giới + số trang. H = số trang × A4_H.
       const A4_H = Math.round(W * 297 / 210); // 1414 với W=1000
@@ -13879,6 +13923,7 @@ const App = (() => {
       };
       drawTotalRow("Cộng tiền hàng (Sub total):", subTotalK, 40, false);
       drawTotalRow("VAT 10%:", vatK, 40, false);
+      if (opt.showShipping) drawTotalRow("Phí vận chuyển:", opt.shippingK, 40, false);
       // Dòng Tổng cộng tiền thanh toán
       ctx.fillStyle = "#f8fafc";
       ctx.fillRect(cx0, y, innerW, 50);
@@ -13977,7 +14022,7 @@ const App = (() => {
     }
 
     return {
-      open, close, render, optionChanged, editRowName, setExtraNoteCount, editExtraNote,
+      open, close, render, optionChanged, shippingChanged, editRowName, setExtraNoteCount, editExtraNote,
       download, copy, refreshConfig,
     };
   })();
@@ -14487,6 +14532,7 @@ const App = (() => {
     invoiceClose: () => Invoice.close(),
     invoiceRender: () => Invoice.render(),
     invoiceOptionChanged: () => Invoice.optionChanged(),
+    invoiceShippingChanged: () => Invoice.shippingChanged(),
     invoiceEditRowName: (idx, value) => Invoice.editRowName(idx, value),
     invoiceSetExtraNoteCount: value => Invoice.setExtraNoteCount(value),
     invoiceEditExtraNote: (idx, value) => Invoice.editExtraNote(idx, value),
