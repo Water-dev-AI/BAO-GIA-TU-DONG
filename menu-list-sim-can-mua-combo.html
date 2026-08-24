@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.99 · 23/08/2026 · (GMT+7)
+ - Ngày tự chỉnh và trạng thái con dấu của Hóa đơn lẻ được giữ theo giỏ khi đóng/mở lại.
+ - Giấy đề nghị thanh toán giữ ngày + con dấu trong extras; đơn nháp local/online
+   và link share đều khôi phục đúng, giỏ mới vẫn mặc định hôm nay + hiện dấu.
+
  v10.9.98 · 23/08/2026 · (GMT+7)
  - Giấy đề nghị thanh toán thêm checkbox `Sửa số tiền`: mặc định tắt và lấy FullVAT;
    khi bật cho sửa chính xác từng đồng, đồng bộ cả số hiển thị và số tiền bằng chữ.
@@ -1726,7 +1731,7 @@
 <div class="wrap">
   <h1>🛒 Combo Bill eSIM/SIM</h1>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.98
+    Version 10.9.99
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2542,7 +2547,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">Ngày trên hóa đơn:</div>
         <input id="invDate" type="date"
-          oninput="App.invoiceRender()"
+          oninput="App.invoiceOptionChanged()"
           style="padding:8px 10px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
       </div>
       <div>
@@ -2563,11 +2568,11 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <div id="invExtraNoteEditor" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-          <input type="checkbox" id="invCompanyStampToggle" checked onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <input type="checkbox" id="invCompanyStampToggle" checked onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện dấu công ty</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-          <input type="checkbox" id="invStampPaid" onchange="App.invoiceRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <input type="checkbox" id="invStampPaid" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
           <span>Đóng dấu <b>"ĐÃ THANH TOÁN"</b> lên hóa đơn</span>
         </label>
       </div>
@@ -2595,7 +2600,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
       <div class="payreq-form-grid">
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Ngày đề nghị thanh toán</div>
-          <input id="payReqDate" type="date" oninput="App.payReqRender()"
+          <input id="payReqDate" type="date" oninput="App.payReqRender()" onchange="App.payReqPersistOptions()"
             style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
         </div>
         <div>
@@ -2639,7 +2644,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
             style="width:150px;padding:7px 9px;border:1px solid #cfd5df;border-radius:7px;font-size:13px;font-family:inherit;box-sizing:border-box;" />
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-          <input id="payReqCompanyStampToggle" type="checkbox" checked onchange="App.payReqRender()" style="width:16px;height:16px;cursor:pointer;" />
+          <input id="payReqCompanyStampToggle" type="checkbox" checked onchange="App.payReqPersistOptions()" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện dấu công ty</span>
         </label>
         <div></div>
@@ -4750,6 +4755,10 @@ const App = (() => {
     if (pre) pre.checked = false;
     const pra = document.getElementById("payReqAmountInput");
     if (pra) { pra.value = ""; pra.disabled = true; }
+    const prd = document.getElementById("payReqDate");
+    if (prd) prd.value = "";
+    const prs = document.getElementById("payReqCompanyStampToggle");
+    if (prs) prs.checked = true;
   }
   // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat} vào DOM
   function applyCartExtras(extras) {
@@ -4774,6 +4783,10 @@ const App = (() => {
       pra.value = payReqEdit ? String(payReqAmountDong) : "";
       pra.disabled = !payReqEdit;
     }
+    const prd = document.getElementById("payReqDate");
+    if (prd) prd.value = /^\d{4}-\d{2}-\d{2}$/.test(String(extras.payReqDate || "")) ? String(extras.payReqDate) : "";
+    const prs = document.getElementById("payReqCompanyStampToggle");
+    if (prs) prs.checked = extras.payReqCompanyStamp !== false;
   }
   // Đọc extras hiện tại từ DOM → cho save draft
   function readCartExtras() {
@@ -4783,6 +4796,8 @@ const App = (() => {
     const payReqAmountDong = payReqAmountEdit
       ? Math.max(0, parseInt(payReqAmountEl && payReqAmountEl.value, 10) || 0)
       : 0;
+    const payReqDate = String((document.getElementById("payReqDate") || {}).value || "");
+    const payReqCompanyStamp = !!((document.getElementById("payReqCompanyStampToggle") || { checked: true }).checked);
     return {
       shipFeeK: getShipFeeK(),
       manualDiscK: getManualDiscountK(),
@@ -4791,6 +4806,8 @@ const App = (() => {
       shipVat: getShipVat(),
       payReqAmountEdit: payReqAmountEdit && payReqAmountDong > 0,
       payReqAmountDong,
+      payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(payReqDate) ? payReqDate : "",
+      payReqCompanyStamp,
     };
   }
 
@@ -9600,7 +9617,9 @@ const App = (() => {
       const manualOverride = ex.manualDiscOverride === true || ex.manualDiscK > 0 || ex.manualDiscPct > 0;
       const payReqAmountDong = Math.max(0, parseInt(ex.payReqAmountDong, 10) || 0);
       const payReqEdit = ex.payReqAmountEdit === true && payReqAmountDong > 0;
-      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit;
+      const payReqDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ex.payReqDate || "")) ? String(ex.payReqDate) : "";
+      const payReqCompanyStamp = ex.payReqCompanyStamp !== false;
+      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit || !!payReqDate || !payReqCompanyStamp;
       if (hasExtras) {
         payload.ex = {};
         if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
@@ -9612,6 +9631,8 @@ const App = (() => {
           payload.ex.pe = 1;
           payload.ex.pa = payReqAmountDong;
         }
+        if (payReqDate) payload.ex.pd = payReqDate;
+        if (!payReqCompanyStamp) payload.ex.ps = 0;
       }
     }
     if (opts.imported === true) payload.im = 1;
@@ -9642,6 +9663,8 @@ const App = (() => {
             shipVat: data.ex.sv === 1,
             payReqAmountEdit: data.ex.pe === 1 && (parseInt(data.ex.pa, 10) || 0) > 0,
             payReqAmountDong: Math.max(0, parseInt(data.ex.pa, 10) || 0),
+            payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(String(data.ex.pd || "")) ? String(data.ex.pd) : "",
+            payReqCompanyStamp: data.ex.ps !== 0,
           }
         : null;
       return {
@@ -13351,11 +13374,27 @@ const App = (() => {
     let rowNameOverrides = [];
     let extraNoteRows = [];
 
+    function invoiceTodayValue() {
+      const t = new Date();
+      const mm = String(t.getMonth() + 1).padStart(2, "0");
+      const dd = String(t.getDate()).padStart(2, "0");
+      return `${t.getFullYear()}-${mm}-${dd}`;
+    }
+
     function persistEditDraft() {
+      const dateValue = String((document.getElementById("invDate") || {}).value || "");
       saveInvoiceEditDraft({
         rowNameOverrides: rowNameOverrides.slice(),
         extraNoteRows: extraNoteRows.slice(0, 3),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : "",
+        showCompanyStamp: !!((document.getElementById("invCompanyStampToggle") || { checked: true }).checked),
+        showPaidStamp: !!((document.getElementById("invStampPaid") || {}).checked),
       });
+    }
+
+    function optionChanged() {
+      persistEditDraft();
+      render();
     }
 
     function syncItemEditors(baseRows) {
@@ -13524,24 +13563,20 @@ const App = (() => {
       const addrEl = document.getElementById("invCustAddr");
       if (nameEl && !nameEl.value && (v.name || Cust2B.state.name)) nameEl.value = v.name || Cust2B.state.name || "";
       if (addrEl && !addrEl.value && v.addr) addrEl.value = v.addr || "";
-      // Uncheck dấu đã thanh toán mỗi lần mở (mặc định)
       const paidEl = document.getElementById("invStampPaid");
-      if (paidEl) paidEl.checked = false;
       const companyStampEl = document.getElementById("invCompanyStampToggle");
-      if (companyStampEl) companyStampEl.checked = true;
-      // Ngày mặc định = hôm nay (chỉ set khi ô đang trống)
       const dateEl = document.getElementById("invDate");
-      if (dateEl && !dateEl.value) {
-        const t = new Date();
-        const mm = String(t.getMonth() + 1).padStart(2, "0");
-        const dd = String(t.getDate()).padStart(2, "0");
-        dateEl.value = `${t.getFullYear()}-${mm}-${dd}`;
-      }
+      if (paidEl) paidEl.checked = !!(savedEdit && savedEdit.showPaidStamp === true);
+      if (companyStampEl) companyStampEl.checked = !savedEdit || savedEdit.showCompanyStamp !== false;
+      if (dateEl) dateEl.value = savedEdit && /^\d{4}-\d{2}-\d{2}$/.test(String(savedEdit.date || ""))
+        ? String(savedEdit.date)
+        : invoiceTodayValue();
       document.getElementById("invoiceOverlay").classList.add("open");
       document.body.style.overflow = "hidden";
       render();
     }
     function close() {
+      persistEditDraft();
       document.getElementById("invoiceOverlay").classList.remove("open");
       document.body.style.overflow = "";
     }
@@ -13942,7 +13977,7 @@ const App = (() => {
     }
 
     return {
-      open, close, render, editRowName, setExtraNoteCount, editExtraNote,
+      open, close, render, optionChanged, editRowName, setExtraNoteCount, editExtraNote,
       download, copy, refreshConfig,
     };
   })();
@@ -14062,7 +14097,7 @@ const App = (() => {
         return true;
       } catch (e) {
         const statusEl = document.getElementById("payReqStatus");
-        if (statusEl) statusEl.textContent = "⚠️ Chưa lưu được số tiền vào đơn: " + e.message;
+        if (statusEl) statusEl.textContent = "⚠️ Chưa lưu được thay đổi Đề nghị thanh toán vào đơn: " + e.message;
         return false;
       }
     }
@@ -14089,6 +14124,10 @@ const App = (() => {
       if (!inputEl) return;
       const edited = Math.round(Number(inputEl.value));
       inputEl.value = String(Number.isFinite(edited) && edited > 0 ? edited : getAutoAmountDong());
+      await render();
+      await persistAmountEdit();
+    }
+    async function persistOptions() {
       await render();
       await persistAmountEdit();
     }
@@ -14135,7 +14174,7 @@ const App = (() => {
       const amountEditEl = document.getElementById("payReqAmountEditToggle");
       const amountInputEl = document.getElementById("payReqAmountInput");
       const companyStampEl = document.getElementById("payReqCompanyStampToggle");
-      if (dateEl) dateEl.value = todayInputValue();
+      if (dateEl && !dateEl.value) dateEl.value = todayInputValue();
       if (recipientEl) recipientEl.value = v.name || "";
       if (requesterEl) requesterEl.value = "Nguyễn Phấn Hoàn";
       if (deptEl) deptEl.value = "Quản lý";
@@ -14146,7 +14185,6 @@ const App = (() => {
       if (bankEl) bankEl.value = "Techcombank";
       if (accNoEl) accNoEl.value = "250891";
       if (branchEl) branchEl.value = "";
-      if (companyStampEl) companyStampEl.checked = true;
       const restoredAmount = Math.round(Number(amountInputEl && amountInputEl.value));
       const hasRestoredAmount = !!(amountEditEl && amountEditEl.checked && restoredAmount > 0);
       if (amountEditEl) amountEditEl.checked = hasRestoredAmount;
@@ -14353,7 +14391,7 @@ const App = (() => {
       else if (st) st.textContent = "⚠️ Trình duyệt không cho copy ảnh — hãy bấm Tải ảnh.";
     }
 
-    return { open, close, render, toggleAmountEdit, amountBlur, download, copy, refreshConfig };
+    return { open, close, render, toggleAmountEdit, amountBlur, persistOptions, download, copy, refreshConfig };
   })();
 
   return {
@@ -14448,6 +14486,7 @@ const App = (() => {
     invoiceOpen: () => Invoice.open(),
     invoiceClose: () => Invoice.close(),
     invoiceRender: () => Invoice.render(),
+    invoiceOptionChanged: () => Invoice.optionChanged(),
     invoiceEditRowName: (idx, value) => Invoice.editRowName(idx, value),
     invoiceSetExtraNoteCount: value => Invoice.setExtraNoteCount(value),
     invoiceEditExtraNote: (idx, value) => Invoice.editExtraNote(idx, value),
@@ -14458,6 +14497,7 @@ const App = (() => {
     payReqRender: () => PaymentRequest.render(),
     payReqToggleAmountEdit: checked => PaymentRequest.toggleAmountEdit(checked),
     payReqAmountBlur: () => PaymentRequest.amountBlur(),
+    payReqPersistOptions: () => PaymentRequest.persistOptions(),
     payReqDownload: () => PaymentRequest.download(),
     payReqCopy: () => PaymentRequest.copy(),
     pickerFilter,
