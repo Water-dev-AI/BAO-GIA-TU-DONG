@@ -78,6 +78,14 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.101 · 24/08/2026 · (GMT+7)
+ - Thêm luồng Import WEB riêng: thả XLSX, lọc theo ngày đặt thành công, nhóm theo
+   mã website + VAT, chỉnh dữ liệu và cảnh báo giá bán có biên lợi nhuận ≤15%.
+ - Đơn WEB lưu/xem/mở lại trong Đơn nháp với màu + badge riêng, không nhập nhầm
+   vào giỏ thường; hỗ trợ chuyển Đơn lưu chung và nhập nhiều đơn vào sổ một lần.
+ - Payload WEB ghi Original Name API, Order ID hãng, giá/SL/giảm phân bổ có sẵn,
+   mã website, email đặt hàng; Apps Script merge VAT đúng từng đơn.
+
  v10.9.100 · 24/08/2026 · (GMT+7)
  - Hóa đơn lẻ thêm tùy chọn `Phí vận chuyển` nhập theo VND, mặc định tắt.
  - Khi bật, phí nằm trước Tổng thanh toán và chỉ cộng vào tổng cuối, không tính VAT;
@@ -1730,13 +1738,61 @@
   @media (max-width: 1000px) {
     .section1-layout { grid-template-columns: 1fr; }
   }
+  .app-title-row { position: relative; min-height: 42px; }
+  .app-title-row h1 { margin-right: 150px; }
+  .web-import-launch {
+    position: absolute; right: 0; top: 0; margin: 0; padding: 9px 14px;
+    background: #0f766e; color: #fff; border: 1px solid #0f766e;
+    border-radius: 7px; font-size: 13px; font-weight: 750; cursor: pointer;
+  }
+  .web-import-launch:hover { background: #115e59; }
+  .web-import-modal { width: min(97vw, 1450px); max-height: 94vh; display: flex; flex-direction: column; }
+  .web-import-body { padding: 14px 16px; overflow: auto; flex: 1 1 auto; min-height: 0; background: #f8fafc; }
+  .web-dropzone {
+    border: 2px dashed #14b8a6; background: #f0fdfa; border-radius: 8px;
+    min-height: 92px; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 5px; color: #115e59; cursor: pointer; text-align: center; padding: 14px;
+  }
+  .web-dropzone.dragover { background: #ccfbf1; border-color: #0f766e; }
+  .web-filter-row { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .web-filter-field { display: flex; flex-direction: column; gap: 4px; min-width: 155px; }
+  .web-filter-field label { color: #475569; font-size: 11.5px; font-weight: 650; }
+  .web-filter-field input { padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+  .web-summary { display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr)); gap: 8px; margin: 12px 0; }
+  .web-summary > div { background: #fff; border: 1px solid #cbd5e1; border-radius: 7px; padding: 8px 10px; }
+  .web-summary small { display: block; color: #64748b; font-size: 10.5px; }
+  .web-summary b { display: block; color: #0f172a; margin-top: 2px; font-size: 14px; }
+  .web-warning-box { background: #fff1f2; border: 1px solid #fda4af; color: #9f1239; border-radius: 7px; padding: 9px 11px; margin: 10px 0; font-size: 12px; line-height: 1.5; }
+  .web-order-card { background: #fff; border: 1px solid #99f6e4; border-left: 4px solid #0f766e; border-radius: 7px; margin: 10px 0; overflow: hidden; }
+  .web-order-head { padding: 9px 11px; background: #f0fdfa; display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+  .web-order-head input[type="text"], .web-order-head input[type="email"] { padding: 6px 8px; border: 1px solid #99cfc9; border-radius: 5px; min-width: 175px; font: inherit; }
+  .web-table-wrap { overflow-x: auto; }
+  .web-table { width: 100%; border-collapse: collapse; min-width: 1040px; }
+  .web-table th { background: #f8fafc; color: #475569; font-size: 10.5px; text-align: left; padding: 6px; border-bottom: 1px solid #dbe3ea; white-space: nowrap; }
+  .web-table td { padding: 5px 6px; border-bottom: 1px solid #edf2f7; font-size: 11.5px; vertical-align: middle; }
+  .web-table input { width: 100%; min-width: 76px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; }
+  .web-table .web-name-input { min-width: 330px; }
+  .web-row-warning td { background: #fff7ed; }
+  .web-row-invalid td { background: #fff1f2; }
+  .web-vat-editor { display: grid; grid-template-columns: 150px minmax(220px, 1fr) minmax(260px, 2fr) minmax(190px, 1fr); gap: 7px; padding: 8px 11px; background: #fffbeb; border-top: 1px solid #fde68a; }
+  .web-vat-editor input { padding: 6px 7px; border: 1px solid #fcd34d; border-radius: 5px; font: inherit; min-width: 0; }
+  .draft-web-badge { background:#ccfbf1;color:#115e59;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:750;border:1px solid #5eead4; }
+  @media (max-width: 760px) {
+    .app-title-row h1 { margin-right: 0; padding-right: 0; }
+    .web-import-launch { position: static; display: block; margin: 4px 0 8px auto; }
+    .web-summary { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+    .web-vat-editor { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🛒 Combo Bill eSIM/SIM</h1>
+  <div class="app-title-row">
+    <h1>🛒 Combo Bill eSIM/SIM</h1>
+    <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
+  </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.100
+    Version 10.9.101
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2401,6 +2457,50 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
   </div>
 </div>
 
+<!-- Import đơn hàng bán từ WEB: luồng riêng, không dùng giỏ báo giá thường -->
+<div class="picker-overlay" id="webImportOverlay" data-overlay-close="App.webImportClose()" style="z-index:1700;">
+  <div class="picker-modal web-import-modal">
+    <div class="picker-header">
+      <h3 style="margin:0;flex:1;">🌐 Import đơn hàng WEB</h3>
+      <button onclick="App.webImportClose()" style="margin:0;background:#eef2f7;color:#444;">✕</button>
+    </div>
+    <div class="web-import-body">
+      <div id="webImportDropzone" class="web-dropzone" onclick="App.webImportBrowse()"
+        ondragover="App.webImportDragOver(event)" ondragleave="App.webImportDragLeave(event)" ondrop="App.webImportDrop(event)">
+        <div style="font-size:27px;line-height:1;">📥</div>
+        <b>Thả file đơn hàng .xlsx vào đây</b>
+        <span id="webImportFileName" style="font-size:11.5px;color:#64748b;">hoặc bấm để chọn file</span>
+      </div>
+      <input id="webImportFileInput" type="file" accept=".xlsx,.xls" hidden onchange="App.webImportPickFile(event)">
+
+      <div class="web-filter-row">
+        <div class="web-filter-field">
+          <label>Từ ngày</label>
+          <input id="webImportDateFrom" type="date">
+        </div>
+        <div class="web-filter-field">
+          <label>Đến ngày</label>
+          <input id="webImportDateTo" type="date">
+        </div>
+        <button class="blue" onclick="App.webImportApplyFilter()" style="margin:0;padding:8px 14px;">🔎 Lọc đơn</button>
+        <div class="web-filter-field" style="flex:1;min-width:260px;">
+          <label>Tên lô lưu nháp</label>
+          <input id="webImportDraftName" type="text" placeholder="WEB ngày ...">
+        </div>
+      </div>
+
+      <div id="webImportStatus" style="display:none;margin-top:10px;padding:8px 10px;border-radius:7px;font-size:12px;"></div>
+      <div id="webImportResult"></div>
+    </div>
+    <div class="picker-footer" style="gap:7px;flex-wrap:wrap;">
+      <span id="webImportFooterInfo" style="flex:1;color:#64748b;font-size:11.5px;min-width:180px;">Chưa có dữ liệu.</span>
+      <button onclick="App.webImportSaveDraft()" style="margin:0;background:#0f766e;color:white;">💾 Lưu vào Đơn nháp</button>
+      <button onclick="App.webImportCopyPayload()" style="margin:0;background:#0e7c3a;color:white;">📤 Nhập sổ</button>
+      <button class="light" onclick="App.webImportClose()" style="margin:0;">Đóng</button>
+    </div>
+  </div>
+</div>
+
 <!-- v10.8.35: PkgInfo modal (APN/timezone + nhà mạng) -->
 <div id="pkgInfoModal" class="picker-overlay" style="display:none;z-index:1500;" data-overlay-close="App.pkgInfoClose()">
   <div class="picker-modal" style="width:min(96vw, 540px);max-height:85vh;display:flex;flex-direction:column;">
@@ -2457,13 +2557,13 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
     <div id="draftViewStatus" style="padding:8px 18px;font-size:12.5px;line-height:1.5;color:#0e7c3a;background:#f0fdf4;border-top:1px solid #d1fae5;display:none;"></div>
     <div class="picker-footer" style="flex-wrap:wrap;gap:6px;">
       <!-- Hàng 1: copy nhanh -->
-      <button class="blue" onclick="App.draftViewCopyBill()" style="margin:0;padding:8px 11px;font-size:12px;">📋 Bill</button>
-      <button onclick="App.draftViewCopyQR()" style="margin:0;padding:8px 11px;font-size:12px;background:var(--green);color:white;border:none;border-radius:7px;cursor:pointer;">🎨 QR TT</button>
-      <button onclick="App.draftViewCopyFullImage()" style="margin:0;padding:8px 11px;font-size:12px;background:#2563eb;color:white;border:none;border-radius:7px;cursor:pointer;">🖼️ Báo giá</button>
-      <button onclick="App.draftViewCopyPayload()" style="margin:0;padding:8px 11px;font-size:12px;background:#0e7c3a;color:white;border:none;border-radius:7px;cursor:pointer;">📤 Nhập sổ</button>
+      <button id="draftViewBillBtn" class="blue" onclick="App.draftViewCopyBill()" style="margin:0;padding:8px 11px;font-size:12px;">📋 Bill</button>
+      <button id="draftViewQrBtn" onclick="App.draftViewCopyQR()" style="margin:0;padding:8px 11px;font-size:12px;background:var(--green);color:white;border:none;border-radius:7px;cursor:pointer;">🎨 QR TT</button>
+      <button id="draftViewImageBtn" onclick="App.draftViewCopyFullImage()" style="margin:0;padding:8px 11px;font-size:12px;background:#2563eb;color:white;border:none;border-radius:7px;cursor:pointer;">🖼️ Báo giá</button>
+      <button id="draftViewPayloadBtn" onclick="App.draftViewCopyPayload()" style="margin:0;padding:8px 11px;font-size:12px;background:#0e7c3a;color:white;border:none;border-radius:7px;cursor:pointer;">📤 Nhập sổ</button>
       <!-- Spacer + nút chính -->
       <span style="flex:1;min-width:8px;"></span>
-      <button class="green" onclick="App.draftViewImport()" style="margin:0;padding:8px 14px;font-size:12.5px;font-weight:700;">📥 Import để chỉnh sửa</button>
+      <button id="draftViewImportBtn" class="green" onclick="App.draftViewImport()" style="margin:0;padding:8px 14px;font-size:12.5px;font-weight:700;">📥 Import để chỉnh sửa</button>
       <button class="light" onclick="App.draftViewClose()" style="margin:0;padding:8px 11px;font-size:12px;">Đóng</button>
     </div>
   </div>
@@ -8070,6 +8170,8 @@ const App = (() => {
       vat: src.vat || null,
       codes,
       extras: src.extras || null,
+      draftKind: src.draftKind === "web" ? "web" : "cart",
+      webData: src.webData && typeof src.webData === "object" ? src.webData : null,
       imported: src.imported === true,
       importedAt: _draftTs(src.importedAt),
       groupByType,
@@ -8103,6 +8205,8 @@ const App = (() => {
       vat: src.vat,
       codes: src.codes,
       extras: src.extras,
+      draftKind: src.draftKind,
+      webData: src.webData,
       imported: src.imported === true,
       importedAt: src.importedAt || "",
       groupByType: typeof src.groupByType === "boolean" ? src.groupByType : "",
@@ -8176,6 +8280,300 @@ const App = (() => {
     return _draftScope(scope) + "_" + String(id || "").replace(/[^A-Za-z0-9_-]/g, "_");
   }
 
+  /* Import XLSX đơn WEB: state/editor riêng, không dùng state giỏ hàng. */
+  const WebImport = (() => {
+    const state = { fileName:"", rawRows:[], orders:[], dateFrom:"", dateTo:"", editingDraftId:null, editingScope:"local" };
+    const HEADERS = {
+      orderedAt:"THỜI GIAN ĐẶT HÀNG THÀNH CÔNG", code:"Mã đặt hàng website",
+      orderEmail:"Email đặt hàng", orderId:"Order ID từ hãng API",
+      name:"Original Name API", cost:"cost price (NT)", price:"Regular Price",
+      qty:"Số lượng", discount:"Phân bổ giảm giá", vatTick:"XUẤT HD",
+      mst:"MST", vatName:"TÊN NGƯỜI MUA CTY", addr:"ĐỊA CHỈ", vatEmail:"EMAIL",
+    };
+    const clone = v => JSON.parse(JSON.stringify(v));
+    const hnorm = v => ComboLogic.norm(String(v == null ? "" : v)).replace(/\s+/g," ").trim();
+    const textVal = (v, fortyBlank) => {
+      const s = String(v == null ? "" : v).trim();
+      return fortyBlank && s === "40" ? "" : s;
+    };
+    function numVal(v) {
+      if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+      let s = String(v == null ? "" : v).trim().replace(/\s/g,"");
+      if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(s)) s = s.replace(/\./g,"").replace(",",".");
+      else if (/^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(s)) s = s.replace(/,/g,"");
+      else s = s.replace(",",".");
+      const n = Number(s.replace(/[^\d.-]/g,""));
+      return Number.isFinite(n) ? n : 0;
+    }
+    function ymdToday() {
+      try {
+        return new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+      } catch (e) {
+        return new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+      }
+    }
+    function ymd(v) {
+      if (typeof v === "number" && window.XLSX && XLSX.SSF) {
+        const p = XLSX.SSF.parse_date_code(v);
+        if (p) return String(p.y).padStart(4,"0")+"-"+String(p.m).padStart(2,"0")+"-"+String(p.d).padStart(2,"0");
+      }
+      const s = String(v == null ? "" : v).trim();
+      let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+      m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+      return m ? m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0") : "";
+    }
+    function vatChecked(v) {
+      if (v === true || v === 1) return true;
+      return /^(true|yes|x|v|1|☑|✓|✔)$/i.test(textVal(v,true));
+    }
+    const money = v => Math.round(Number(v)||0).toLocaleString("vi-VN")+"đ";
+    function status(msg, kind) {
+      const el = document.getElementById("webImportStatus");
+      if (!el) return;
+      const st = {
+        success:["#f0fdf4","#86efac","#166534"], error:["#fff1f2","#fda4af","#9f1239"],
+        info:["#eff6ff","#93c5fd","#1e40af"],
+      }[kind||"info"];
+      el.style.display = msg ? "block" : "none";
+      el.style.background=st[0]; el.style.border="1px solid "+st[1]; el.style.color=st[2]; el.textContent=msg||"";
+    }
+    function defaultName() {
+      if (!state.dateFrom) return "Đơn WEB";
+      const f=state.dateFrom.split("-").reverse().join("/"), t=state.dateTo.split("-").reverse().join("/");
+      return state.dateFrom===state.dateTo ? "WEB "+f : "WEB "+f+" - "+t;
+    }
+    function setDates(from,to) {
+      state.dateFrom=from; state.dateTo=to;
+      document.getElementById("webImportDateFrom").value=from;
+      document.getElementById("webImportDateTo").value=to;
+    }
+    function open() {
+      const today=ymdToday();
+      Object.assign(state,{fileName:"",rawRows:[],orders:[],editingDraftId:null,editingScope:"local"});
+      setDates(today,today);
+      document.getElementById("webImportDraftName").value=defaultName();
+      document.getElementById("webImportFileName").textContent="hoặc bấm để chọn file";
+      status("","info"); render();
+      document.getElementById("webImportOverlay").classList.add("open");
+    }
+    function openDraft(d,scope) {
+      if (!d || d.draftKind!=="web" || !d.webData) return;
+      const data=clone(d.webData);
+      Object.assign(state,{fileName:data.fileName||"",rawRows:[],orders:Array.isArray(data.orders)?data.orders:[],
+        editingDraftId:d.id,editingScope:_draftScope(scope)});
+      setDates(data.dateFrom||ymdToday(),data.dateTo||data.dateFrom||ymdToday());
+      document.getElementById("webImportDraftName").value=d.name||defaultName();
+      document.getElementById("webImportFileName").textContent=state.fileName ? "Đang sửa: "+state.fileName : "Đơn WEB đã lưu";
+      status("Đang chỉnh sửa "+_draftScopeName(scope)+" WEB. Lưu lại sẽ ghi đúng nơi đang mở.","info");
+      render(); document.getElementById("webImportOverlay").classList.add("open");
+    }
+    const close = () => document.getElementById("webImportOverlay").classList.remove("open");
+    const browse = () => document.getElementById("webImportFileInput").click();
+    function dragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect="copy"; document.getElementById("webImportDropzone").classList.add("dragover"); }
+    function dragLeave(ev){ ev.preventDefault(); document.getElementById("webImportDropzone").classList.remove("dragover"); }
+    function drop(ev){ ev.preventDefault(); dragLeave(ev); const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(f) loadFile(f); }
+    function pickFile(ev){ const f=ev.target.files&&ev.target.files[0]; if(f) loadFile(f); ev.target.value=""; }
+    function loadLib() {
+      if (window.XLSX) return Promise.resolve();
+      return new Promise((resolve,reject)=>{
+        const old=document.getElementById("webXlsxLib");
+        if(old){ old.addEventListener("load",resolve,{once:true}); old.addEventListener("error",()=>reject(new Error("Không tải được thư viện XLSX.")),{once:true}); return; }
+        const s=document.createElement("script"); s.id="webXlsxLib"; s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+        s.onload=resolve; s.onerror=()=>reject(new Error("Không tải được thư viện XLSX. Kiểm tra mạng rồi thử lại.")); document.head.appendChild(s);
+      });
+    }
+    function fileBuffer(file) {
+      if (file.arrayBuffer) return file.arrayBuffer();
+      return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(r.error); r.readAsArrayBuffer(file); });
+    }
+    async function loadFile(file) {
+      if(!/\.xlsx?$/i.test(file.name||"")) return status("Chỉ nhận file .xlsx hoặc .xls.","error");
+      status("Đang đọc file Excel...","info");
+      try {
+        await loadLib();
+        const wb=XLSX.read(await fileBuffer(file),{type:"array",raw:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=ws ? XLSX.utils.sheet_to_json(ws,{header:1,defval:"",raw:true}) : [];
+        if(rows.length<2) throw new Error("File không có dữ liệu.");
+        const hdr=(rows[0]||[]).map(hnorm), idx={};
+        Object.keys(HEADERS).forEach(k=>idx[k]=hdr.indexOf(hnorm(HEADERS[k])));
+        const missing=Object.keys(idx).filter(k=>idx[k]<0);
+        if(missing.length) throw new Error("Thiếu cột: "+missing.map(k=>HEADERS[k]).join(", "));
+        state.rawRows=rows.slice(1).map((r,i)=>{
+          const g=k=>r[idx[k]], date=ymd(g("orderedAt"));
+          return {sourceRow:i+2,orderedDate:date,orderedAt:textVal(g("orderedAt"),false),
+            websiteOrderCode:textVal(g("code"),true),orderEmail:textVal(g("orderEmail"),true),
+            orderId:textVal(g("orderId"),true),name:textVal(g("name"),true),costNt:numVal(g("cost")),
+            regularVnd:Math.round(numVal(g("price"))),qty:Math.max(0,Math.round(numVal(g("qty")))),
+            discountVnd:Math.round(numVal(g("discount"))),vatEnabled:vatChecked(g("vatTick")),
+            vat:{mst:textVal(g("mst"),true),name:textVal(g("vatName"),true),addr:textVal(g("addr"),true),email:textVal(g("vatEmail"),true)}};
+        }).filter(r=>r.orderedDate||r.websiteOrderCode||r.name);
+        state.fileName=file.name;
+        document.getElementById("webImportFileName").textContent=file.name+" · "+state.rawRows.length+" dòng dữ liệu";
+        applyFilter();
+      } catch(e) { console.error("[WEB XLSX]",e); status("Lỗi đọc Excel: "+e.message,"error"); }
+    }
+    function applyFilter() {
+      if(!state.rawRows.length) return status("Hãy thả file Excel vào trước.","error");
+      const from=document.getElementById("webImportDateFrom").value, to=document.getElementById("webImportDateTo").value;
+      if(!from||!to||from>to) return status("Khoảng ngày không hợp lệ.","error");
+      state.dateFrom=from; state.dateTo=to;
+      const selected=state.rawRows.filter(r=>r.orderedDate&&r.orderedDate>=from&&r.orderedDate<=to), groups=new Map();
+      selected.forEach((r,i)=>{
+        const vat=r.vatEnabled?r.vat:{mst:"",name:"",addr:"",email:""};
+        const key=(r.websiteOrderCode||"__MISSING_"+i)+"||"+[vat.mst,vat.name,vat.addr,vat.email].map(hnorm).join("|");
+        if(!groups.has(key)) groups.set(key,{websiteOrderCode:r.websiteOrderCode,orderEmail:r.orderEmail,orderedAt:r.orderedAt,
+          orderedDate:r.orderedDate,vatEnabled:r.vatEnabled,vat:clone(vat),items:[]});
+        const o=groups.get(key); if(!o.orderEmail&&r.orderEmail)o.orderEmail=r.orderEmail;
+        o.items.push({sourceRow:r.sourceRow,name:r.name,orderId:r.orderId,costNt:r.costNt,regularVnd:r.regularVnd,qty:r.qty,discountVnd:r.discountVnd});
+      });
+      state.orders=Array.from(groups.values());
+      document.getElementById("webImportDraftName").value=defaultName();
+      status(selected.length ? "Đã lọc "+selected.length+" dòng thuộc "+state.orders.length+" đơn WEB." : "Không có đơn trong khoảng ngày đã chọn.",selected.length?"success":"error");
+      render();
+    }
+    function itemErrors(order,item) {
+      const out=[];
+      if(!String(order.websiteOrderCode||"").trim()) out.push("thiếu mã website");
+      if(!String(item.name||"").trim()) out.push("thiếu Original Name API");
+      if(!String(item.orderId||"").trim()) out.push("thiếu Order ID hãng");
+      if(!(Number(item.regularVnd)>0)) out.push("giá bán không hợp lệ");
+      if(!(Number(item.qty)>0)) out.push("số lượng không hợp lệ");
+      if(order.vatEnabled){const v=order.vat||{};if(!v.mst||!v.name||!v.addr||!v.email)out.push("thiếu thông tin VAT");}
+      return out;
+    }
+    function marginWarning(item) {
+      const cost=Number(item.costNt)||0, price=Number(item.regularVnd)||0;
+      if(!(cost>0)) return "không có cost price để kiểm tra";
+      if(price<=cost*1000*1.15){
+        const pct=(price/(cost*1000)-1)*100;
+        return "lãi "+(Number.isFinite(pct)?pct.toFixed(1):"0")+"% (cần >15%)";
+      }
+      return "";
+    }
+    function audit() {
+      const errors=[],warnings=[],seen={};
+      state.orders.forEach(order=>{
+        const code=String(order.websiteOrderCode||"").trim(), sig=order.vatEnabled?JSON.stringify(order.vat||{}):"NO_VAT";
+        if(code&&seen[code]&&seen[code]!==sig) warnings.push("Mã "+code+" có nhiều bộ VAT, đã tách thành nhóm riêng.");
+        if(code) seen[code]=sig;
+        (order.items||[]).forEach(item=>{
+          const p="Đơn "+(code||"(thiếu mã)")+" · dòng Excel "+(item.sourceRow||"?"), errs=itemErrors(order,item), mw=marginWarning(item);
+          if(errs.length) errors.push(p+": "+errs.join(", "));
+          if(mw) warnings.push(p+" · "+(item.name||"(thiếu tên)")+": "+mw+".");
+        });
+      });
+      return {errors,warnings};
+    }
+    function totals(){
+      let rows=0,gross=0,discount=0,vatOrders=0;
+      state.orders.forEach(o=>{if(o.vatEnabled)vatOrders++;(o.items||[]).forEach(i=>{rows++;gross+=(Number(i.regularVnd)||0)*(Number(i.qty)||0);discount+=Number(i.discountVnd)||0;});});
+      return {rows,gross,discount,vatOrders};
+    }
+    function render() {
+      const host=document.getElementById("webImportResult"), footer=document.getElementById("webImportFooterInfo");
+      if(!host)return;
+      if(!state.orders.length){host.innerHTML='<div style="padding:18px 4px;color:#64748b;text-align:center;">Chưa có đơn WEB trong khoảng ngày đã chọn.</div>';if(footer)footer.textContent="Chưa có dữ liệu.";return;}
+      const t=totals(),a=audit(),parts=[];
+      if(a.errors.length)parts.push("<b>⛔ Cần sửa trước khi nhập sổ:</b><br>"+a.errors.map(escapeHtml).join("<br>"));
+      if(a.warnings.length)parts.push("<b>⚠ Cảnh báo giá/cấu trúc:</b><br>"+a.warnings.map(escapeHtml).join("<br>"));
+      let html='<div class="web-summary"><div><small>Số đơn</small><b>'+state.orders.length+'</b></div><div><small>Số dòng</small><b>'+t.rows+
+        '</b></div><div><small>Đơn có VAT</small><b>'+t.vatOrders+'</b></div><div><small>Tổng sản phẩm</small><b>'+money(t.gross)+
+        '</b></div><div><small>Phân bổ giảm giá</small><b>'+money(t.discount)+'</b></div></div>'+
+        (parts.length?'<div class="web-warning-box">'+parts.join("<br><br>")+'</div>':"");
+      state.orders.forEach((o,oi)=>{
+        html+='<section class="web-order-card"><div class="web-order-head"><b style="color:#115e59;">Đơn '+(oi+1)+'</b>'+
+          '<label style="font-size:11px;color:#64748b;">Mã website<br><input type="text" value="'+escapeHtml(o.websiteOrderCode||"")+'" onchange="App.webImportEditOrder('+oi+',\'websiteOrderCode\',this.value)"></label>'+
+          '<label style="font-size:11px;color:#64748b;">Email đặt hàng<br><input type="email" value="'+escapeHtml(o.orderEmail||"")+'" onchange="App.webImportEditOrder('+oi+',\'orderEmail\',this.value)"></label>'+
+          '<span style="font-size:11px;color:#64748b;">Đặt: '+escapeHtml(o.orderedAt||o.orderedDate||"")+'</span>'+
+          '<label style="margin-left:auto;font-size:12px;font-weight:650;color:#92400e;"><input type="checkbox" '+(o.vatEnabled?"checked":"")+
+          ' onchange="App.webImportToggleVat('+oi+',this.checked)"> Xuất VAT</label></div>';
+        if(o.vatEnabled){const v=o.vat||{};html+='<div class="web-vat-editor">'+
+          '<input placeholder="MST" value="'+escapeHtml(v.mst||"")+'" onchange="App.webImportEditVat('+oi+',\'mst\',this.value)">'+
+          '<input placeholder="Tên người mua / công ty" value="'+escapeHtml(v.name||"")+'" onchange="App.webImportEditVat('+oi+',\'name\',this.value)">'+
+          '<input placeholder="Địa chỉ" value="'+escapeHtml(v.addr||"")+'" onchange="App.webImportEditVat('+oi+',\'addr\',this.value)">'+
+          '<input placeholder="Email VAT" value="'+escapeHtml(v.email||"")+'" onchange="App.webImportEditVat('+oi+',\'email\',this.value)"></div>';}
+        html+='<div class="web-table-wrap"><table class="web-table"><thead><tr><th># Excel</th><th>Original Name API</th><th>Order ID hãng</th><th>Cost NT</th><th>Regular Price</th><th>SL</th><th>Phân bổ giảm</th><th>Biên giá</th><th></th></tr></thead><tbody>';
+        (o.items||[]).forEach((it,ii)=>{
+          const errs=itemErrors(o,it),mw=marginWarning(it),cls=errs.length?"web-row-invalid":(mw?"web-row-warning":"");
+          html+='<tr class="'+cls+'"><td>'+escapeHtml(String(it.sourceRow||""))+'</td>'+
+            '<td><input class="web-name-input" value="'+escapeHtml(it.name||"")+'" onchange="App.webImportEditItem('+oi+','+ii+',\'name\',this.value)"></td>'+
+            '<td><input value="'+escapeHtml(it.orderId||"")+'" onchange="App.webImportEditItem('+oi+','+ii+',\'orderId\',this.value)"></td>'+
+            '<td><input type="number" step="0.01" value="'+escapeHtml(String(it.costNt||""))+'" onchange="App.webImportEditItem('+oi+','+ii+',\'costNt\',this.value)"></td>'+
+            '<td><input type="number" step="1" value="'+escapeHtml(String(it.regularVnd||""))+'" onchange="App.webImportEditItem('+oi+','+ii+',\'regularVnd\',this.value)"></td>'+
+            '<td><input type="number" min="1" step="1" value="'+escapeHtml(String(it.qty||""))+'" onchange="App.webImportEditItem('+oi+','+ii+',\'qty\',this.value)"></td>'+
+            '<td><input type="number" step="1" value="'+escapeHtml(String(it.discountVnd||0))+'" onchange="App.webImportEditItem('+oi+','+ii+',\'discountVnd\',this.value)"></td>'+
+            '<td style="color:'+(mw?"#b45309":"#166534")+';font-weight:650;">'+escapeHtml(mw||"OK >15%")+'</td>'+
+            '<td><button class="red" style="margin:0;padding:4px 7px;" onclick="App.webImportRemoveItem('+oi+','+ii+')" title="Bỏ dòng">✕</button></td></tr>';
+        });
+        html+='</tbody></table></div></section>';
+      });
+      host.innerHTML=html;
+      if(footer)footer.textContent=t.rows+" dòng · "+state.orders.length+" đơn · sau giảm "+money(t.gross-t.discount);
+    }
+    function editOrder(oi,field,value){if(state.orders[oi]){state.orders[oi][field]=value;render();}}
+    function toggleVat(oi,checked){const o=state.orders[oi];if(!o)return;o.vatEnabled=!!checked;if(!o.vat)o.vat={mst:"",name:"",addr:"",email:""};render();}
+    function editVat(oi,field,value){const o=state.orders[oi];if(!o)return;if(!o.vat)o.vat={};o.vat[field]=value;render();}
+    function editItem(oi,ii,field,value){
+      const it=state.orders[oi]&&state.orders[oi].items[ii];if(!it)return;
+      it[field]=["costNt","regularVnd","qty","discountVnd"].includes(field)?(field==="costNt"?numVal(value):Math.round(numVal(value))):value;render();
+    }
+    function removeItem(oi,ii){const o=state.orders[oi];if(!o)return;o.items.splice(ii,1);if(!o.items.length)state.orders.splice(oi,1);render();}
+    const snapshot=()=>({version:1,fileName:state.fileName,dateFrom:state.dateFrom,dateTo:state.dateTo,orders:clone(state.orders)});
+    function payloadFromData(data){
+      data=data||{};
+      const orders=Array.isArray(data.orders)?data.orders:[];
+      return {v:1,kind:"simglobe_web_sheet_v1",source:"web",fileName:data.fileName||"",dateFrom:data.dateFrom||"",dateTo:data.dateTo||"",
+        orders:orders.map(o=>({websiteOrderCode:String(o.websiteOrderCode||"").trim(),orderEmail:String(o.orderEmail||"").trim(),
+          orderedAt:o.orderedAt||"",vat:o.vatEnabled?{mst:String((o.vat&&o.vat.mst)||"").trim(),name:String((o.vat&&o.vat.name)||"").trim(),
+            addr:String((o.vat&&o.vat.addr)||"").trim(),email:String((o.vat&&o.vat.email)||"").trim()}:null,
+          items:(o.items||[]).map(it=>({p:String(it.name||"").trim(),orderId:String(it.orderId||"").trim(),q:Math.max(1,Math.round(Number(it.qty)||1)),
+            unitVnd:Math.round(Number(it.regularVnd)||0),discountVnd:Math.round(Number(it.discountVnd)||0),costNt:Number(it.costNt)||0,sourceRow:it.sourceRow||""}))}))};
+    }
+    function payload(){return payloadFromData(snapshot());}
+    async function saveDraft(){
+      if(!state.orders.length)return status("Không có đơn WEB để lưu.","error");
+      const a=audit();if(a.errors.length)return status("Còn "+a.errors.length+" lỗi bắt buộc. Sửa dòng màu đỏ trước khi lưu.","error");
+      const name=String(document.getElementById("webImportDraftName").value||"").trim()||defaultName();
+      const scope=state.editingDraftId?state.editingScope:"local",store=_draftStore(scope),old=state.editingDraftId?store.getById(state.editingDraftId):null;
+      const d=_normalizeDraftRecord({...old,id:state.editingDraftId||draftGenId(),name,tag:"KHAC",customTag:"WEB",
+        orderCode:state.orders.length===1?state.orders[0].websiteOrderCode:"",cart:[],vat:null,codes:{groups:[]},extras:null,
+        draftKind:"web",webData:snapshot(),imported:old?old.imported===true:false,importedAt:old?old.importedAt:0});
+      try{await store.upsert(d);state.editingDraftId=d.id;state.editingScope=scope;_draftRenderScope(scope);status('Đã lưu đơn WEB vào '+_draftScopeName(scope)+' "'+name+'".',"success");}
+      catch(e){status("Lưu đơn WEB thất bại: "+e.message,"error");}
+    }
+    async function copyPayload(){
+      if(!state.orders.length)return status("Không có đơn WEB để nhập sổ.","error");
+      const a=audit();if(a.errors.length)return status("Còn "+a.errors.length+" lỗi bắt buộc. Sửa dòng màu đỏ trước khi nhập sổ.","error");
+      const ok=await copyText("SIMGLOBE-SHEET:"+urlSafeEncode(JSON.stringify(payload())));
+      if(!ok)return status("Trình duyệt chặn clipboard. Hãy thử lại.","error");
+      if(state.editingDraftId)await _draftMarkImported(state.editingDraftId,state.editingScope);
+      status("Đã copy payload "+state.orders.length+" đơn WEB. Chọn ô MÃ ORDER ID trong Google Sheet rồi dùng menu Nhập đơn từ App.","success");
+    }
+    function renderDraftPreview(d){
+      const data=d&&d.webData?d.webData:{orders:[]},orders=Array.isArray(data.orders)?data.orders:[];let gross=0,discount=0,rows=0;
+      const cards=orders.map((o,oi)=>{
+        const vat=o.vatEnabled&&o.vat?o.vat:null;
+        const trs=(o.items||[]).map((it,ii)=>{rows++;gross+=(Number(it.regularVnd)||0)*(Number(it.qty)||0);discount+=Number(it.discountVnd)||0;
+          return '<tr><td style="padding:6px;border-bottom:1px solid #e5e7eb;">'+(ii+1)+'</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">'+escapeHtml(it.name||"")+
+            '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;font-family:monospace;">'+escapeHtml(it.orderId||"")+
+            '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;">'+money(it.regularVnd)+
+            '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;text-align:center;">'+escapeHtml(String(it.qty||0))+
+            '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;">'+money(it.discountVnd)+'</td></tr>';}).join("");
+        return '<div class="web-order-card"><div class="web-order-head"><b>Đơn '+(oi+1)+': '+escapeHtml(o.websiteOrderCode||"(thiếu mã)")+
+          '</b><span style="font-size:11px;color:#64748b;">'+escapeHtml(o.orderEmail||"")+'</span></div>'+
+          (vat?'<div style="padding:7px 10px;background:#fffbeb;color:#92400e;font-size:11.5px;">VAT · '+escapeHtml(vat.mst||"")+' · '+escapeHtml(vat.name||"")+' · '+escapeHtml(vat.email||"")+'</div>':
+            '<div style="padding:7px 10px;background:#f8fafc;color:#64748b;font-size:11.5px;">Không xuất VAT</div>')+
+          '<div class="web-table-wrap"><table class="web-table"><thead><tr><th>#</th><th>Original Name API</th><th>Order ID hãng</th><th>Đơn giá</th><th>SL</th><th>Giảm phân bổ</th></tr></thead><tbody>'+trs+'</tbody></table></div></div>';
+      }).join("");
+      return '<div style="background:#ecfeff;border:1px solid #67e8f9;border-radius:8px;padding:10px 12px;margin-bottom:12px;"><b style="color:#155e75;">🌐 Đơn WEB</b>'+
+        '<div style="font-size:12px;color:#475569;margin-top:4px;">File: '+escapeHtml(data.fileName||"(đơn đã lưu)")+' · '+escapeHtml(data.dateFrom||"")+' → '+escapeHtml(data.dateTo||"")+
+        '</div><div style="font-size:12px;margin-top:4px;">'+orders.length+' đơn · '+rows+' dòng · Tổng sau giảm: <b>'+money(gross-discount)+'</b></div></div>'+cards;
+    }
+    return {open,openDraft,close,browse,dragOver,dragLeave,drop,pickFile,applyFilter,editOrder,toggleVat,editVat,editItem,removeItem,saveDraft,copyPayload,renderDraftPreview,payload,payloadFromData};
+  })();
+
   function draftsCleanup() {
     // Compat shim cho code cũ — đồng bộ, dùng cache đã load
     return DraftStore.getAll();
@@ -8247,7 +8645,10 @@ const App = (() => {
 
     const kw = ComboLogic.norm(searchKw);
     const filtered = kw ? list.filter(d => {
-      const hay = ComboLogic.norm(d.name + " " + (d.customTag || "") + " " + (d.orderCode || ""));
+      const webSearch = d.draftKind === "web" && d.webData
+        ? (d.webData.orders || []).map(o => [o.websiteOrderCode, o.orderEmail].join(" ")).join(" ")
+        : "";
+      const hay = ComboLogic.norm(d.name + " " + (d.customTag || "") + " " + (d.orderCode || "") + " " + webSearch);
       return hay.includes(kw);
     }) : list;
 
@@ -8276,10 +8677,16 @@ const App = (() => {
 
     wrap.innerHTML = batchBarHtml + filtered.map(d => {
       const domKey = _draftDomKey(scope, d.id);
-      const itemCount = (d.cart || []).length;
-      const vatBadge = d.vat && (d.vat.mst || d.vat.name)
+      const isWeb = d.draftKind === "web" && d.webData;
+      const webOrders = isWeb && Array.isArray(d.webData.orders) ? d.webData.orders : [];
+      const itemCount = isWeb
+        ? webOrders.reduce((sum, o) => sum + (Array.isArray(o.items) ? o.items.length : 0), 0)
+        : (d.cart || []).length;
+      const hasWebVat = isWeb && webOrders.some(o => o.vatEnabled && o.vat);
+      const vatBadge = (d.vat && (d.vat.mst || d.vat.name)) || hasWebVat
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;" title="Đơn có VAT">VAT</span>`
         : "";
+      const webBadge = isWeb ? `<span class="draft-web-badge">🌐 WEB · ${webOrders.length} đơn</span>` : "";
       // v10.8.26: Tag mới — "Đã lấy" (có mã eSIM), "Đã nạp" (có mã SIM VL), "Đã nhập sổ" (đã copy payload).
       // v10.8.39: Chỉ tính là mã (cho tag) khi line match pattern `b\d{2,}` (b + ≥2 số liền).
       // Note tự do (không phải mã) sẽ không trigger badge.
@@ -8319,13 +8726,18 @@ const App = (() => {
       const moveBtn = isShared
         ? `<button style="margin:0;padding:7px 12px;font-size:12px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;cursor:pointer;font-weight:700;" onclick="App.sharedDraftSaveLocal('${d.id}')" title="Lưu đơn lưu chung này về Đơn nháp local">💾 Lưu Nháp</button>`
         : `<button style="margin:0;padding:7px 12px;font-size:12px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;cursor:pointer;font-weight:700;" onclick="App.draftSaveOnline('${d.id}')" title="Lưu đơn này sang Đơn lưu chung online">☁️ Lưu Online</button>`;
-      const rowBg = isShared ? "#fffaf0" : "#f9fafb";
-      const rowBorder = isShared ? "#fbbf24" : "var(--line)";
+      const rowBg = isWeb ? "#f0fdfa" : (isShared ? "#fffaf0" : "#f9fafb");
+      const rowBorder = isWeb ? "#2dd4bf" : (isShared ? "#fbbf24" : "var(--line)");
+      const importBtn = isWeb
+        ? `<button style="margin:0;padding:7px 12px;font-size:12px;background:#0f766e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="App.draftImport('${d.id}', '${scope}')">✏️ Mở WEB</button>`
+        : `<button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}', '${scope}')">⬇️ Import</button>`;
+      const shareBtn = isWeb ? "" : `<button class="blue" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}', '${scope}')">🔗 Share</button>`;
       return `
         <div class="draft-list-item" style="display:flex;align-items:center;gap:8px;background:${rowBg};border:1px solid ${rowBorder};border-radius:10px;padding:9px 11px;flex-wrap:wrap;">
           <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:4px;">
             <div id="draftNameRow_${domKey}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${draftTagBadge(d.tag, d.customTag)}
+              ${webBadge}
               ${vatBadge}
               ${tookBadge}
               ${chargedBadge}
@@ -8338,13 +8750,13 @@ const App = (() => {
               <span style="font-family:'Roboto Mono',monospace;font-size:11.5px;font-weight:600;color:#1f2937;background:#fff;padding:2px 7px;border:1px solid #d1d5db;border-radius:4px;">${ocDisplay}</span>
               ${oc ? `<button onclick="App.draftCopyOrderCode('${d.id}', '${scope}')" title="Copy mã đơn" style="margin:0;padding:2px 6px;background:#dcfce7;color:#166534;font-size:11px;border:none;border-radius:4px;cursor:pointer;">📋</button>` : ""}
               <button onclick="App.draftEditOrderCode('${d.id}', '${scope}')" title="Sửa mã đơn" style="margin:0;padding:2px 6px;background:#eef2f7;color:#444;font-size:11px;border:none;border-radius:4px;cursor:pointer;">✏️</button>
-              <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng · ${draftFormatTimePair(d.createdAt, d.updatedAt)}</span>
+              <span style="font-size:11px;color:var(--muted);">· ${itemCount} dòng${isWeb ? ` / ${webOrders.length} đơn` : ""} · ${draftFormatTimePair(d.createdAt, d.updatedAt)}</span>
             </div>
           </div>
           <button style="margin:0;padding:7px 10px;font-size:12px;background:#f1f5f9;color:#1e293b;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;" onclick="App.draftView('${d.id}', '${scope}')" title="Xem chi tiết (không thay giỏ hiện tại)">👁 Xem</button>
-          <button class="green" style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftImport('${d.id}', '${scope}')">⬇️ Import</button>
+          ${importBtn}
           ${moveBtn}
-          <button class="blue"  style="margin:0;padding:7px 12px;font-size:12px;" onclick="App.draftShare('${d.id}', '${scope}')">🔗 Share</button>
+          ${shareBtn}
           <button class="red"   style="margin:0;padding:7px 10px;font-size:12px;" onclick="App.draftDelete('${d.id}', '${scope}')" title="Xoá đơn">✕</button>
           <input type="checkbox" class="draft-sel-chk" data-id="${d.id}" onchange="App.draftBatchToggle('${d.id}', this.checked, '${scope}')"
             title="Chọn để xoá hàng loạt"
@@ -8588,6 +9000,15 @@ const App = (() => {
   let _draftViewingId = null;
   let _draftViewingScope = "local";
 
+  function _setDraftViewWebMode(isWeb) {
+    ["draftViewBillBtn", "draftViewQrBtn", "draftViewImageBtn"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = isWeb ? "none" : "";
+    });
+    const importBtn = document.getElementById("draftViewImportBtn");
+    if (importBtn) importBtn.textContent = isWeb ? "✏️ Mở WEB để chỉnh sửa" : "📥 Import để chỉnh sửa";
+  }
+
   function draftView(id, scope) {
     scope = _draftScope(scope);
     const d = _draftStore(scope).getById(id);
@@ -8597,6 +9018,13 @@ const App = (() => {
     const body = document.getElementById("draftViewBody");
     const title = document.getElementById("draftViewTitle");
     title.innerHTML = `👁 Xem ${_draftScopeName(scope)}: <span style="font-weight:700;">${escapeHtml(d.name)}</span>`;
+    const isWeb = d.draftKind === "web" && d.webData;
+    _setDraftViewWebMode(isWeb);
+    if (isWeb) {
+      body.innerHTML = WebImport.renderDraftPreview(d);
+      document.getElementById("draftViewOverlay").classList.add("open");
+      return;
+    }
 
     // v10.8.29: Dùng _draftCalcOpts(d) để đọc đúng d.extras (ship/discount/shipVat) + d.vat.
     // calc() đã embed VAT block khi opts.vatInfo có giá trị → không cần append thủ công.
@@ -8819,8 +9247,10 @@ const App = (() => {
   function draftViewImport() {
     const id = _draftViewingId;
     const scope = _draftViewingScope;
+    const d = id ? _draftStore(scope).getById(id) : null;
     draftViewClose();
-    if (id) draftImport(id, scope);
+    if (d && d.draftKind === "web") WebImport.openDraft(d, scope);
+    else if (id) draftImport(id, scope);
   }
 
   // ─── Quick actions trong modal Xem đơn nháp (KHÔNG đụng state hiện tại) ───
@@ -8982,6 +9412,19 @@ const App = (() => {
     if (!_draftViewingId) return;
     const d = _draftStore(_draftViewingScope).getById(_draftViewingId);
     if (!d) return;
+    if (d.draftKind === "web" && d.webData) {
+      try {
+        const payload = WebImport.payloadFromData(d.webData);
+        const out = "SIMGLOBE-SHEET:" + urlSafeEncode(JSON.stringify(payload));
+        const ok = await copyText(out);
+        if (!ok) return _draftViewStatus("❌ Copy thất bại — browser có thể chặn clipboard.", "error");
+        _draftViewStatus(`✅ Đã copy payload ${payload.orders.length} đơn WEB. Chọn ô MÃ ORDER ID trong Google Sheet rồi dùng menu Nhập đơn từ App.`, "success");
+        _draftMarkImported(d.id, _draftViewingScope);
+      } catch (e) {
+        _draftViewStatus("❌ Lỗi tạo payload WEB: " + e.message, "error");
+      }
+      return;
+    }
     if (!(d.cart || []).length) { _draftViewStatus("⚠️ Đơn nháp không có gói.", "error"); return; }
     try {
       const savedCart = cart;
@@ -9470,6 +9913,10 @@ const App = (() => {
     scope = _draftScope(scope);
     const d = _draftStore(scope).getById(id);
     if (!d) return;
+    if (d.draftKind === "web" && d.webData) {
+      WebImport.openDraft(d, scope);
+      return;
+    }
     if (cart.length > 0 && !confirm(`Thay thế giỏ hiện tại (${cart.length} dòng) bằng ${_draftScopeName(scope)} "${d.name}"?`)) return;
     _loadingDraft = true; // chặn auto-regen mã đơn trong liveRecalc
     cart = normalizeCartItems(JSON.parse(JSON.stringify(d.cart || [])));
@@ -9716,6 +10163,10 @@ const App = (() => {
     scope = _draftScope(scope);
     const d = _draftStore(scope).getById(id);
     if (!d) return;
+    if (d.draftKind === "web") {
+      showStatus("Đơn WEB không dùng link Share của giỏ thường. Hãy dùng Lưu Online để đồng bộ.");
+      return;
+    }
     lastShareLink = buildShareLink(d.name, d.tag, d.customTag, d.cart, {
       orderCode: d.orderCode || "",
       vat: d.vat || null,
@@ -14558,6 +15009,21 @@ const App = (() => {
     pickerRefresh,
     pickerOpenSheetUrl,
     pickerSetTypeFilter,
+    webImportOpen: () => WebImport.open(),
+    webImportClose: () => WebImport.close(),
+    webImportBrowse: () => WebImport.browse(),
+    webImportDragOver: ev => WebImport.dragOver(ev),
+    webImportDragLeave: ev => WebImport.dragLeave(ev),
+    webImportDrop: ev => WebImport.drop(ev),
+    webImportPickFile: ev => WebImport.pickFile(ev),
+    webImportApplyFilter: () => WebImport.applyFilter(),
+    webImportEditOrder: (oi, field, value) => WebImport.editOrder(oi, field, value),
+    webImportToggleVat: (oi, checked) => WebImport.toggleVat(oi, checked),
+    webImportEditVat: (oi, field, value) => WebImport.editVat(oi, field, value),
+    webImportEditItem: (oi, ii, field, value) => WebImport.editItem(oi, ii, field, value),
+    webImportRemoveItem: (oi, ii) => WebImport.removeItem(oi, ii),
+    webImportSaveDraft: () => WebImport.saveDraft(),
+    webImportCopyPayload: () => WebImport.copyPayload(),
     draftSaveOpen,
     doSaveNewDraft,
     doUpdateDraft,
