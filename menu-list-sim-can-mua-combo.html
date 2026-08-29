@@ -78,6 +78,17 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.104 · 29/08/2026 · (GMT+7)
+ - Fix `+Tổng` khi lọc `Cả 2`: tính mốc gói tổng gần nhất riêng cho ESIM và
+   SIM VẬT LÝ, tránh mốc ESIM làm mất gói tổng SIM VL (vd China 2 ngày).
+ - Chỉ tìm gói tổng trong tab/bộ đang mở; bỏ cơ chế tìm chéo tab của v10.9.103.
+
+ v10.9.103 · 29/08/2026 · (GMT+7)
+ - Fix checkbox `+Tổng` cho SIM VẬT LÝ: tìm gói tổng chéo các tab/bộ trong cùng
+   bảng giá, vì gói /day và gói tổng SIM VL thường nằm ở hai bộ khác nhau.
+ - Chỉ ghép gói tổng cùng loại SIM + cùng nhóm quốc gia/vùng phủ sóng; dòng bổ sung
+   có badge `+Tổng`, vẫn chọn/copy/thêm giỏ đúng theo tab nguồn.
+
  v10.9.102 · 24/08/2026 · (GMT+7)
  - Đồng bộ header version bị sót trong `simglobe_import.gs`; version chạy thật
    trước đó đã đúng, dòng `v10.9.97` còn lại là changelog lịch sử.
@@ -1796,7 +1807,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.102
+    Version 10.9.104
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -6503,22 +6514,48 @@ const App = (() => {
     return Number.isFinite(day) && day > 0 ? day : null;
   }
 
-  // Với mỗi ngày tìm, lấy đúng mốc gói tổng gần nhất >= ngày đó trong tab hiện tại.
+  function pickerItemTypeGroup(item) {
+    const typeNorm = ComboLogic.norm(item && item.parsed && item.parsed.type || "");
+    if (typeNorm.includes("esim")) return "ESIM";
+    if (typeNorm.includes("sim vat ly") || typeNorm === "sim") return "PHYSICAL";
+    return "OTHER";
+  }
+
+  // Với mỗi loại SIM và mỗi ngày tìm, lấy mốc gói tổng gần nhất >= ngày đó
+  // trong tab hiện tại. Tách loại để mốc ESIM không làm mất mốc SIM vật lý.
   function pickerBuildTotalDayTargets(items, kw) {
-    const targets = new Set();
-    if (!pickerTotalSearchEnabled || !pickerDaysFilter.length) return targets;
-    const available = [];
+    const targetsByType = new Map();
+    if (!pickerTotalSearchEnabled || !pickerDaysFilter.length) return targetsByType;
+    const availableByType = new Map();
     items.forEach(item => {
       if (!pickerItemMatchesBase(item, kw)) return;
       const day = pickerGetTotalPackageDay(item);
-      if (day !== null && !available.includes(day)) available.push(day);
+      if (day === null) return;
+      const type = pickerItemTypeGroup(item);
+      if (!availableByType.has(type)) availableByType.set(type, new Set());
+      availableByType.get(type).add(day);
     });
-    available.sort((a, b) => a - b);
-    pickerDaysFilter.forEach(wanted => {
-      const nearest = available.find(day => day >= wanted);
-      if (nearest !== undefined) targets.add(nearest);
+    availableByType.forEach((daySet, type) => {
+      const available = Array.from(daySet).sort((a, b) => a - b);
+      const targets = new Set();
+      pickerDaysFilter.forEach(wanted => {
+        const nearest = available.find(day => day >= wanted);
+        if (nearest !== undefined) targets.add(nearest);
+      });
+      targetsByType.set(type, targets);
     });
-    return targets;
+    return targetsByType;
+  }
+
+  function pickerBuildVisibleEntries(tbl, kw) {
+    if (!tbl) return [];
+    const localTargets = pickerBuildTotalDayTargets(tbl.items, kw);
+    return tbl.items.reduce((entries, item, itemIdx) => {
+      if (pickerItemMatches(item, kw, localTargets)) {
+        entries.push({ item, tabIdx: pickerActiveTab, itemIdx });
+      }
+      return entries;
+    }, []);
   }
 
   function pickerItemMatches(item, kw, totalDayTargets) {
@@ -6526,7 +6563,8 @@ const App = (() => {
     if (!pickerDaysFilter.length) return true;
     if (pickerMatchDays(item, pickerDaysFilter)) return true;
     const totalDay = pickerGetTotalPackageDay(item);
-    return !!(totalDayTargets && totalDayTargets.has(totalDay));
+    const typeTargets = totalDayTargets && totalDayTargets.get(pickerItemTypeGroup(item));
+    return !!(typeTargets && typeTargets.has(totalDay));
   }
 
   function pickerRenderFilterButtons() {
@@ -6553,13 +6591,11 @@ const App = (() => {
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) return;
     const items = tbl.items;
-    const totalDayTargets = pickerBuildTotalDayTargets(items, kw);
-    let shown = 0;
-    items.forEach((item, idx) => {
-      if (!pickerItemMatches(item, kw, totalDayTargets)) return;
-      shown++;
+    const entries = pickerBuildVisibleEntries(tbl, kw);
+    entries.forEach(entry => {
+      const { item, tabIdx, itemIdx } = entry;
       const p = item.parsed;
-      const key = pickerActiveTab + "_" + idx;
+      const key = tabIdx + "_" + itemIdx;
       const checked = pickerChecked.has(key);
       const tr = document.createElement("tr");
       if (checked) tr.classList.add("selected");
@@ -6568,7 +6604,7 @@ const App = (() => {
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked;
       cb.onchange = () => pickerToggle(key, tr);
       tdCb.appendChild(cb); tr.appendChild(tdCb);
-      const tdNo = document.createElement("td"); tdNo.className = "col-no"; tdNo.textContent = idx + 2; tr.appendChild(tdNo);
+      const tdNo = document.createElement("td"); tdNo.className = "col-no"; tdNo.textContent = itemIdx + 2; tr.appendChild(tdNo);
 
       const tdName = document.createElement("td"); tdName.className = "col-name";
       const nameDiv = document.createElement("div");
@@ -6613,8 +6649,8 @@ const App = (() => {
     const statsEl = document.getElementById("pickerFilterStats");
     if (statsEl) {
       const total = items.length;
-      if (shown < total) {
-        statsEl.textContent = `Hiện ${shown}/${total} gói`;
+      if (entries.length < total) {
+        statsEl.textContent = `Hiện ${entries.length}/${total} gói`;
         statsEl.style.color = "var(--blue)";
         statsEl.style.fontWeight = "600";
       } else {
@@ -6627,7 +6663,7 @@ const App = (() => {
     const cnt = pickerChecked.size;
     document.getElementById("pickerSelCount").textContent = cnt
       ? ("Đã chọn " + cnt + " gói")
-      : ("Chưa chọn (" + shown + " gói hiển thị)");
+      : ("Chưa chọn (" + entries.length + " gói hiển thị)");
   }
 
 
@@ -6654,12 +6690,9 @@ const App = (() => {
     const kw = pickerSearchKw.toLowerCase();
     const tbl = pickerTables[pickerActiveTab];
     if (!tbl) return;
-    const totalDayTargets = pickerBuildTotalDayTargets(tbl.items, kw);
-    // Chỉ chọn những item match filter hiện tại (search + type)
-    tbl.items.forEach((item, idx) => {
-      if (pickerItemMatches(item, kw, totalDayTargets)) {
-        pickerChecked.add(pickerActiveTab + "_" + idx);
-      }
+    // Chỉ chọn các gói đang hiển thị trong tab hiện tại.
+    pickerBuildVisibleEntries(tbl, kw).forEach(entry => {
+      pickerChecked.add(entry.tabIdx + "_" + entry.itemIdx);
     });
     pickerRender();
   }
@@ -6729,8 +6762,7 @@ const App = (() => {
     } else {
       // Chưa tick → lấy toàn bộ items đang match filter ở tab hiện tại
       const kw = (pickerSearchKw || "").toLowerCase();
-      const totalDayTargets = pickerBuildTotalDayTargets(tbl.items, kw);
-      rows = tbl.items.filter(item => pickerItemMatches(item, kw, totalDayTargets));
+      rows = pickerBuildVisibleEntries(tbl, kw).map(entry => entry.item);
     }
     if (!rows.length) {
       document.getElementById("slStatus").textContent = "⚠️ Không có gói nào để copy.";
