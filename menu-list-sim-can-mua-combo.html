@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.106 · 04/09/2026 · (GMT+7)
+ - Hai mẫu chứng từ: chữ ký còn 90%, dấu giám đốc tăng 5%; căn dấu sát dưới
+   nét chữ ký, bỏ khoảng trắng thừa của dấu khi vẽ để không che nét ký.
+
  v10.9.105 · 04/09/2026 · (GMT+7)
  - Hóa đơn lẻ / Đề nghị TT: thêm tùy chọn chữ ký (5 mẫu) và dấu giám đốc
    (3 mẫu, xoay -2..2 độ), mặc định tắt; chữ ký trên, dấu dưới ở phần người ký.
@@ -1812,7 +1816,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.105
+    Version 10.9.106
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -13911,18 +13915,43 @@ const App = (() => {
       }
       return assets;
     },
+    inkRows(img) {
+      const scratch = document.createElement("canvas");
+      scratch.width = img.width;
+      scratch.height = img.height;
+      const ctx = scratch.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      const pixels = ctx.getImageData(0, 0, img.width, img.height).data;
+      let first = img.height, last = -1;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const min = Math.min(pixels[i], pixels[i + 1], pixels[i + 2]);
+        const max = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+        if (pixels[i + 3] > 32 && max - min > 60 && min < 200) {
+          const row = Math.floor(i / 4 / img.width);
+          first = Math.min(first, row);
+          last = Math.max(last, row);
+        }
+      }
+      return last < 0 ? { top: 0, bottom: img.height }
+        : { top: Math.max(0, first - 3), bottom: Math.min(img.height, last + 4) };
+    },
     draw(ctx, assets, selection, x, top) {
       ctx.save();
       ctx.globalAlpha = 1;
+      let signatureBottom = top;
       if (assets.signature) {
-        const w = 176, h = w * assets.signature.height / assets.signature.width;
+        const w = 176 * 0.9, h = w * assets.signature.height / assets.signature.width;
         ctx.drawImage(assets.signature, x - w / 2, top, w, h);
+        signatureBottom = top + this.inkRows(assets.signature).bottom * w / assets.signature.width;
       }
       if (assets.stamp) {
-        const w = 230, h = w * assets.stamp.height / assets.stamp.width;
-        ctx.translate(x, top + 122 + h / 2);
+        // Trim only at render time: the original PNGs and ink scale stay intact.
+        const bounds = this.inkRows(assets.stamp);
+        const sourceH = bounds.bottom - bounds.top;
+        const w = 230 * 1.05, h = w * sourceH / assets.stamp.width;
+        ctx.translate(x, signatureBottom + 8 + h / 2);
         ctx.rotate(selection.rotation);
-        ctx.drawImage(assets.stamp, -w / 2, -h / 2, w, h);
+        ctx.drawImage(assets.stamp, 0, bounds.top, assets.stamp.width, sourceH, -w / 2, -h / 2, w, h);
       }
       ctx.restore();
     },
