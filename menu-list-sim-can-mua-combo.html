@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.107 · 04/09/2026 · (GMT+7)
+ - Bật lại chữ ký / dấu giám đốc sẽ random mẫu khác mẫu vừa dùng; dấu random
+   lại góc -2..2 độ. Hai chứng từ luôn dùng chữ ký và dấu khác nhau.
+ - Sửa thông tin vẫn giữ mẫu; bỏ kết quả render cũ khi bật/tắt nhanh.
+
  v10.9.106 · 04/09/2026 · (GMT+7)
  - Hai mẫu chứng từ: chữ ký còn 90%, dấu giám đốc tăng 5%; căn dấu sát dưới
    nét chữ ký, bỏ khoảng trắng thừa của dấu khi vẽ để không che nét ký.
@@ -1816,7 +1821,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.106
+    Version 10.9.107
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2711,11 +2716,11 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
           <span>Hiện dấu công ty</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-          <input type="checkbox" id="invSignatureToggle" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
+          <input type="checkbox" id="invSignatureToggle" onchange="App.invoiceOptionChanged('signature')" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện chữ ký</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
-          <input type="checkbox" id="invDirectorStampToggle" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
+          <input type="checkbox" id="invDirectorStampToggle" onchange="App.invoiceOptionChanged('stamp')" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện dấu giám đốc</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
@@ -2796,11 +2801,11 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         </label>
         <div style="display:flex;gap:14px;flex-wrap:wrap;">
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input id="payReqSignatureToggle" type="checkbox" onchange="App.payReqPersistOptions()" style="width:16px;height:16px;" />
+            <input id="payReqSignatureToggle" type="checkbox" onchange="App.payReqPersistOptions('signature')" style="width:16px;height:16px;" />
             <span>Hiện chữ ký</span>
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-            <input id="payReqDirectorStampToggle" type="checkbox" onchange="App.payReqPersistOptions()" style="width:16px;height:16px;" />
+            <input id="payReqDirectorStampToggle" type="checkbox" onchange="App.payReqPersistOptions('stamp')" style="width:16px;height:16px;" />
             <span>Hiện dấu giám đốc</span>
           </label>
         </div>
@@ -13896,15 +13901,26 @@ const App = (() => {
     ctx.filter = oldFilter || "none";
   }
 
-  // One random selection per modal opening; assets remain unchanged while editing.
+  // Each document keeps its own selection, excluding its last sample and the other document.
   const DirectorSigning = {
-    pick() {
+    selections: {},
+    pickFor(owner, kind) {
+      const otherOwner = owner === "invoice" ? "payment" : "invoice";
+      const selected = this.pick(this.selections[owner], kind, this.selections[otherOwner]);
+      this.selections[owner] = selected;
+      return selected;
+    },
+    pick(previous = {}, kind, other = {}) {
       const signatures = ["CK01.png", "CK02.png", "CK 03.png", "CK04.png", "CK05.png"];
       const stamps = ["DAUGD01.png", "DAUGD02.png", "DAUGD03.png"];
+      const choose = (samples, last, usedElsewhere) => {
+        const available = samples.filter(name => name !== last && name !== usedElsewhere);
+        return available[Math.floor(Math.random() * available.length)];
+      };
       return {
-        signature: signatures[Math.floor(Math.random() * signatures.length)],
-        stamp: stamps[Math.floor(Math.random() * stamps.length)],
-        rotation: (Math.random() * 4 - 2) * Math.PI / 180,
+        signature: kind === "stamp" ? previous.signature : choose(signatures, previous.signature, other.signature),
+        stamp: kind === "signature" ? previous.stamp : choose(stamps, previous.stamp, other.stamp),
+        rotation: kind === "signature" ? previous.rotation : (Math.random() * 4 - 2) * Math.PI / 180,
       };
     },
     async load(selection, opt) {
@@ -13958,7 +13974,8 @@ const App = (() => {
   };
 
   const Invoice = (() => {
-    let signing = DirectorSigning.pick();
+    let signing = DirectorSigning.pickFor("invoice");
+    let renderRevision = 0;
     let cfg = null; // load từ hoadonle.json
     const DEFAULT_CFG = {
       company: {
@@ -13999,7 +14016,9 @@ const App = (() => {
       });
     }
 
-    function optionChanged() {
+    function optionChanged(kind) {
+      const toggleId = { signature: "invSignatureToggle", stamp: "invDirectorStampToggle" }[kind];
+      if (toggleId && document.getElementById(toggleId).checked) signing = DirectorSigning.pickFor("invoice", kind);
       persistEditDraft();
       render();
     }
@@ -14160,7 +14179,7 @@ const App = (() => {
     function open() {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
       const savedEdit = loadInvoiceEditDraft();
-      signing = DirectorSigning.pick();
+      signing = DirectorSigning.pickFor("invoice");
       document.getElementById("invSignatureToggle").checked = !!(savedEdit && savedEdit.showSignature === true);
       document.getElementById("invDirectorStampToggle").checked = !!(savedEdit && savedEdit.showDirectorStamp === true);
       rowNameOverrides = savedEdit && Array.isArray(savedEdit.rowNameOverrides)
@@ -14214,8 +14233,10 @@ const App = (() => {
     }
 
     async function render() {
+      const revision = ++renderRevision;
       const c = await loadCfg();
       const canvas = document.getElementById("invoiceCanvas");
+      if (revision !== renderRevision) return;
       const statusEl = document.getElementById("invoiceStatus");
       const r = ComboLogic.calc(cart, getCalcOpts());
       if (!r.ok || !r.parsedItems || !r.parsedItems.length) {
@@ -14255,8 +14276,10 @@ const App = (() => {
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
       try {
-        await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showSignature, showDirectorStamp, signing, showShipping, shippingK, dateStr });
+        await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showSignature, showDirectorStamp, signing, showShipping, shippingK, dateStr, revision });
+        if (revision !== renderRevision) return;
       } catch (e) {
+        if (revision !== renderRevision) return;
         canvas.width = 0;
         if (statusEl) statusEl.textContent = "Không tải được chữ ký/dấu giám đốc: " + e.message;
         return;
@@ -14276,6 +14299,7 @@ const App = (() => {
       try { logoImg = await loadImage(auxVersionedUrl("./logoctyngang.png")); } catch (e) {}
       try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
       if (opt.showPaid) { try { stampPaid = await loadImage(auxVersionedUrl("./dau-thanh-toan.png")); } catch (e) {} }
+      if (opt.revision !== renderRevision) return;
 
       // ─── Đo chiều cao động ───
       // Header cty (~115) + tiêu đề (~70) + KH 2 dòng (~78) + bảng (header + rows) + footer (~150)
@@ -14635,7 +14659,8 @@ const App = (() => {
   const PaymentRequest = (() => {
     let cfg = null;
     let stampRot = 0;
-    let signing = DirectorSigning.pick();
+    let signing = DirectorSigning.pickFor("payment");
+    let renderRevision = 0;
     const DEFAULT_CFG = {
       company: {
         name: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
@@ -14777,7 +14802,9 @@ const App = (() => {
       await render();
       await persistAmountEdit();
     }
-    async function persistOptions() {
+    async function persistOptions(kind) {
+      const toggleId = { signature: "payReqSignatureToggle", stamp: "payReqDirectorStampToggle" }[kind];
+      if (toggleId && document.getElementById(toggleId).checked) signing = DirectorSigning.pickFor("payment", kind);
       await render();
       await persistAmountEdit();
     }
@@ -14811,7 +14838,7 @@ const App = (() => {
       if (!r.ok) { alert("Chưa có dòng hợp lệ để lập đề nghị thanh toán."); return; }
       if (!currentOrderCode) regenOrderCode();
       stampRot = (Math.random() * 24 - 12) * Math.PI / 180;
-      signing = DirectorSigning.pick();
+      signing = DirectorSigning.pickFor("payment");
       Cust2B.syncFromDOM();
       const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
       const dateEl = document.getElementById("payReqDate");
@@ -14856,11 +14883,14 @@ const App = (() => {
     }
 
     async function render() {
+      const revision = ++renderRevision;
       const c = await loadCfg();
       const canvas = document.getElementById("payReqCanvas");
+      if (revision !== renderRevision) return;
       const statusEl = document.getElementById("payReqStatus");
       const amountPreview = document.getElementById("payReqAmountPreview");
       const opt = getOpt();
+      opt.revision = revision;
       if (amountPreview) amountPreview.textContent = `${fmtDong(opt.amountDong)} vnđ`;
       if (!opt.amountDong) {
         if (statusEl) statusEl.textContent = isAmountEditEnabled()
@@ -14870,7 +14900,9 @@ const App = (() => {
       }
       try {
         await draw(canvas, c, opt);
+        if (revision !== renderRevision) return;
       } catch (e) {
+        if (revision !== renderRevision) return;
         canvas.width = 0;
         if (statusEl) statusEl.textContent = "Không tải được chữ ký/dấu giám đốc: " + e.message;
         return;
@@ -14880,6 +14912,10 @@ const App = (() => {
 
     async function draw(canvas, c, opt) {
       const signingAssets = await DirectorSigning.load(opt.signing, opt);
+      let logoImg = null, stampCty = null;
+      try { logoImg = await loadImage(auxVersionedUrl("./logo.png")); } catch (e) {}
+      try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
+      if (opt.revision !== renderRevision) return;
       const DPR = 2;
       const W = 1000;
       const H = Math.round(W * 297 / 210);
@@ -14895,10 +14931,6 @@ const App = (() => {
       ctx.textBaseline = "alphabetic";
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, W, H);
-
-      let logoImg = null, stampCty = null;
-      try { logoImg = await loadImage(auxVersionedUrl("./logo.png")); } catch (e) {}
-      try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
 
       ctx.fillStyle = "#111827";
       if (logoImg) {
@@ -15148,7 +15180,7 @@ const App = (() => {
     invoiceOpen: () => Invoice.open(),
     invoiceClose: () => Invoice.close(),
     invoiceRender: () => Invoice.render(),
-    invoiceOptionChanged: () => Invoice.optionChanged(),
+    invoiceOptionChanged: kind => Invoice.optionChanged(kind),
     invoiceShippingChanged: () => Invoice.shippingChanged(),
     invoiceEditRowName: (idx, value) => Invoice.editRowName(idx, value),
     invoiceSetExtraNoteCount: value => Invoice.setExtraNoteCount(value),
@@ -15160,7 +15192,7 @@ const App = (() => {
     payReqRender: () => PaymentRequest.render(),
     payReqToggleAmountEdit: checked => PaymentRequest.toggleAmountEdit(checked),
     payReqAmountBlur: () => PaymentRequest.amountBlur(),
-    payReqPersistOptions: () => PaymentRequest.persistOptions(),
+    payReqPersistOptions: kind => PaymentRequest.persistOptions(kind),
     payReqDownload: () => PaymentRequest.download(),
     payReqCopy: () => PaymentRequest.copy(),
     pickerFilter,
