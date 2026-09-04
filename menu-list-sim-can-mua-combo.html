@@ -78,6 +78,11 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.105 · 04/09/2026 · (GMT+7)
+ - Hóa đơn lẻ / Đề nghị TT: thêm tùy chọn chữ ký (5 mẫu) và dấu giám đốc
+   (3 mẫu, xoay -2..2 độ), mặc định tắt; chữ ký trên, dấu dưới ở phần người ký.
+ - Hóa đơn lẻ đổi ĐT thành ĐT/MST, tự điền MST khi khách là công ty.
+
  v10.9.104 · 29/08/2026 · (GMT+7)
  - Fix `+Tổng` khi lọc `Cả 2`: tính mốc gói tổng gần nhất riêng cho ESIM và
    SIM VẬT LÝ, tránh mốc ESIM làm mất gói tổng SIM VL (vd China 2 ngày).
@@ -1807,7 +1812,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.104
+    Version 10.9.105
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2652,7 +2657,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
             style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
         </div>
         <div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Điện thoại (ĐT)</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Điện thoại / Mã số thuế (ĐT/MST)</div>
           <input id="invCustPhone" type="text" placeholder="VD: 0901234567"
             oninput="App.invoiceRender()"
             style="width:100%;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;" />
@@ -2700,6 +2705,14 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="invCompanyStampToggle" checked onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện dấu công ty</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="invSignatureToggle" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Hiện chữ ký</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="invDirectorStampToggle" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
+          <span>Hiện dấu giám đốc</span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="invStampPaid" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;cursor:pointer;" />
@@ -2777,7 +2790,16 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
           <input id="payReqCompanyStampToggle" type="checkbox" checked onchange="App.payReqPersistOptions()" style="width:16px;height:16px;cursor:pointer;" />
           <span>Hiện dấu công ty</span>
         </label>
-        <div></div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input id="payReqSignatureToggle" type="checkbox" onchange="App.payReqPersistOptions()" style="width:16px;height:16px;" />
+            <span>Hiện chữ ký</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input id="payReqDirectorStampToggle" type="checkbox" onchange="App.payReqPersistOptions()" style="width:16px;height:16px;" />
+            <span>Hiện dấu giám đốc</span>
+          </label>
+        </div>
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Tên chủ TK</div>
           <input id="payReqAccountName" type="text" value="CÔNG TY TNHH SIMGLOBE OFFICIAL" oninput="App.payReqRender()"
@@ -4889,6 +4911,10 @@ const App = (() => {
     if (prd) prd.value = "";
     const prs = document.getElementById("payReqCompanyStampToggle");
     if (prs) prs.checked = true;
+    ["payReqSignatureToggle", "payReqDirectorStampToggle"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.checked = false;
+    });
   }
   // Apply extras từ object {shipFeeK, manualDiscK, manualDiscPct, manualDiscOverride, shipVat} vào DOM
   function applyCartExtras(extras) {
@@ -4917,6 +4943,8 @@ const App = (() => {
     if (prd) prd.value = /^\d{4}-\d{2}-\d{2}$/.test(String(extras.payReqDate || "")) ? String(extras.payReqDate) : "";
     const prs = document.getElementById("payReqCompanyStampToggle");
     if (prs) prs.checked = extras.payReqCompanyStamp !== false;
+    document.getElementById("payReqSignatureToggle").checked = extras.payReqSignature === true;
+    document.getElementById("payReqDirectorStampToggle").checked = extras.payReqDirectorStamp === true;
   }
   // Đọc extras hiện tại từ DOM → cho save draft
   function readCartExtras() {
@@ -4938,6 +4966,8 @@ const App = (() => {
       payReqAmountDong,
       payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(payReqDate) ? payReqDate : "",
       payReqCompanyStamp,
+      payReqSignature: document.getElementById("payReqSignatureToggle").checked,
+      payReqDirectorStamp: document.getElementById("payReqDirectorStampToggle").checked,
     };
   }
 
@@ -10117,7 +10147,7 @@ const App = (() => {
       const payReqEdit = ex.payReqAmountEdit === true && payReqAmountDong > 0;
       const payReqDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ex.payReqDate || "")) ? String(ex.payReqDate) : "";
       const payReqCompanyStamp = ex.payReqCompanyStamp !== false;
-      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit || !!payReqDate || !payReqCompanyStamp;
+      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit || !!payReqDate || !payReqCompanyStamp || ex.payReqSignature === true || ex.payReqDirectorStamp === true;
       if (hasExtras) {
         payload.ex = {};
         if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
@@ -10131,6 +10161,8 @@ const App = (() => {
         }
         if (payReqDate) payload.ex.pd = payReqDate;
         if (!payReqCompanyStamp) payload.ex.ps = 0;
+        if (ex.payReqSignature === true) payload.ex.pk = 1;
+        if (ex.payReqDirectorStamp === true) payload.ex.pg = 1;
       }
     }
     if (opts.imported === true) payload.im = 1;
@@ -10163,6 +10195,8 @@ const App = (() => {
             payReqAmountDong: Math.max(0, parseInt(data.ex.pa, 10) || 0),
             payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(String(data.ex.pd || "")) ? String(data.ex.pd) : "",
             payReqCompanyStamp: data.ex.ps !== 0,
+            payReqSignature: data.ex.pk === 1,
+            payReqDirectorStamp: data.ex.pg === 1,
           }
         : null;
       return {
@@ -13858,7 +13892,44 @@ const App = (() => {
     ctx.filter = oldFilter || "none";
   }
 
+  // One random selection per modal opening; assets remain unchanged while editing.
+  const DirectorSigning = {
+    pick() {
+      const signatures = ["CK01.png", "CK02.png", "CK 03.png", "CK04.png", "CK05.png"];
+      const stamps = ["DAUGD01.png", "DAUGD02.png", "DAUGD03.png"];
+      return {
+        signature: signatures[Math.floor(Math.random() * signatures.length)],
+        stamp: stamps[Math.floor(Math.random() * stamps.length)],
+        rotation: (Math.random() * 4 - 2) * Math.PI / 180,
+      };
+    },
+    async load(selection, opt) {
+      const base = "./FILE IMAGE LOGO/Dau GIAM DOC CK/";
+      const assets = {};
+      for (const [key, enabled] of [["signature", opt.showSignature], ["stamp", opt.showDirectorStamp]]) {
+        if (enabled) assets[key] = await loadImage(auxVersionedUrl(base + encodeURIComponent(selection[key])));
+      }
+      return assets;
+    },
+    draw(ctx, assets, selection, x, top) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      if (assets.signature) {
+        const w = 176, h = w * assets.signature.height / assets.signature.width;
+        ctx.drawImage(assets.signature, x - w / 2, top, w, h);
+      }
+      if (assets.stamp) {
+        const w = 230, h = w * assets.stamp.height / assets.stamp.width;
+        ctx.translate(x, top + 122 + h / 2);
+        ctx.rotate(selection.rotation);
+        ctx.drawImage(assets.stamp, -w / 2, -h / 2, w, h);
+      }
+      ctx.restore();
+    },
+  };
+
   const Invoice = (() => {
+    let signing = DirectorSigning.pick();
     let cfg = null; // load từ hoadonle.json
     const DEFAULT_CFG = {
       company: {
@@ -13892,6 +13963,8 @@ const App = (() => {
         date: /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : "",
         showCompanyStamp: !!((document.getElementById("invCompanyStampToggle") || { checked: true }).checked),
         showPaidStamp: !!((document.getElementById("invStampPaid") || {}).checked),
+        showSignature: document.getElementById("invSignatureToggle").checked,
+        showDirectorStamp: document.getElementById("invDirectorStampToggle").checked,
         shippingEnabled: !!((document.getElementById("invShippingToggle") || {}).checked),
         shippingDong,
       });
@@ -14058,6 +14131,9 @@ const App = (() => {
     function open() {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
       const savedEdit = loadInvoiceEditDraft();
+      signing = DirectorSigning.pick();
+      document.getElementById("invSignatureToggle").checked = !!(savedEdit && savedEdit.showSignature === true);
+      document.getElementById("invDirectorStampToggle").checked = !!(savedEdit && savedEdit.showDirectorStamp === true);
       rowNameOverrides = savedEdit && Array.isArray(savedEdit.rowNameOverrides)
         ? savedEdit.rowNameOverrides.map(x => String(x || "")) : [];
       extraNoteRows = savedEdit && Array.isArray(savedEdit.extraNoteRows)
@@ -14077,6 +14153,8 @@ const App = (() => {
       const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
       const nameEl = document.getElementById("invCustName");
       const addrEl = document.getElementById("invCustAddr");
+      const phoneEl = document.getElementById("invCustPhone");
+      if (phoneEl && Cust2B.state.type === "company") phoneEl.value = v.mst || "";
       if (nameEl && !nameEl.value && (v.name || Cust2B.state.name)) nameEl.value = v.name || Cust2B.state.name || "";
       if (addrEl && !addrEl.value && v.addr) addrEl.value = v.addr || "";
       const paidEl = document.getElementById("invStampPaid");
@@ -14138,6 +14216,8 @@ const App = (() => {
       const custAddr = (document.getElementById("invCustAddr") || {}).value || "";
       const showPaid = (document.getElementById("invStampPaid") || {}).checked;
       const showCompanyStamp = !!((document.getElementById("invCompanyStampToggle") || {}).checked);
+      const showSignature = document.getElementById("invSignatureToggle").checked;
+      const showDirectorStamp = document.getElementById("invDirectorStampToggle").checked;
       // Ngày: từ input (yyyy-mm-dd) → "Ngày d tháng m năm yyyy"; fallback hôm nay
       let dateStr;
       const dv = (document.getElementById("invDate") || {}).value || "";
@@ -14145,7 +14225,13 @@ const App = (() => {
       if (dm) dateStr = `Ngày ${parseInt(dm[3], 10)} tháng ${parseInt(dm[2], 10)} năm ${dm[1]}`;
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
-      await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showShipping, shippingK, dateStr });
+      try {
+        await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showSignature, showDirectorStamp, signing, showShipping, shippingK, dateStr });
+      } catch (e) {
+        canvas.width = 0;
+        if (statusEl) statusEl.textContent = "Không tải được chữ ký/dấu giám đốc: " + e.message;
+        return;
+      }
       if (statusEl) statusEl.textContent = `✅ ${rows.length} hàng hóa · ${extraNoteRows.length} ghi chú${showShipping ? ` · Phí vận chuyển: ${fmtVnd(shippingK)}đ` : ""} · Tổng thanh toán: ${fmtVnd(totalPaymentK)}đ (VAT chỉ tính trên hàng hóa: ${fmtVnd(fullVatK)}đ)`;
     }
 
@@ -14156,6 +14242,7 @@ const App = (() => {
       const innerW = W - pad * 2;
 
       // Pre-load images
+      const signingAssets = await DirectorSigning.load(opt.signing, opt);
       let logoImg = null, stampCty = null, stampPaid = null;
       try { logoImg = await loadImage(auxVersionedUrl("./logoctyngang.png")); } catch (e) {}
       try { stampCty = await loadImage(auxVersionedUrl("./dau-cong-ty.png")); } catch (e) {}
@@ -14183,7 +14270,7 @@ const App = (() => {
       const headerCtyH = 200;
       const titleH = 76;
       const custH = 86;
-      const footerH = 230;
+      const footerH = (opt.showSignature || opt.showDirectorStamp) ? 340 : 230;
       const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH
         + subTotalRowH + vatRowH + shippingRowH + congRowH + footerH + pad;
       // v10.9.51: Khổ dọc A4 (1:1.414). Nếu content > 1 trang → chia nhiều trang A4 xếp dọc,
@@ -14287,7 +14374,7 @@ const App = (() => {
       // Dòng 1: Họ tên (rộng) + ĐT (phải)
       const phoneColX = pad + innerW * 0.66;
       dotFill("Họ tên khách hàng:", opt.custName, pad, phoneColX - 16);
-      dotFill("ĐT:", opt.custPhone, phoneColX, pad + innerW);
+      dotFill("ĐT/MST:", opt.custPhone, phoneColX, pad + innerW);
       y += 38;
       dotFill("Địa chỉ:", opt.custAddr, pad, pad + innerW);
       y += custH - 38;
@@ -14442,6 +14529,7 @@ const App = (() => {
       ctx.fillStyle = "#6b7280";
       ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.24, y + 20);
       ctx.fillText("(Ký, ghi rõ họ tên)", pad + innerW * 0.76, y + 20);
+      DirectorSigning.draw(ctx, signingAssets, opt.signing, pad + innerW * 0.76, y + 30);
 
       // Con dấu ĐÃ THANH TOÁN — xoay random -45..45°, nhỏ còn 2/3, nằm giữa Người mua/bán hàng (dưới cùng)
       if (opt.showPaid && stampPaid) {
@@ -14518,6 +14606,7 @@ const App = (() => {
   const PaymentRequest = (() => {
     let cfg = null;
     let stampRot = 0;
+    let signing = DirectorSigning.pick();
     const DEFAULT_CFG = {
       company: {
         name: "CÔNG TY TNHH SIMGLOBE OFFICIAL",
@@ -14679,6 +14768,9 @@ const App = (() => {
         accountNo: pick("payReqAccountNo").trim(),
         branch: pick("payReqBranch").trim(),
         showCompanyStamp: !!((document.getElementById("payReqCompanyStampToggle") || {}).checked),
+        showSignature: document.getElementById("payReqSignatureToggle").checked,
+        showDirectorStamp: document.getElementById("payReqDirectorStampToggle").checked,
+        signing,
         amountDong,
         amountText: numberToVietnameseDong(amountDong),
       };
@@ -14690,6 +14782,7 @@ const App = (() => {
       if (!r.ok) { alert("Chưa có dòng hợp lệ để lập đề nghị thanh toán."); return; }
       if (!currentOrderCode) regenOrderCode();
       stampRot = (Math.random() * 24 - 12) * Math.PI / 180;
+      signing = DirectorSigning.pick();
       Cust2B.syncFromDOM();
       const v = (Cust2B.state.type === "company") ? (Cust2B.state.vat || {}) : {};
       const dateEl = document.getElementById("payReqDate");
@@ -14746,11 +14839,18 @@ const App = (() => {
           : "❌ Không đọc được FullVAT của đơn.";
         return;
       }
-      await draw(canvas, c, opt);
+      try {
+        await draw(canvas, c, opt);
+      } catch (e) {
+        canvas.width = 0;
+        if (statusEl) statusEl.textContent = "Không tải được chữ ký/dấu giám đốc: " + e.message;
+        return;
+      }
       if (statusEl) statusEl.textContent = `✅ ${isAmountEditEnabled() ? "Số tiền chỉnh tay" : "FullVAT"}: ${fmtDong(opt.amountDong)} vnđ · ${opt.amountText}`;
     }
 
     async function draw(canvas, c, opt) {
+      const signingAssets = await DirectorSigning.load(opt.signing, opt);
       const DPR = 2;
       const W = 1000;
       const H = Math.round(W * 297 / 210);
@@ -14899,6 +14999,7 @@ const App = (() => {
       ctx.fillText("Người đề nghị", signX, sy);
       ctx.font = "17px 'Times New Roman', Georgia, serif";
       ctx.fillText("(Ký, ghi họ tên)", signX, sy + 36);
+      DirectorSigning.draw(ctx, signingAssets, opt.signing, signX, sy + 46);
     }
 
     async function download() {
