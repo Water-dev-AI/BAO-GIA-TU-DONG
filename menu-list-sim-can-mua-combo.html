@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.108 · 04/09/2026 · (GMT+7)
+ - Giữ nội dung thanh toán chỉnh tay khi đóng/mở Đề nghị TT, kể cả để trống.
+ - Lưu/khôi phục nội dung qua extras của đơn nháp và link share; giỏ mới reset.
+
  v10.9.107 · 04/09/2026 · (GMT+7)
  - Bật lại chữ ký / dấu giám đốc sẽ random mẫu khác mẫu vừa dùng; dấu random
    lại góc -2..2 độ. Hai chứng từ luôn dùng chữ ký và dấu khác nhau.
@@ -1821,7 +1825,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.107
+    Version 10.9.108
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2772,7 +2776,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         </div>
         <div style="grid-column:1 / -1;">
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Nội dung thanh toán</div>
-          <textarea id="payReqContent" oninput="App.payReqRender()"
+          <textarea id="payReqContent" oninput="this.dataset.edited = 'true'; App.payReqRender()" onchange="App.payReqPersistOptions()"
             style="width:100%;min-height:62px;padding:10px 12px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
         </div>
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
@@ -4918,6 +4922,8 @@ const App = (() => {
     if (pra) { pra.value = ""; pra.disabled = true; }
     const prd = document.getElementById("payReqDate");
     if (prd) prd.value = "";
+    const prc = document.getElementById("payReqContent");
+    if (prc) { prc.value = ""; delete prc.dataset.edited; }
     const prs = document.getElementById("payReqCompanyStampToggle");
     if (prs) prs.checked = true;
     ["payReqSignatureToggle", "payReqDirectorStampToggle"].forEach(id => {
@@ -4952,6 +4958,13 @@ const App = (() => {
     if (prd) prd.value = /^\d{4}-\d{2}-\d{2}$/.test(String(extras.payReqDate || "")) ? String(extras.payReqDate) : "";
     const prs = document.getElementById("payReqCompanyStampToggle");
     if (prs) prs.checked = extras.payReqCompanyStamp !== false;
+    const prc = document.getElementById("payReqContent");
+    if (prc) {
+      const hasContent = typeof extras.payReqContent === "string";
+      prc.value = hasContent ? extras.payReqContent : "";
+      if (hasContent) prc.dataset.edited = "true";
+      else delete prc.dataset.edited;
+    }
     document.getElementById("payReqSignatureToggle").checked = extras.payReqSignature === true;
     document.getElementById("payReqDirectorStampToggle").checked = extras.payReqDirectorStamp === true;
   }
@@ -4975,6 +4988,8 @@ const App = (() => {
       payReqAmountDong,
       payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(payReqDate) ? payReqDate : "",
       payReqCompanyStamp,
+      payReqContent: document.getElementById("payReqContent").dataset.edited === "true"
+        ? document.getElementById("payReqContent").value : null,
       payReqSignature: document.getElementById("payReqSignatureToggle").checked,
       payReqDirectorStamp: document.getElementById("payReqDirectorStampToggle").checked,
     };
@@ -10156,7 +10171,8 @@ const App = (() => {
       const payReqEdit = ex.payReqAmountEdit === true && payReqAmountDong > 0;
       const payReqDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ex.payReqDate || "")) ? String(ex.payReqDate) : "";
       const payReqCompanyStamp = ex.payReqCompanyStamp !== false;
-      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit || !!payReqDate || !payReqCompanyStamp || ex.payReqSignature === true || ex.payReqDirectorStamp === true;
+      const hasContent = typeof ex.payReqContent === "string";
+      const hasExtras = (ex.shipFeeK > 0) || manualOverride || ex.shipVat === true || payReqEdit || !!payReqDate || !payReqCompanyStamp || ex.payReqSignature === true || ex.payReqDirectorStamp === true || hasContent;
       if (hasExtras) {
         payload.ex = {};
         if (ex.shipFeeK > 0) payload.ex.s = ex.shipFeeK;
@@ -10169,6 +10185,7 @@ const App = (() => {
           payload.ex.pa = payReqAmountDong;
         }
         if (payReqDate) payload.ex.pd = payReqDate;
+        if (hasContent) payload.ex.pc = ex.payReqContent;
         if (!payReqCompanyStamp) payload.ex.ps = 0;
         if (ex.payReqSignature === true) payload.ex.pk = 1;
         if (ex.payReqDirectorStamp === true) payload.ex.pg = 1;
@@ -10204,6 +10221,7 @@ const App = (() => {
             payReqAmountDong: Math.max(0, parseInt(data.ex.pa, 10) || 0),
             payReqDate: /^\d{4}-\d{2}-\d{2}$/.test(String(data.ex.pd || "")) ? String(data.ex.pd) : "",
             payReqCompanyStamp: data.ex.ps !== 0,
+            payReqContent: typeof data.ex.pc === "string" ? data.ex.pc : null,
             payReqSignature: data.ex.pk === 1,
             payReqDirectorStamp: data.ex.pg === 1,
           }
@@ -14859,7 +14877,7 @@ const App = (() => {
       if (recipientEl) recipientEl.value = v.name || "";
       if (requesterEl) requesterEl.value = "Nguyễn Phấn Hoàn";
       if (deptEl) deptEl.value = "Quản lý";
-      if (contentEl) contentEl.value = `Thanh toán cho đơn hàng ${currentOrderCode}`;
+      if (contentEl && contentEl.dataset.edited !== "true") contentEl.value = `Thanh toán cho đơn hàng ${currentOrderCode}`;
       if (transferEl) transferEl.checked = true;
       if (cashEl) cashEl.checked = false;
       if (accNameEl) accNameEl.value = "CÔNG TY TNHH SIMGLOBE OFFICIAL";
