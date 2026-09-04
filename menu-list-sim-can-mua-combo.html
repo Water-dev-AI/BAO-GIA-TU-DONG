@@ -78,6 +78,10 @@
  VERSION HISTORY (mới nhất ở trên — note GỌN, đủ để khôi phục context)
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.109 · 04/09/2026 · (GMT+7)
+ - Thêm lựa chọn tiêu đề BẢNG BÁO GIÁ / HÓA ĐƠN BÁN LẺ trên ảnh chứng từ;
+   mặc định BẢNG BÁO GIÁ, lưu lựa chọn cùng bản chỉnh hóa đơn của giỏ hiện tại.
+
  v10.9.108 · 04/09/2026 · (GMT+7)
  - Giữ nội dung thanh toán chỉnh tay khi đóng/mở Đề nghị TT, kể cả để trống.
  - Lưu/khôi phục nội dung qua extras của đơn nháp và link share; giỏ mới reset.
@@ -1825,7 +1829,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.108
+    Version 10.9.109
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2687,6 +2691,17 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
         <input id="invDate" type="date"
           oninput="App.invoiceOptionChanged()"
           style="padding:8px 10px;border:1px solid #cfd5df;border-radius:10px;font-size:14px;font-family:inherit;" />
+      </div>
+      <div role="radiogroup" aria-label="Tiêu đề chứng từ" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--muted);">Tiêu đề:</span>
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;">
+          <input id="invTitleQuote" type="radio" name="invTitleMode" value="quote" checked onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;margin:0;" />
+          <span>Bảng báo giá</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;">
+          <input id="invTitleInvoice" type="radio" name="invTitleMode" value="invoice" onchange="App.invoiceOptionChanged()" style="width:16px;height:16px;margin:0;" />
+          <span>Hóa đơn bán lẻ</span>
+        </label>
       </div>
       <div>
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:7px;">Tên hàng hóa trên hóa đơn</div>
@@ -14027,6 +14042,7 @@ const App = (() => {
         date: /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : "",
         showCompanyStamp: !!((document.getElementById("invCompanyStampToggle") || { checked: true }).checked),
         showPaidStamp: !!((document.getElementById("invStampPaid") || {}).checked),
+        titleMode: document.getElementById("invTitleInvoice").checked ? "invoice" : "quote",
         showSignature: document.getElementById("invSignatureToggle").checked,
         showDirectorStamp: document.getElementById("invDirectorStampToggle").checked,
         shippingEnabled: !!((document.getElementById("invShippingToggle") || {}).checked),
@@ -14197,6 +14213,9 @@ const App = (() => {
     function open() {
       if (!cart || !cart.length) { alert("Giỏ hàng trống — chưa có gì để xuất hóa đơn."); return; }
       const savedEdit = loadInvoiceEditDraft();
+      const invoiceTitle = !!(savedEdit && savedEdit.titleMode === "invoice");
+      document.getElementById("invTitleInvoice").checked = invoiceTitle;
+      document.getElementById("invTitleQuote").checked = !invoiceTitle;
       signing = DirectorSigning.pickFor("invoice");
       document.getElementById("invSignatureToggle").checked = !!(savedEdit && savedEdit.showSignature === true);
       document.getElementById("invDirectorStampToggle").checked = !!(savedEdit && savedEdit.showDirectorStamp === true);
@@ -14294,7 +14313,8 @@ const App = (() => {
       else { const t = new Date(); dateStr = `Ngày ${t.getDate()} tháng ${t.getMonth() + 1} năm ${t.getFullYear()}`; }
 
       try {
-        await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showSignature, showDirectorStamp, signing, showShipping, shippingK, dateStr, revision });
+        const title = document.getElementById("invTitleInvoice").checked ? "HÓA ĐƠN BÁN LẺ" : "BẢNG BÁO GIÁ";
+        await draw(canvas, c, rows, extraNoteRows.slice(), sumRowsK, vatK, totalPaymentK, { custName, custPhone, custAddr, showPaid, showCompanyStamp, showSignature, showDirectorStamp, signing, showShipping, shippingK, dateStr, revision, title });
         if (revision !== renderRevision) return;
       } catch (e) {
         if (revision !== renderRevision) return;
@@ -14417,7 +14437,7 @@ const App = (() => {
       ctx.textAlign = "center";
       ctx.fillStyle = "#111827";
       ctx.font = "bold 34px 'Times New Roman', Georgia, serif";
-      ctx.fillText("HOÁ ĐƠN BÁN LẺ", W / 2, y + 38);
+      ctx.fillText(opt.title, W / 2, y + 38);
       y += titleH;
 
       // === Thông tin khách hàng ===
