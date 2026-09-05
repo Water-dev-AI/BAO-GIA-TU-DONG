@@ -5,6 +5,10 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.112 · 05/09/2026 · (GMT+7)
+ - Hóa đơn lẻ: tên khách dài dùng trọn chiều ngang và tự wrap; ĐT/MST chuyển xuống
+   dòng riêng, đồng thời tăng chiều cao khối khách để không chồng địa chỉ hoặc bảng.
+
  v10.9.111 · 05/09/2026 · (GMT+7)
  - Hóa đơn lẻ: đơn công ty có tên người mua tự điền "Tên người mua (Tên công ty)" vào
    Họ tên khách hàng; đơn không có tên người mua vẫn chỉ dùng tên công ty như trước.
@@ -1837,7 +1841,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.111
+    Version 10.9.112
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -14414,7 +14418,20 @@ const App = (() => {
       const subTotalRowH = 40, vatRowH = 40, shippingRowH = opt.showShipping ? 40 : 0, congRowH = 50;
       const headerCtyH = 200;
       const titleH = 76;
-      const custH = 86;
+      // Tên dài: dành trọn chiều ngang cho tên, đưa ĐT/MST xuống dòng riêng.
+      const customerPhoneColX = pad + innerW * 0.66;
+      ctxM.font = "bold 15px Arial, sans-serif";
+      const customerNameLabelW = ctxM.measureText("Họ tên khách hàng:").width;
+      ctxM.font = "15px Arial, sans-serif";
+      const customerNameInlineW = customerPhoneColX - 16 - (pad + customerNameLabelW + 6);
+      const customerNameOwnRow = ctxM.measureText(opt.custName || "").width > customerNameInlineW;
+      const customerNameFullLines = customerNameOwnRow
+        ? wrapText(ctxM, opt.custName || "", innerW - customerNameLabelW - 12)
+        : [];
+      const customerNameRowH = customerNameOwnRow
+        ? Math.max(38, Math.max(1, customerNameFullLines.length) * 20 + 18)
+        : 38;
+      const custH = customerNameOwnRow ? customerNameRowH + 86 : 86;
       const footerH = (opt.showSignature || opt.showDirectorStamp) ? 340 : 230;
       const contentH = pad + headerCtyH + titleH + custH + tableHeaderH + totalRowsH
         + subTotalRowH + vatRowH + shippingRowH + congRowH + footerH + pad;
@@ -14516,13 +14533,39 @@ const App = (() => {
         ctx.stroke();
         ctx.setLineDash([]);
       };
+      const dotFillWrapped = (label, lines, x, maxX) => {
+        ctx.font = "bold 15px Arial, sans-serif";
+        ctx.fillStyle = "#111827";
+        ctx.fillText(label, x, y + 20);
+        const lblW = ctx.measureText(label).width;
+        const valX = x + lblW + 6;
+        ctx.font = "15px Arial, sans-serif";
+        const safeLines = lines.length ? lines : [""];
+        safeLines.forEach((line, idx) => ctx.fillText(line, valX, y + 20 + idx * 20));
+        const lastLine = safeLines[safeLines.length - 1];
+        const lastY = y + 22 + (safeLines.length - 1) * 20;
+        ctx.strokeStyle = "#9ca3af";
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(valX + ctx.measureText(lastLine).width + 4, lastY);
+        ctx.lineTo(maxX, lastY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
       // Dòng 1: Họ tên (rộng) + ĐT (phải)
       const phoneColX = pad + innerW * 0.66;
-      dotFill("Họ tên khách hàng:", opt.custName, pad, phoneColX - 16);
-      dotFill("ĐT/MST:", opt.custPhone, phoneColX, pad + innerW);
-      y += 38;
+      if (customerNameOwnRow) {
+        dotFillWrapped("Họ tên khách hàng:", customerNameFullLines, pad, pad + innerW);
+        y += customerNameRowH;
+        dotFill("ĐT/MST:", opt.custPhone, pad, pad + innerW);
+        y += 38;
+      } else {
+        dotFill("Họ tên khách hàng:", opt.custName, pad, phoneColX - 16);
+        dotFill("ĐT/MST:", opt.custPhone, phoneColX, pad + innerW);
+        y += 38;
+      }
       dotFill("Địa chỉ:", opt.custAddr, pad, pad + innerW);
-      y += custH - 38;
+      y += 48;
 
       // === Bảng ===
       // Cột: STT | Tên hàng hóa & quy cách | ĐVT | SL | Đơn giá | Thành tiền
