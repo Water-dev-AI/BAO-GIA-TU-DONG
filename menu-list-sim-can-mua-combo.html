@@ -5,6 +5,10 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.111 · 05/09/2026 · (GMT+7)
+ - Hóa đơn lẻ: đơn công ty có tên người mua tự điền "Tên người mua (Tên công ty)" vào
+   Họ tên khách hàng; đơn không có tên người mua vẫn chỉ dùng tên công ty như trước.
+
  v10.9.110 · 04/09/2026 · (GMT+7)
  - Thêm tên người mua tuỳ chọn: bill, parse text/OCR, lịch sử VAT, đơn nháp và share.
  - VAT/DRAFTS lưu cột riêng; sổ xuất VAT ghi tên người mua trên tên công ty trong cùng ô.
@@ -1833,7 +1837,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.110
+    Version 10.9.111
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -14287,7 +14291,10 @@ const App = (() => {
       const addrEl = document.getElementById("invCustAddr");
       const phoneEl = document.getElementById("invCustPhone");
       if (phoneEl && Cust2B.state.type === "company") phoneEl.value = v.mst || "";
-      if (nameEl && !nameEl.value && (v.name || Cust2B.state.name)) nameEl.value = v.name || Cust2B.state.name || "";
+      const invoiceCustomerName = v.buyerName && v.name
+        ? `${v.buyerName} (${v.name})`
+        : (v.buyerName || v.name || Cust2B.state.name || "");
+      if (nameEl && !nameEl.value && invoiceCustomerName) nameEl.value = invoiceCustomerName;
       if (addrEl && !addrEl.value && v.addr) addrEl.value = v.addr || "";
       const paidEl = document.getElementById("invStampPaid");
       const companyStampEl = document.getElementById("invCompanyStampToggle");
