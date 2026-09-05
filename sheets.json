@@ -41,5 +41,6 @@
   { "id": "bac-my",             "name": "BẢNG GIÁ BẮC MỸ",                                                                    "url": "https://docs.google.com/spreadsheets/d/1hVk3ebQmxvY39aGoR7HX08TdAHMTqIvuO0hLlo3VjvA/edit?gid=0#gid=0" },
   { "id": "an-do",              "name": "BẢNG GIÁ ẤN ĐỘ 🇮🇳",                                                                 "url": "https://docs.google.com/spreadsheets/d/1ckhyI77-N9CWAGp0AaOOE5oAVC6Xf9JeOqxwMBdKuHg/edit?gid=0#gid=0" },
   { "id": "apac-a-14-nuoc",     "name": "BẢNG GIÁ 14 NƯỚC CHÂU Á (APAC A)",                                                   "url": "https://docs.google.com/spreadsheets/d/1Ehd0XSKwb2pJ1r-_S0rWsnFAzed4kjFD__zoJkhWFFI/edit?gid=0#gid=0" },
-  { "id": "morroco",     	"name": "BẢNG GIÁ MA RỐC MOROCCO 🇲🇦",                                                        "url": "https://docs.google.com/spreadsheets/d/1FW8joH9yz74WI7dk6F-ZV9o5ax_grqZF55GfvDec370/edit?gid=0#gid=0" }
+  { "id": "morroco",     	"name": "BẢNG GIÁ MA RỐC MOROCCO 🇲🇦",                                                        "url": "https://docs.google.com/spreadsheets/d/1FW8joH9yz74WI7dk6F-ZV9o5ax_grqZF55GfvDec370/edit?gid=0#gid=0" },
+  { "id": "brunei",     	"name": "BẢNG GIÁ BRUNEI 🇧🇳",                                                                "url": "https://docs.google.com/spreadsheets/d/1Tr2lYmn-flwukKnV9z1SIodKAmbKpvLNAUVA43Rv2uo/edit?gid=0#gid=0" }
 ]
