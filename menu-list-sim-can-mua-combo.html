@@ -5,6 +5,10 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.110 · 04/09/2026 · (GMT+7)
+ - Thêm tên người mua tuỳ chọn: bill, parse text/OCR, lịch sử VAT, đơn nháp và share.
+ - VAT/DRAFTS lưu cột riêng; sổ xuất VAT ghi tên người mua trên tên công ty trong cùng ô.
+
  STACK & KIẾN TRÚC
  - 1 file HTML (CSS+JS inline) chạy GitHub Pages, KHÔNG backend.
  - Tích hợp Google Sheet qua: (a) CSV publish để đọc bảng giá + hướng dẫn gói,
@@ -1829,7 +1833,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.109
+    Version 10.9.110
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -2061,8 +2065,12 @@ Thailand, Unlimited Data /day, 10mbps	SIM VẬT LÝ	2 NGÀY	125k"></textarea>
           <div style="position:relative;">
             <input id="cust2bVatName" type="text" placeholder="Tên công ty"
               oninput="App.cust2bOnVatInput('name')" onfocus="App.cust2bShowVatSuggest('name')" onblur="App.cust2bHideVatSuggest()"
-              style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
+              style="width:100%;padding:8px 38px 8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
+            <input id="cust2bBuyerToggle" type="checkbox" title="Tên người mua" aria-label="Tên người mua" aria-controls="cust2bBuyerWrap" onchange="App.cust2bToggleBuyer(this.checked)" style="position:absolute;right:10px;top:9px;width:16px;height:16px;margin:0;cursor:pointer;" />
             <div id="cust2bVatSuggest_name" class="vat-suggest" style="display:none;"></div>
+          </div>
+          <div id="cust2bBuyerWrap" style="display:none;grid-column:1/-1;">
+            <input id="cust2bVatBuyerName" type="text" placeholder="Tên người mua" aria-label="Tên người mua hàng" oninput="App.cust2bOnChange()" style="width:100%;padding:8px 10px;border:1px solid #cfd5df;border-radius:7px;font-size:12.5px;" />
           </div>
           <div>
             <input id="cust2bVatAddr" type="text" placeholder="Địa chỉ"
@@ -2557,7 +2565,7 @@ table.cart-table td.td-price.price-mismatch { animation: priceBlink 1s ease-in-o
     </div>
     <div class="picker-body" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
       <div style="font-size:12.5px;color:#475569;line-height:1.55;">
-        Paste text chứa thông tin VAT, hoặc edit text OCR vừa quét. App tự nhận diện 4 field. Bấm "Phân tích thử" để xem kết quả trước khi điền.
+        Paste text chứa thông tin VAT, hoặc edit text OCR vừa quét. App tự nhận diện thông tin VAT. Bấm "Phân tích thử" để xem kết quả trước khi điền.
         <details style="margin-top:6px;font-size:11.5px;color:#64748b;">
           <summary style="cursor:pointer;">Cách app nhận diện</summary>
           <ul style="margin:4px 0 0 18px;padding:0;">
@@ -3444,6 +3452,7 @@ const ComboLogic = (() => {
     if (hasVatInfo) {
       const vatBlock = "Thông tin hóa đơn:\n"
         + "MST:         " + (vatInfo.mst || "") + "\n"
+        + (vatInfo.buyerName ? "Tên người mua: " + vatInfo.buyerName + "\n" : "")
         + "Tên Công ty: " + (vatInfo.name || "") + "\n"
         + "Địa chỉ:     " + (vatInfo.addr || "") + "\n"
         + "Email:       " + (vatInfo.email || "");
@@ -3863,6 +3872,7 @@ const App = (() => {
     //   "Tên Công ty: ABC" với regex /(tên|tên công ty)/ → match "Tên" → value = "Công ty: ABC" (THỪA).
     // Phải dùng: /(tên công ty|tên)/ → match "Tên Công ty" → value = "ABC".
     const vatFieldRe = {
+      buyerName: /^(tên người mua|ten nguoi mua|họ tên người mua|ho ten nguoi mua|buyer name)(?:\s*:\s*|\s+)(.*)$/i,
       mst: /^(mã số thuế|ma so thue|tax\s*id|mst|tax)\s*:?\s*(.+)$/i,
       name: /^(tên công ty|ten cong ty|tên cty|ten cty|công ty|cong ty|buyer|customer|tên|ten)\s*:?\s*(.+)$/i,
       addr: /^(địa chỉ|dia chi|address|đ\/c|d\/c)\s*:?\s*(.+)$/i,
@@ -3879,7 +3889,7 @@ const App = (() => {
     }
 
     const packages = [];
-    const vat = { mst: "", name: "", addr: "", email: "" };
+    const vat = { mst: "", name: "", addr: "", email: "", buyerName: "" };
     let orderCode = "";
     let inVatBlock = false;
     let manualDiscK = 0; // v10.8.27: parse "Giảm giá riêng: -Xk"
@@ -4305,7 +4315,7 @@ const App = (() => {
         Cust2B.state.type = "company";
         Cust2B.state.vat = {
           mst: parsed.vat.mst || "",
-          name: parsed.vat.name || "",
+          buyerName: parsed.vat.buyerName || "", name: parsed.vat.name || "",
           addr: parsed.vat.addr || "",
           email: parsed.vat.email || "",
         };
@@ -7376,7 +7386,7 @@ const App = (() => {
       name: "",
       tag: "ZALO",
       customTag: "",
-      vat: { mst: "", name: "", addr: "", email: "" },
+      vat: { mst: "", name: "", addr: "", email: "", buyerName: "" },
     },
     _normalizeState(raw) {
       const src = raw && typeof raw === "object" ? raw : {};
@@ -7389,7 +7399,8 @@ const App = (() => {
         customTag: String(src.customTag || ""),
         vat: {
           mst: String(vat.mst || ""),
-          name: String(vat.name || ""),
+          buyerEnabled: vat.buyerEnabled === true || !!vat.buyerName,
+          buyerName: String(vat.buyerName || ""), name: String(vat.name || ""),
           addr: String(vat.addr || ""),
           email: String(vat.email || ""),
         },
@@ -7418,7 +7429,7 @@ const App = (() => {
         tag: s.tag,
         customTag: s.tag === "KHAC" ? s.customTag.trim() : "",
         vat: s.type === "company" && (s.vat.mst || s.vat.name || s.vat.addr || s.vat.email)
-          ? { mst: s.vat.mst.trim(), name: s.vat.name.trim(), addr: s.vat.addr.trim(), email: s.vat.email.trim() }
+          ? { mst: s.vat.mst.trim(), buyerName: String(s.vat.buyerName || "").trim(), name: s.vat.name.trim(), addr: s.vat.addr.trim(), email: s.vat.email.trim() }
           : null,
       };
     },
@@ -7431,8 +7442,8 @@ const App = (() => {
       this.state.tag = d.tag || "ZALO";
       this.state.customTag = d.customTag || "";
       this.state.vat = hasVat
-        ? { mst: d.vat.mst || "", name: d.vat.name || "", addr: d.vat.addr || "", email: d.vat.email || "" }
-        : { mst: "", name: "", addr: "", email: "" };
+        ? { mst: d.vat.mst || "", buyerName: d.vat.buyerName || "", name: d.vat.name || "", addr: d.vat.addr || "", email: d.vat.email || "" }
+        : { mst: "", name: "", addr: "", email: "", buyerName: "" };
       this.syncToDOM();
     },
     // Load từ share link payload (cùng format với draft)
@@ -7443,8 +7454,8 @@ const App = (() => {
       this.state.tag = p.tag || "ZALO";
       this.state.customTag = p.customTag || "";
       this.state.vat = hasVat
-        ? { mst: p.vat.mst || "", name: p.vat.name || "", addr: p.vat.addr || "", email: p.vat.email || "" }
-        : { mst: "", name: "", addr: "", email: "" };
+        ? { mst: p.vat.mst || "", buyerName: p.vat.buyerName || "", name: p.vat.name || "", addr: p.vat.addr || "", email: p.vat.email || "" }
+        : { mst: "", name: "", addr: "", email: "", buyerName: "" };
       this.syncToDOM();
     },
     clear() {
@@ -7453,7 +7464,7 @@ const App = (() => {
         name: "",
         tag: "ZALO",
         customTag: "",
-        vat: { mst: "", name: "", addr: "", email: "" },
+        vat: { mst: "", name: "", addr: "", email: "", buyerName: "" },
       };
       this.syncToDOM();
     },
@@ -7464,10 +7475,15 @@ const App = (() => {
       if (nameInp) nameInp.value = s.name;
       const customInp = document.getElementById("cust2bCustomTag");
       if (customInp) customInp.value = s.customTag;
-      ["mst", "name", "addr", "email"].forEach(k => {
+      ["mst", "name", "addr", "email", "buyerName"].forEach(k => {
         const el = document.getElementById("cust2bVat" + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) el.value = s.vat[k] || "";
       });
+      const buyerToggle = document.getElementById("cust2bBuyerToggle");
+      const buyerWrap = document.getElementById("cust2bBuyerWrap");
+      const buyerEnabled = s.vat.buyerEnabled === true || !!s.vat.buyerName;
+      if (buyerToggle) buyerToggle.checked = buyerEnabled;
+      if (buyerWrap) buyerWrap.style.display = buyerEnabled ? "" : "none";
       // Checkbox Xuất VAT (v10.1) — thay cho 2 button retail/company cũ
       const cb = document.getElementById("cust2bVatToggle");
       const vatBox = document.getElementById("cust2bVatBox");
@@ -7493,12 +7509,23 @@ const App = (() => {
       s.vat.name = get("cust2bVatName");
       s.vat.addr = get("cust2bVatAddr");
       s.vat.email = get("cust2bVatEmail");
+      s.vat.buyerEnabled = !!document.getElementById("cust2bBuyerToggle")?.checked;
+      s.vat.buyerName = s.vat.buyerEnabled ? get("cust2bVatBuyerName") : "";
       this.saveToStorage();
     },
   };
 
   // Wrappers gọi từ DOM (onclick/oninput) — đều trigger liveRecalc để bill realtime cập nhật VAT block.
   // v10.1: thay 2 button retail/company bằng checkbox "Xuất VAT"
+  function cust2bToggleBuyer(checked) {
+    Cust2B.syncFromDOM();
+    Cust2B.state.vat.buyerEnabled = checked;
+    if (!checked) Cust2B.state.vat.buyerName = "";
+    Cust2B.syncToDOM();
+    liveRecalc();
+    if (checked) document.getElementById("cust2bVatBuyerName")?.focus();
+  }
+
   function cust2bToggleVat(checked) {
     Cust2B.state.type = checked ? "company" : "retail";
     Cust2B.syncToDOM();
@@ -7629,7 +7656,7 @@ const App = (() => {
   //   3) Multi-line address: line không match label/name/email/mst, có Phường/Quận/...
   //      → gắn vào addr trước đó (continuation)
   function _parseVatTextFromOcr(text) {
-    const out = { mst: "", name: "", addr: "", email: "" };
+    const out = { mst: "", name: "", addr: "", email: "", buyerName: "" };
     // v10.8.18: Strip leading bullet/marker chars để label match work với "- Địa chỉ:" / "* MST:".
     // v10.8.19: Split lines:
     //   - Bằng \t (tab cell separator phổ biến trong OCR table / paste từ Google Sheet).
@@ -7677,6 +7704,7 @@ const App = (() => {
     const mstRe = /(\d{10})\s*[-\s]?\s*(\d{3})?/;
 
     // Label patterns (dài hơn trước!)
+    const labelBuyerName = /^(tên người mua|ten nguoi mua|họ tên người mua|ho ten nguoi mua|buyer name)\s*[:;]/i;
     const labelName = /^(t[êe]n\s+(?:c[ôo]ng\s*ty|cty|c\.?ty|doanh\s*nghi[êệ]p|đ[ơo]n\s*v[ịi]|kh[áa]ch\s*h[àa]ng|đv|kh|đv\s*tnvt)|t[êe]n|c[ôo]ng\s*ty|cty|c\.?ty|company\s*name|name|buyer|customer)\s*[:;]/i;
     const labelAddr = /^(địa\s*ch[ỉi]|dia\s*chi|address|đ[\/\.]?c|d[\/\.]?c)\s*[:;]/i;
     const labelEmail = /^(email|e\-?mail|mail|email\s*nh[ậa]n\s*(?:ho[áa]\s*đ[ơo]n|vat))\s*[:;]/i;
@@ -7747,6 +7775,12 @@ const App = (() => {
             if (m2) out.mst = m2[0];
           }
         }
+        continue;
+      }
+
+      if (labelBuyerName.test(ln)) {
+        matched.add(i);
+        if (!out.buyerName) out.buyerName = ln.replace(labelBuyerName, "").trim();
         continue;
       }
 
@@ -7992,8 +8026,9 @@ const App = (() => {
     };
     prev.style.display = "block";
     prev.innerHTML =
-      `<div style="font-size:11.5px;color:#1e40af;margin-bottom:8px;">✏️ Có thể sửa trực tiếp 4 ô dưới trước khi điền:</div>` +
+      `<div style="font-size:11.5px;color:#1e40af;margin-bottom:8px;">✏️ Có thể sửa trực tiếp các ô dưới trước khi điền:</div>` +
       field("MST", "vatEditMst", r.mst, false) +
+      field("Tên người mua", "vatEditBuyerName", r.buyerName, false) +
       field("Tên CTY", "vatEditName", r.name, false) +
       field("Địa chỉ", "vatEditAddr", r.addr, true) +
       field("Email", "vatEditEmail", r.email, false);
@@ -8004,6 +8039,7 @@ const App = (() => {
     if (mEl) {
       return {
         mst: (document.getElementById("vatEditMst").value || "").trim(),
+        buyerName: (document.getElementById("vatEditBuyerName").value || "").trim(),
         name: (document.getElementById("vatEditName").value || "").trim(),
         addr: (document.getElementById("vatEditAddr").value || "").trim(),
         email: (document.getElementById("vatEditEmail").value || "").trim(),
@@ -8020,6 +8056,7 @@ const App = (() => {
     const r = _getVatAutoResult();
     const found = [];
     if (r.mst) found.push("MST");
+    if (r.buyerName) found.push("Tên người mua");
     if (r.name) found.push("Tên CTY");
     if (r.addr) found.push("Địa chỉ");
     if (r.email) found.push("Email");
@@ -8033,6 +8070,7 @@ const App = (() => {
     const cur = Cust2B.state.vat || {};
     const conflicts = [];
     if (r.mst && (cur.mst || "").trim()) conflicts.push(`MST đang là "${cur.mst.trim()}"`);
+    if (r.buyerName && (cur.buyerName || "").trim()) conflicts.push(`Tên người mua đang là "${cur.buyerName.trim()}"`);
     if (r.name && (cur.name || "").trim()) conflicts.push(`Tên CTY đang là "${cur.name.trim()}"`);
     if (r.addr && (cur.addr || "").trim()) conflicts.push(`Địa chỉ đang là "${(cur.addr || "").trim().slice(0, 60)}${cur.addr.length > 60 ? "..." : ""}"`);
     if (r.email && (cur.email || "").trim()) conflicts.push(`Email đang là "${cur.email.trim()}"`);
@@ -8047,7 +8085,9 @@ const App = (() => {
     }
     // Bật mode company + fill (chỉ ghi đè field nào parser có giá trị)
     Cust2B.state.type = "company";
-    if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "" };
+    if (!Cust2B.state.vat) Cust2B.state.vat = { mst: "", name: "", addr: "", email: "", buyerName: "" };
+    Cust2B.state.vat.buyerName = r.buyerName || "";
+    Cust2B.state.vat.buyerEnabled = !!r.buyerName;
     if (r.mst) Cust2B.state.vat.mst = r.mst;
     if (r.name) Cust2B.state.vat.name = r.name;
     if (r.addr) Cust2B.state.vat.addr = r.addr;
@@ -8162,6 +8202,7 @@ const App = (() => {
         <div class="vs-main" onmousedown="App.cust2bPickVat('${payload}')">
           ${v.mst ? `<div><span class="vs-mst">${escapeHtml(v.mst)}</span> · <span class="vs-name">${escapeHtml(v.ten)}</span></div>` : `<div class="vs-name">${escapeHtml(v.ten)}</div>`}
           ${v.diaChi ? `<div class="vs-sub">${escapeHtml(v.diaChi)}</div>` : ""}
+          ${v.buyerName ? `<div class="vs-sub">Tên người mua: ${escapeHtml(v.buyerName)}</div>` : ""}
           ${v.email ? `<div class="vs-sub">${escapeHtml(v.email)}</div>` : ""}
         </div>
         <button class="vs-del" title="Xoá khỏi Google Sheet VAT DB" onmousedown="event.preventDefault(); event.stopPropagation(); App.vatDeleteItem('${encBtoa}')">✕</button>
@@ -8174,7 +8215,7 @@ const App = (() => {
     try { v = JSON.parse(decodeURIComponent(enc)); } catch { return; }
     Cust2B.state.vat = {
       mst: v.mst || "",
-      name: v.ten || "",
+      buyerName: v.buyerName || "", name: v.ten || "",
       addr: v.diaChi || "",
       email: v.email || "",
     };
@@ -9216,6 +9257,7 @@ const App = (() => {
       <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.7;">
         <div style="font-weight:700;color:#92400e;margin-bottom:6px;">🧾 Thông tin xuất VAT</div>
         ${vat.mst ? `<div><span style="color:var(--muted);">MST:</span> <b>${escapeHtml(vat.mst)}</b></div>` : ""}
+        ${vat.buyerName ? `<div><span style="color:var(--muted);">Tên người mua:</span> <b>${escapeHtml(vat.buyerName)}</b></div>` : ""}
         ${vat.name ? `<div><span style="color:var(--muted);">Tên CTY:</span> <b>${escapeHtml(vat.name)}</b></div>` : ""}
         ${vat.addr ? `<div><span style="color:var(--muted);">Địa chỉ:</span> ${escapeHtml(vat.addr)}</div>` : ""}
         ${vat.email ? `<div><span style="color:var(--muted);">Email:</span> ${escapeHtml(vat.email)}</div>` : ""}
@@ -9598,6 +9640,7 @@ const App = (() => {
     return [
       "Thông tin hóa đơn:",
       "MST:         " + (vat.mst || ""),
+      ...(vat.buyerName ? ["Tên người mua: " + vat.buyerName] : []),
       "Tên Công ty: " + (vat.name || ""),
       "Địa chỉ:     " + (vat.addr || ""),
       "Email:       " + (vat.email || ""),
@@ -9814,7 +9857,7 @@ const App = (() => {
     if (p.vat && (p.vat.mst || p.vat.name) && typeof vatSaveToSheet === "function") {
       try {
         await vatSaveToSheet({
-          mst: p.vat.mst, name: p.vat.name, addr: p.vat.addr, email: p.vat.email
+          mst: p.vat.mst, name: p.vat.name, addr: p.vat.addr, buyerName: p.vat.buyerName || "", email: p.vat.email
         });
       } catch (e) { /* silent fail — không block UX */ }
     }
@@ -10166,7 +10209,7 @@ const App = (() => {
     if (opts.vat && (opts.vat.mst || opts.vat.name)) {
       payload.vat = {
         mst: opts.vat.mst || "",
-        name: opts.vat.name || "",
+        buyerName: opts.vat.buyerName || "", name: opts.vat.name || "",
         addr: opts.vat.addr || "",
         email: opts.vat.email || "",
       };
@@ -10248,7 +10291,7 @@ const App = (() => {
         orderCode: String(data.oc || ""),
         vat: data.vat ? {
           mst: String(data.vat.mst || ""),
-          name: String(data.vat.name || ""),
+          buyerName: String(data.vat.buyerName || ""), name: String(data.vat.name || ""),
           addr: String(data.vat.addr || ""),
           email: String(data.vat.email || ""),
         } : null,
@@ -10910,7 +10953,7 @@ const App = (() => {
     //   Note > 70 chars: +1 line, > 140 chars: +2 lines
     let extraNoteLines = 0;
     // v10.9.27: ước lượng wrap cho dòng VAT (Địa chỉ thường dài). ~90 chars/dòng.
-    const _vatRe = /^(MST:|Tên Công ty:|Địa chỉ:|Email:)\s+/;
+    const _vatRe = /^(MST:|Tên người mua:|Tên Công ty:|Địa chỉ:|Email:)\s+/;
     for (const ln of billLines) {
       if (ln.startsWith("   ↳")) {
         const cleanLen = ln.replace(/^\s*↳\s*/, "").length;
@@ -11008,7 +11051,7 @@ const App = (() => {
       if (cells.length === 1) {
         // v10.9.27: Wrap dòng VAT info ("MST:", "Tên Công ty:", "Địa chỉ:", "Email:") nếu quá dài
         // (đặc biệt Địa chỉ thường dài bị cắt cụt mép phải). Indent các dòng wrap thẳng hàng giá trị.
-        const vatLabelMatch = line.match(/^(MST:|Tên Công ty:|Địa chỉ:|Email:)(\s+)(.*)$/);
+        const vatLabelMatch = line.match(/^(MST:|Tên người mua:|Tên Công ty:|Địa chỉ:|Email:)(\s+)(.*)$/);
         const maxW = W - padding * 2 - 8;
         if (vatLabelMatch && ctx.measureText(line).width > maxW) {
           const label = vatLabelMatch[1] + vatLabelMatch[2];
@@ -12490,6 +12533,7 @@ const App = (() => {
         <div style="margin-top:6px;padding-top:6px;border-top:1px dashed #bfdbfe;">
           <b>🧾 VAT:</b>
           ${v.mst ? ` MST <code style="background:#fff;padding:0 4px;border-radius:3px;">${escapeHtml(v.mst)}</code>` : ""}
+          ${v.buyerName ? ` · Tên người mua: ${escapeHtml(v.buyerName)}` : ""}
           ${v.name ? ` · ${escapeHtml(v.name)}` : ""}
           ${v.email ? ` · ${escapeHtml(v.email)}` : ""}
         </div>` : `<div style="color:var(--red);margin-top:4px;">⚠️ Đơn công ty nhưng VAT trống — sửa ở khung 2B.</div>`;
@@ -12715,7 +12759,7 @@ const App = (() => {
       try {
         const cust = Cust2B.getDraftPayload();
         if (cust.vat && (cust.vat.mst || cust.vat.name) && typeof vatSaveToSheet === "function") {
-          vatSaveToSheet({ mst: cust.vat.mst, name: cust.vat.name, addr: cust.vat.addr, email: cust.vat.email });
+          vatSaveToSheet({ mst: cust.vat.mst, name: cust.vat.name, addr: cust.vat.addr, buyerName: cust.vat.buyerName || "", email: cust.vat.email });
         }
         // Sync draft đang edit về đúng store local/shared.
         if (draftEditingId) await _syncEditingDraftFromCurrent({ imported: true });
@@ -12807,10 +12851,11 @@ const App = (() => {
       ten: header.findIndex(h => h === "TEN" || h === "TÊN" || h === "TÊN CTY" || h === "TEN CTY"),
       diaChi: header.findIndex(h => h === "DIA_CHI" || h === "DIA CHI" || h === "ĐỊA CHỈ" || h === "DIACHI"),
       email: header.findIndex(h => h === "EMAIL"),
+      buyerName: header.findIndex(h => ["TEN_NGUOI_MUA", "TÊN NGƯỜI MUA", "BUYER_NAME"].includes(h)),
       updatedAt: header.findIndex(h => h === "UPDATED_AT" || h === "UPDATED"),
     };
     if (idx.mst < 0 && idx.ten < 0) {
-      idx = { mst: 0, ten: 1, diaChi: 2, email: 3, updatedAt: 4 };
+      idx = { mst: 0, ten: 1, diaChi: 2, email: 3, updatedAt: 4, buyerName: -1 };
     }
     const out = [];
     for (let i = 1; i < rows.length; i++) {
@@ -12820,6 +12865,7 @@ const App = (() => {
       if (!mst && !ten) continue;
       out.push({
         mst: vatNormalizeMst(mst), // strip "@" / "'" prefix (server ghi để giữ leading 0)
+        buyerName: String((idx.buyerName >= 0 ? r[idx.buyerName] : "") || "").trim(),
         ten: String(ten).trim(),
         diaChi: String((idx.diaChi >= 0 ? r[idx.diaChi] : "") || "").trim(),
         email: String((idx.email >= 0 ? r[idx.email] : "") || "").trim(),
@@ -12889,7 +12935,7 @@ const App = (() => {
       dd.innerHTML = `<div class="vat-dropdown-empty">${vatList.length ? "Không có gợi ý khớp" : "Chưa có lịch sử — cấu hình ⚙"}</div>`;
     } else {
       dd.innerHTML = matches.map(m => {
-        const sub = [m.email, m.diaChi].filter(Boolean).join(" · ");
+        const sub = [m.buyerName, m.email, m.diaChi].filter(Boolean).join(" · ");
         const enc = btoa(unescape(encodeURIComponent(JSON.stringify(m))));
         return `
           <div class="vat-dropdown-item" onmousedown="event.preventDefault(); App.vatPickItem('${enc}')">
@@ -12922,7 +12968,7 @@ const App = (() => {
     Cust2B.state.type = "company";
     Cust2B.state.vat = {
       mst: m.mst || "",
-      name: m.ten || "",
+      buyerName: m.buyerName || "", name: m.ten || "",
       addr: m.diaChi || "",
       email: m.email || "",
     };
@@ -12982,6 +13028,7 @@ const App = (() => {
         body: JSON.stringify({
           action: "upsert",
           mst: info.mst || "",
+          buyerName: info.buyerName || "",
           ten: info.name || "",
           diaChi: info.addr || "",
           email: info.email || "",
@@ -12996,7 +13043,7 @@ const App = (() => {
           (String(v.email || "").trim().toLowerCase() === _em)
         );
         const entry = {
-          mst: info.mst || "", ten: info.name || "",
+          mst: info.mst || "", ten: info.name || "", buyerName: info.buyerName || "",
           diaChi: info.addr || "", email: info.email || "",
           updatedAt: new Date().toISOString(),
         };
@@ -15291,6 +15338,7 @@ const App = (() => {
     draftViewCopyPayload,
     draftViewImport,
     cust2bToggleVat,
+    cust2bToggleBuyer,
     cust2bSelectTagFromDropdown,
     cust2bTagDropdownToggle,
     vatImageOpen,
