@@ -44,5 +44,6 @@
   { "id": "morroco",     	"name": "BẢNG GIÁ MA RỐC MOROCCO 🇲🇦",                                                        "url": "https://docs.google.com/spreadsheets/d/1FW8joH9yz74WI7dk6F-ZV9o5ax_grqZF55GfvDec370/edit?gid=0#gid=0" },
   { "id": "brunei",     	"name": "BẢNG GIÁ BRUNEI 🇧🇳",                                                                "url": "https://docs.google.com/spreadsheets/d/1Tr2lYmn-flwukKnV9z1SIodKAmbKpvLNAUVA43Rv2uo/edit?gid=0#gid=0" },
   { "id": "nepal",     	        "name": "BẢNG GIÁ NEPAL 🇳🇵",                                                                "url": "https://docs.google.com/spreadsheets/d/1vSvLetnPHRnwtB31VX84PHAPKC1EZDQGhZ8mZ3YvFB4/edit?gid=0#gid=0" },
-  { "id": "bhutan",     	"name": "BẢNG GIÁ BHUTAN 🇧🇹",                                                                "url": "https://docs.google.com/spreadsheets/d/14mwvdb5dRICY3SF-5LDFG34-LrkmeCeSpvXYxVY3UlQ/edit?gid=0#gid=0" }
+  { "id": "bhutan",     	"name": "BẢNG GIÁ BHUTAN 🇧🇹",                                                                "url": "https://docs.google.com/spreadsheets/d/14mwvdb5dRICY3SF-5LDFG34-LrkmeCeSpvXYxVY3UlQ/edit?gid=0#gid=0" },
+  { "id": "three-uk-aio",     	"name": "BẢNG GIÁ THREE UK AIO ĐA QUỐC GIA (Việt Nam+Mỹ+Brazil....)",                        "url": "https://docs.google.com/spreadsheets/d/1fiRqOIl9J6cGSpg7Z3YkCkWKAn56dbMoAwxzPWma748/edit?gid=0#gid=0" }
 ]
