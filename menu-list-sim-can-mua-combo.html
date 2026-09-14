@@ -5,6 +5,10 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.113 · 14/09/2026 · (GMT+7)
+ - Tìm bảng giá theo nhiều nước: thêm alias nguồn "viet nam" có khoảng trắng cho Việt Nam.
+   Fix "Mỹ, Việt Nam" không ra THREE UK AIO trong khi "Mỹ, Việt na" lại ra.
+
  v10.9.112 · 05/09/2026 · (GMT+7)
  - Hóa đơn lẻ: tên khách dài dùng trọn chiều ngang và tự wrap; ĐT/MST chuyển xuống
    dòng riêng, đồng thời tăng chiều cao khối khách để không chồng địa chỉ hoặc bảng.
@@ -1841,7 +1845,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.112
+    Version 10.9.113
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -7002,7 +7006,7 @@ const App = (() => {
       { vn: ["macao", "ma cao"],         en: ["macao", "macau"], short: [] },
       { vn: ["saipan"],                  en: ["saipan"], short: [] },
       { vn: ["guam"],                    en: ["guam"], short: [] },
-      { vn: ["viet nam", "vietnam", "vn"],en: ["vietnam", "vietnamese"], short: [] },
+      { vn: ["viet nam", "vietnam", "vn"],en: ["viet nam", "vietnam", "vietnamese"], short: [] },
     ];
     // Reverse lookup: normalized input → alias group object
     const _aliasLookup = new Map();
