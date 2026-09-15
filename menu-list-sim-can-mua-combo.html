@@ -5,6 +5,11 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.114 · 15/09/2026 · (GMT+7)
+ - Tìm bảng giá theo nước nhận cả tên Việt và Anh trong nội dung sheet, không chỉ alias
+   tiếng Anh. Tên Việt khớp nguyên từ/cụm từ để tránh nhiễu (vd "Anh" trong "nhanh").
+   Fix "Mỹ, Việt Nam, Anh" và các bảng ghi danh sách quốc gia bằng tiếng Việt.
+
  v10.9.113 · 14/09/2026 · (GMT+7)
  - Tìm bảng giá theo nhiều nước: thêm alias nguồn "viet nam" có khoảng trắng cho Việt Nam.
    Fix "Mỹ, Việt Nam" không ra THREE UK AIO trong khi "Mỹ, Việt na" lại ra.
@@ -1845,7 +1850,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.113
+    Version 10.9.114
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -6929,8 +6934,7 @@ const App = (() => {
     const STORAGE_META_KEY = STORAGE_KEY + "_meta";
     const STORAGE_DB_KEY = "__" + STORAGE_KEY + "__";
     const STALE_MS = 12 * 3600 * 1000; // 12h
-    // v10.8.34: Alias map structured — user gõ tên VN/EN, nhưng search trong content sheet
-    //   CHỈ DÙNG `en` (content sheet là tiếng Anh). `vn` chỉ dùng để match input keyword.
+    // Alias map structured — nhận input VN/EN và match nội dung sheet ở cả hai ngôn ngữ.
     //   `short` (code 2-3 char) chỉ match khi user gõ chính xác code đó.
     //   Format: { vn: [...], en: [...], short: [...] }
     const ALIASES = [
@@ -7102,8 +7106,9 @@ const App = (() => {
       try { csvDbDelete(STORAGE_DB_KEY); } catch (e) {}
     }
 
-    // v10.8.34: User gõ tên VN/EN — expand thành EN aliases ONLY (content sheet là tiếng Anh).
-    //   - Nếu match alias group → trả EN aliases của group (+ short nếu user gõ chính xác short).
+    // User gõ tên VN/EN: tìm cả aliases Anh lẫn Việt vì nhiều sheet ghi danh sách nước bằng tiếng Việt.
+    // Tên Việt cần khớp nguyên từ; các alias Anh giữ cơ chế substring cũ (vd "india" trong "indian").
+    //   - Nếu match alias group → trả các aliases của group (+ short nếu user gõ chính xác short).
     //   - Nếu KHÔNG match alias nào → fallback: chỉ dùng keyword gốc nếu >= 3 ký tự (tránh
     //     2 ký tự gây false positive lung tung).
     function _expandKeyword(kw) {
@@ -7111,17 +7116,19 @@ const App = (() => {
       if (!k) return [];
       const group = _aliasLookup.get(k);
       if (group) {
-        // Trả EN aliases. Nếu user gõ chính xác short code → thêm short vào (vì user chủ động chọn).
+        // Alias EN giữ substring; alias VN >=3 chữ khớp nguyên từ để không nhầm "anh" với "nhanh".
         const enTerms = group.en.map(t => ComboLogic.norm(t)).filter(Boolean);
-        // Filter EN >= 3 char để tránh code gây nhiễu
-        const safeEn = enTerms.filter(t => t.length >= 3);
+        const safeEn = enTerms.filter(t => t.length >= 3).map(term => ({ term, wholeWord: false }));
+        const nativeTerms = group.vn.map(t => ComboLogic.norm(t)).filter(t => t.length >= 3)
+          .map(term => ({ term, wholeWord: true }));
         const userTypedShort = group.short.some(s => ComboLogic.norm(s) === k);
-        if (userTypedShort) safeEn.push(k);
-        return safeEn.length ? safeEn : [k];
+        if (userTypedShort) safeEn.push({ term: k, wholeWord: true });
+        const aliases = [...safeEn, ...nativeTerms];
+        return aliases.length ? aliases : [{ term: k, wholeWord: true }];
       }
       // Không match alias → fallback (kw >= 3 ký tự để tránh nhiễu)
       if (k.length < 3) return [];
-      return [k];
+      return [{ term: k, wholeWord: false }];
     }
 
     // Parse search input "han quoc, nhat ban" → array các keyword group đã expand
@@ -7133,7 +7140,7 @@ const App = (() => {
     }
 
     // Match 1 sheet text với query groups (AND của các keyword group).
-    // groups = [["korea", "south korea"], ["japan", "japanese"]] (sau expand)
+    // groups = [[{term:"korea",wholeWord:false}, ...], ...] (sau expand)
     // Match khi: với MỖI group, text chứa ÍT NHẤT 1 alias của group đó.
     // Nếu groups rỗng → KHÔNG match (tránh return tất cả).
     function matchSheet(normText, groups) {
@@ -7141,8 +7148,13 @@ const App = (() => {
       for (const g of groups) {
         if (!g.length) return false; // safety
         let any = false;
-        for (const term of g) {
-          if (normText.indexOf(term) !== -1) { any = true; break; }
+        for (const alias of g) {
+          if (alias.wholeWord) {
+            const escaped = alias.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(normText)) { any = true; break; }
+          } else if (normText.indexOf(alias.term) !== -1) {
+            any = true; break;
+          }
         }
         if (!any) return false;
       }
