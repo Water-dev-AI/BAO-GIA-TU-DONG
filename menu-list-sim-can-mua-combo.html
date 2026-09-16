@@ -5,6 +5,12 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.115 · 16/09/2026 · (GMT+7)
+ - Nút nhanh chung: đọc phản hồi Web App an toàn trên Safari, retry một lần và báo rõ
+   HTTP/HTML thay vì lỗi mơ hồ "The string did not match the expected pattern".
+ - Tải nền lỗi nhưng còn cache thì tiếp tục dùng cache như một fallback thành công,
+   không lặp cảnh báo đỏ mỗi chu kỳ 12 giờ; thao tác thủ công vẫn hiện lỗi chi tiết.
+
  v10.9.114 · 15/09/2026 · (GMT+7)
  - Tìm bảng giá theo nước nhận cả tên Việt và Anh trong nội dung sheet, không chỉ alias
    tiếng Anh. Tên Việt khớp nguyên từ/cụm từ để tránh nhiễu (vd "Anh" trong "nhanh").
@@ -1850,7 +1856,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.114
+    Version 10.9.115
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5718,6 +5724,40 @@ const App = (() => {
     return "☁️ Chưa có cấu hình chung, đang dùng bộ pill mặc định gốc.";
   }
 
+  async function slQuickPostJson(url, payload) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload || {}),
+          cache: "no-store",
+          credentials: "omit",
+          redirect: "follow",
+        });
+        const raw = await res.text();
+        if (!res.ok) throw new Error(`Web App HTTP ${res.status}`);
+        if (!raw || !raw.trim()) throw new Error("Web App trả phản hồi rỗng");
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch (parseError) {
+          if (/^\s*</.test(raw)) {
+            throw new Error("Web App trả trang HTML thay vì JSON; kiểm tra quyền triển khai là Anyone");
+          }
+          throw new Error("Web App trả dữ liệu không phải JSON");
+        }
+        if (!data || typeof data !== "object") throw new Error("Web App không trả object JSON");
+        return data;
+      } catch (e) {
+        lastError = e;
+        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    throw lastError || new Error("Không kết nối được Web App");
+  }
+
   async function slQuickSharedFetch(options) {
     const force = !!(options && options.force);
     const silent = !!(options && options.silent);
@@ -5734,12 +5774,7 @@ const App = (() => {
     try {
       const url = await _sharedDraftWebAppUrl();
       if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json");
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "quick_prices_get" }),
-      });
-      const data = await res.json();
+      const data = await slQuickPostJson(url, { action: "quick_prices_get" });
       if (!data.ok) throw new Error(data.error || "Web App không trả dữ liệu hợp lệ");
       const items = slQuickNormalizeItems(data.items);
       slQuickSharedItems = items.length ? items : null;
@@ -5757,6 +5792,19 @@ const App = (() => {
         slQuickSharedItems = null;
         slQuickSharedCacheAt = 0;
         slQuickSharedUpdatedAt = "";
+      }
+      if (cached && silent) {
+        console.warn("[QuickPrices] Không tải mới được, tiếp tục dùng cache:", e.message);
+        const text = slQuickSyncSummary("☁️ Đang dùng cấu hình chung (cache gần nhất)");
+        slQuickSetSyncInfo(text, false);
+        return {
+          ok: true,
+          cached: true,
+          stale: true,
+          count: cached.items.filter(x => x.enabled !== false).length,
+          warning: e.message,
+          text,
+        };
       }
       const fallback = cached ? "cache gần nhất" : "bộ pill mặc định gốc";
       const text = `❌ Không tải được cấu hình nút nhanh chung: ${e.message}. Đang dùng ${fallback}.`;
@@ -6028,12 +6076,7 @@ const App = (() => {
     try {
       const url = await _sharedDraftWebAppUrl();
       if (!url) throw new Error("Chưa cấu hình Web App URL trong vat-config.json");
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "quick_prices_upsert", items: payload }),
-      });
-      const data = await res.json();
+      const data = await slQuickPostJson(url, { action: "quick_prices_upsert", items: payload });
       if (!data.ok) throw new Error(data.error || "Web App không lưu được cấu hình");
       if (!data.scriptVersion) throw new Error("vat-sheet.gs đang là bản cũ; cần deploy lại v10.9.85");
 
@@ -7346,7 +7389,7 @@ const App = (() => {
       ["Hướng dẫn", () => PackageGuides.refresh()],
       ["Tồn kho", () => StockOverflow.refresh()],
       ["STK", () => loadStkConfig()],
-      ["Nút nhanh", () => slQuickSharedFetch({ force: true, silent: true })],
+      ["Nút nhanh", () => slQuickSharedFetch({ force: true, silent: false })],
       ["Cấu hình", async () => {
         const values = await Promise.all([Invoice.refreshConfig(), PaymentRequest.refreshConfig()]);
         return { ok: values.every(x => x && x.ok) };
