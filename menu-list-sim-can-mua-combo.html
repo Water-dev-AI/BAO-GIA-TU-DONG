@@ -5,6 +5,12 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.116 · 21/09/2026 · (GMT+7)
+ - Cho phép cú pháp N1/N... trên ESIM: bill hiển thị NẠP ESIM và giữ nguyên đơn giá
+   ESIM; SIM VẬT LÝ vẫn hiển thị NẠP GÓI và trừ 20k/SIM như cũ.
+ - Parse ngược nhận NẠP ESIM; payload nhập sổ vẫn đánh dấu loại NẠP GÓI nhưng dùng
+   đúng giá ESIM, áp dụng cho giỏ hiện tại, đơn nháp local và đơn lưu chung.
+
  v10.9.115 · 16/09/2026 · (GMT+7)
  - Nút nhanh chung: đọc phản hồi Web App an toàn trên Safari, retry một lần và báo rõ
    HTTP/HTML thay vì lỗi mơ hồ "The string did not match the expected pattern".
@@ -49,7 +55,7 @@
  CÚ PHÁP GIÁ TRONG BẢNG GIÁ
  - "299k"        → giá đơn (1 SIM)
  - "299k*2"      → giá *2 SL (bậc thang qty)
- - "299k*N3"     → NẠP GÓI 3 SIM (chỉ SIM VẬT LÝ, -20k/SIM)
+ - "299k*N3"     → NẠP ESIM nếu là ESIM (giữ giá), NẠP GÓI nếu là SIM VẬT LÝ (-20k/SIM)
  - "(GIA-20k)*N" → cú pháp nạp gói alt (v10.8.9)
  - "PRICE*QTY=TOTAL" → total override (v10.8.9)
  - "[note]" / "{note}" cuối line → note inline (v10.8.6)
@@ -1856,12 +1862,12 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.115
+    Version 10.9.116
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
     <b>Cú pháp SL:</b> <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">2</code> = 2 SIM,
-    <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">N3</code> = nạp gói 3 SIM (chỉ SIM VẬT LÝ, -20k/SIM),
+    <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">N3</code> = nạp 3 gói (ESIM giữ nguyên giá; SIM VẬT LÝ giảm 20k/SIM),
     <code style="background:#eef2f7;padding:1px 5px;border-radius:4px;">2+N3</code> = 2 SIM mới + 3 nạp gói.
   </div>
 
@@ -3051,6 +3057,7 @@ const ComboLogic = (() => {
     return (
       /(^|[\s\t\[\(])nap($|[\s\t\]\):_-])/.test(n) ||
       n.includes("nap sim") ||
+      n.includes("nap esim") ||
       n.includes("nap sim vat ly") ||
       n.includes("goi nap") ||
       n.includes("nap goi")
@@ -3108,7 +3115,7 @@ const ComboLogic = (() => {
 
   // v10.9.0: Build tên hàng hóa cho Hóa đơn lẻ.
   //  - GIỮ nguyên kbps/mbps (không cleanPackageName).
-  //  - Tách phần trước giá, bỏ ô là "loại" (ESIM/SIM VẬT LÝ/SIM/NẠP GÓI), ghép phần còn lại bằng ", ".
+  //  - Tách phần trước giá, bỏ ô là "loại" (ESIM/SIM VẬT LÝ/SIM/NẠP GÓI/NẠP ESIM), ghép phần còn lại bằng ", ".
   //  - Prefix typeLabel ở đầu. VD: "ESIM Mainland China A, 5 Days, Premium unlimited data/day".
   function buildInvoiceName(lineCore, typeLabel) {
     const beforePrice = String(lineCore || "").replace(priceRe, "").trim();
@@ -3116,7 +3123,8 @@ const ComboLogic = (() => {
     const isTypeCell = c => {
       const n = norm(c);
       return n === "esim" || n === "sim" || n.includes("sim vat ly")
-        || n === "nap goi" || n.includes("nap goi");
+        || n === "nap goi" || n.includes("nap goi")
+        || n === "nap esim" || n.includes("nap esim");
     };
     let nameParts;
     if (rawParts.length >= 2) {
@@ -3128,6 +3136,7 @@ const ComboLogic = (() => {
         .replace(/SIM\s+V[ẬA]T\s+L[YÝ]/gi, "")
         .replace(/\bESIM\b/gi, "")
         .replace(/N[ẠA]P\s+G[ÓO]I/gi, "")
+        .replace(/N[ẠA]P\s+ESIM/gi, "")
         .replace(/\s{2,}/g, " ")
         .replace(/^[\s,]+|[\s,]+$/g, "")
         .trim();
@@ -3205,11 +3214,14 @@ const ComboLogic = (() => {
     return sign < 0 ? shares.map(s => -s) : shares;
   }
 
-  // Build dòng NẠP GÓI cho bill output: thay loại → "NẠP GÓI", giá → "(GIÁ-20k)*N"
-  function buildRechargeLine(line, unitK, qty) {
-    const priceText = qty > 1
-      ? `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)*${qty}`
-      : `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)`;
+  // ESIM nạp giữ nguyên giá; SIM VẬT LÝ nạp vẫn trừ 20k như trước.
+  function buildRechargeLine(line, unitK, qty, esimRecharge) {
+    const typeLabel = esimRecharge ? "NẠP ESIM" : "NẠP GÓI";
+    const priceText = esimRecharge
+      ? (qty > 1 ? `${fmtK(unitK)}*${qty}` : fmtK(unitK))
+      : (qty > 1
+          ? `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)*${qty}`
+          : `(${fmtK(unitK)}-${RECHARGE_DISCOUNT_K}k)`);
     // Thay giá ở cuối bằng expression mới
     let newLine = String(line).replace(priceRe, priceText);
     // Thay cột Loại (tab-separated: index 1) → "NẠP GÓI"
@@ -3218,15 +3230,15 @@ const ComboLogic = (() => {
       if (parts.length >= 2) {
         const typeNorm = norm(parts[1].trim());
         if (typeNorm === "sim" || typeNorm.includes("sim vat ly") || typeNorm.includes("esim")) {
-          parts[1] = "NẠP GÓI";
+          parts[1] = typeLabel;
         }
       }
       newLine = parts.join("\t");
     } else {
       // Inline format: tìm và thay từ khoá loại
       newLine = newLine
-        .replace(/SIM\s+V[ẬA]T\s+L[YÝ]/gi, "NẠP GÓI")
-        .replace(/\bESIM\b/gi, "NẠP GÓI");
+        .replace(/SIM\s+V[ẬA]T\s+L[YÝ]/gi, typeLabel)
+        .replace(/\bESIM\b/gi, typeLabel);
     }
     return newLine;
   }
@@ -3300,15 +3312,14 @@ const ComboLogic = (() => {
         regular = 0;
       }
 
-      // RULE: Nạp gói (N) CHỈ áp dụng cho SIM VẬT LÝ.
-      // Nếu user gõ N vào ESIM (hoặc loại khác không phải SIM VẬT LÝ và không có tên "nạp"),
-      // skip toàn bộ phần recharge — không trừ 20k, không tính tiền — và báo lỗi.
-      if (recharge > 0 && !isPhysical && !isLegacyRechargeName) {
-        errors.push(`Dòng ${index + 1}: Cú pháp N (nạp gói) chỉ áp dụng cho SIM VẬT LÝ. Phần "N${recharge}" đã bị BỎ QUA. Hãy sửa số lượng.`);
+      // Cú pháp N áp dụng cho ESIM và SIM VẬT LÝ. Loại khác vẫn bị chặn.
+      if (recharge > 0 && !isPhysical && !isEsim && !isLegacyRechargeName) {
+        errors.push(`Dòng ${index + 1}: Cú pháp N chỉ áp dụng cho ESIM hoặc SIM VẬT LÝ. Phần "N${recharge}" đã bị BỎ QUA. Hãy sửa số lượng.`);
         recharge = 0;
       }
 
-      const rechargeUnitK = Math.max(unitK - RECHARGE_DISCOUNT_K, 0);
+      const isEsimRecharge = recharge > 0 && isEsim && !isPhysical;
+      const rechargeUnitK = isEsimRecharge ? unitK : Math.max(unitK - RECHARGE_DISCOUNT_K, 0);
       const regularAmount = regular * unitK;
       const rechargeAmount = recharge * rechargeUnitK;
 
@@ -3350,9 +3361,9 @@ const ComboLogic = (() => {
         });
       }
 
-      // Dòng NẠP GÓI
+      // Dòng NẠP ESIM hoặc NẠP GÓI
       if (recharge > 0) {
-        let rechargeLine = buildRechargeLine(lineCore, unitK, recharge);
+        let rechargeLine = buildRechargeLine(lineCore, unitK, recharge, isEsimRecharge);
         if (rowNote) rechargeLine += "  [" + rowNote + "]";
         outLines.push(rechargeLine);
         outLinesShort.push(rechargeLine);
@@ -3364,6 +3375,7 @@ const ComboLogic = (() => {
           amountK: rechargeAmount,
           unitK: rechargeUnitK,
           isRecharge: true,
+          isEsimRecharge,
           isPhysical: isPhysical,
           invName: buildInvoiceName(lineCore, "RECHARGE"),
           note: rowNote,
@@ -3524,7 +3536,9 @@ const ComboLogic = (() => {
     const shares = largestRemainderShares(items, discountK);
     const lines = items.map((item, idx) => {
       if (item.maintenance) return "";
-      const typeLabel = item.isRecharge ? "NẠP GÓI" : item.productType;
+      const typeLabel = item.isRecharge
+        ? (item.isEsimRecharge ? "NẠP ESIM" : "NẠP GÓI")
+        : item.productType;
       // v10.8.27: share âm = phụ thu (do shipVat). Hiển thị "+Xk" thay vì "-(-Xk)".
       const share = shares[idx];
       const shareStr = share < 0 ? "+" + fmtK(-share) : "-" + fmtK(share);
@@ -4049,6 +4063,7 @@ const App = (() => {
     // Pattern này luôn nằm ở vị trí giá (sau tên+loại). Có thể optional theo sau bằng *N.
     // Ưu tiên check TRƯỚC mọi pattern qty/price khác vì paren chứa "(..k..k)" sẽ confuse các regex sau.
     let isRecharge = false;
+    let rechargeSourceType = ""; // "ESIM" hoặc "SIM VẬT LÝ"
     let qty = 1;
     let qtyMatched = false;
     let priceK = 0;
@@ -4066,6 +4081,7 @@ const App = (() => {
         // Đây là đơn giá SIM VẬT LÝ gốc (trước khi -20k cho nạp gói)
         priceK = giaGoc;
         isRecharge = true;
+        rechargeSourceType = "SIM VẬT LÝ";
         qty = parenM[3] ? parseInt(parenM[3], 10) : 1;
         qtyMatched = true;
         priceMatchedViaParen = true;
@@ -4198,6 +4214,14 @@ const App = (() => {
       // Vì giá đã được cắt khỏi `s` ở trên, cellsRaw lúc này là [tên, loại, ngày?].
       name = cellsRaw[0] || "";
       type = cellsRaw[1] || "";
+      const tabTypeNorm = ComboLogic.norm(type);
+      if (tabTypeNorm.includes("nap esim")) {
+        isRecharge = true;
+        rechargeSourceType = "ESIM";
+      } else if (tabTypeNorm.includes("nap goi")) {
+        isRecharge = true;
+        rechargeSourceType = "SIM VẬT LÝ";
+      }
       // cells[2] có thể là ngày (vd "30 NGÀY" cho SIM VL data/ngày), hoặc rỗng (cho ESIM / SIM data tổng)
       if (cellsRaw.length >= 3) days = cellsRaw[2] || "";
       // Nếu cells.length = 2 (chỉ [tên, loại]) → days = ""
@@ -4205,14 +4229,23 @@ const App = (() => {
       // Không có tab → regex tìm loại trong text.
       // Lưu ý: KHÔNG dùng \b word boundary vì JS \b chỉ work với ASCII (Ý, Ó là Unicode → fail).
       // Thay bằng: phải có whitespace/start/punctuation 2 bên (tự match qua [^\w] / start / end).
-      const typeMatch = beforePrice.match(/(?:^|[\s,.;:|/\\])(ESIM|SIM\s+VẬT\s+LÝ|SIM\s+VAT\s+LY|NẠP\s+GÓI|NAP\s+GOI)(?=$|[\s,.;:|/\\])/i);
+      const typeMatch = beforePrice.match(/(?:^|[\s,.;:|/\\])(NẠP\s+ESIM|NAP\s+ESIM|ESIM|SIM\s+VẬT\s+LÝ|SIM\s+VAT\s+LY|NẠP\s+GÓI|NAP\s+GOI)(?=$|[\s,.;:|/\\])/i);
       let remaining = beforePrice;
       let afterTypeText = "";
       if (typeMatch) {
         type = typeMatch[1].toUpperCase().replace(/\s+/g, " ");
         // Normalize
-        if (type.includes("VAT")) type = "SIM VẬT LÝ";
-        if (type.includes("NAP")) { type = "NẠP GÓI"; isRecharge = true; }
+        const matchedTypeNorm = ComboLogic.norm(type);
+        if (matchedTypeNorm.includes("sim vat ly")) type = "SIM VẬT LÝ";
+        if (matchedTypeNorm.includes("nap esim")) {
+          type = "NẠP ESIM";
+          isRecharge = true;
+          rechargeSourceType = "ESIM";
+        } else if (matchedTypeNorm.includes("nap")) {
+          type = "NẠP GÓI";
+          isRecharge = true;
+          rechargeSourceType = "SIM VẬT LÝ";
+        }
         // typeMatch[0] có thể bao gồm ký tự whitespace ở đầu; tính đúng vị trí token loại
         // để chỉ xét phần SAU loại khi tách cột Ngày.
         const typeOffset = typeMatch[0].indexOf(typeMatch[1]);
@@ -4260,8 +4293,11 @@ const App = (() => {
     // Trong cart, NẠP GÓI KHÔNG phải type riêng — nó chỉ là qty=Nx trên 1 dòng SIM VẬT LÝ.
     // → Force type="SIM VẬT LÝ" để merge tự nhiên với dòng SIM VẬT LÝ cùng (name+days+price) qua addItems.
     // Ngoài ra, nếu text có "NẠP GÓI" chữ thẳng → cũng convert sang SIM VẬT LÝ (vì đây là alias display, KHÔNG phải type độc lập).
+    if (isRecharge && !rechargeSourceType && /esim/i.test(type)) {
+      rechargeSourceType = "ESIM";
+    }
     if (isRecharge) {
-      type = "SIM VẬT LÝ";
+      type = rechargeSourceType === "ESIM" ? "ESIM" : "SIM VẬT LÝ";
     }
 
     // Build line chuẩn 4 cells: tên\tloại\tngày\tgiá
@@ -4448,7 +4484,8 @@ const App = (() => {
       // (dùng ComboLogic.norm vì isRechargeLine/isPhysicalLine/isEsimLine ở scope ComboLogic, không expose)
       const n = ComboLogic.norm(line);
       let detectedType = "";
-      if (/(^|[\s\t\[\(])nap($|[\s\t\]\):_\-])/.test(n) || n.includes("nap sim") || n.includes("goi nap") || n.includes("nap goi")) detectedType = "NẠP GÓI";
+      if (n.includes("nap esim")) detectedType = "NẠP ESIM";
+      else if (/(^|[\s\t\[\(])nap($|[\s\t\]\):_\-])/.test(n) || n.includes("nap sim") || n.includes("goi nap") || n.includes("nap goi")) detectedType = "NẠP GÓI";
       else if (n.includes("sim vat ly")) detectedType = "SIM VẬT LÝ";
       else if (n.includes("esim")) detectedType = "ESIM";
       const daysMatch = String(line).match(/(\d+)\s*(?:days?|ng[aà]y)/i);
@@ -4849,7 +4886,7 @@ const App = (() => {
       qty.placeholder = "1";
       qty.title = isMaintenance
         ? "Nhập số lượng Duy trì SIM (số nguyên từ 1)"
-        : "Cú pháp: 2 (SIM mới) | N3 (nạp gói 3 SIM, chỉ SIM VẬT LÝ, -20k/SIM) | 2+N3 (2 mới + 3 nạp) | N2+3";
+        : "Cú pháp: 2 (gói mới) | N3 (nạp 3 gói: ESIM giữ giá, SIM VẬT LÝ -20k/SIM) | 2+N3 | N2+3";
       const validateQty = () => {
         if (isMaintenance) {
           const parsed = ComboLogic.parseQtyExpression(qty.value);
@@ -4861,15 +4898,11 @@ const App = (() => {
           return;
         }
         const parsed = ComboLogic.parseQtyExpression(qty.value);
-        const typeNorm = (p.type || "").toLowerCase();
-        const isPhysical = typeNorm.includes("sim vat ly") || typeNorm.includes("sim vật lý");
-        const isEsim = typeNorm.includes("esim");
-        const hasRecharge = parsed.valid && parsed.recharge > 0;
-        const nOnEsim = hasRecharge && isEsim && !isPhysical;
-        const invalid = !parsed.valid || nOnEsim;
+        const invalid = !parsed.valid;
         qty.classList.toggle("invalid", invalid);
-        if (nOnEsim) qty.title = "❌ Nạp gói (N) chỉ áp dụng cho SIM VẬT LÝ.";
-        else qty.title = "Cú pháp: 2 | N3 | 2+N3 | N2+3 (max 6 ký tự)";
+        qty.title = invalid
+          ? "❌ Số lượng không hợp lệ."
+          : "Cú pháp: 2 | N3 | 2+N3 | N2+3; N trên ESIM = NẠP ESIM, trên SIM VẬT LÝ = NẠP GÓI.";
       };
       qty.oninput = () => {
         cart[idx].qty = qty.value;
@@ -12671,7 +12704,8 @@ const App = (() => {
         });
       }
       if (recharge > 0) {
-        const rechargeUnitK = unitK - 20;
+        const isEsimRecharge = ComboLogic.norm(parts.type).includes("esim");
+        const rechargeUnitK = isEsimRecharge ? unitK : Math.max(unitK - 20, 0);
         items.push({
           country,
           packageRaw: parts.name,
@@ -12679,6 +12713,7 @@ const App = (() => {
           days: parts.days,
           qty: recharge,
           isRecharge: true,
+          isEsimRecharge,
           unitPriceK: rechargeUnitK,
           amountK: rechargeUnitK * recharge,
           rowNote, productNote,
