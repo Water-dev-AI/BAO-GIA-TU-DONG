@@ -5,6 +5,12 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.118 · 25/09/2026 · (GMT+7)
+ - Fix cảnh báo tồn kho khi copy bill: đối chiếu bằng đúng tên/loại/ngày nguyên bản
+   trong giỏ thay vì tên đã rút gọn của calc nên không còn bỏ sót gói có kbps/mbps.
+ - Hướng dẫn riêng và tồn kho được nạp ngay khi app sẵn sàng; thao tác copy sẽ chờ
+   dữ liệu phụ trợ tải xong rồi mới kiểm tra cảnh báo, áp dụng cả bill từ đơn nháp.
+
  v10.9.117 · 24/09/2026 · (GMT+7)
  - Copy Bill khách/Bill gọn cảnh báo lớn màu tím nếu đơn có gói đang tồn kho,
    tự tắt sau 3 giây và có nút đóng riêng.
@@ -1884,7 +1890,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.117
+    Version 10.9.118
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5419,6 +5425,19 @@ const App = (() => {
     if (banner) banner.classList.remove("show");
   }
 
+  // Dùng cùng parser với phần render giỏ để giữ nguyên tên/loại/ngày khi đối chiếu.
+  // parsedItems của calc có cleanPackageName nên có thể đã bỏ kbps/mbps ở cuối tên.
+  function buildBillReminderItems(cartItems) {
+    return (Array.isArray(cartItems) ? cartItems : []).map(item => {
+      const parsed = parseLineForDisplay(item && item.line || "") || {};
+      return {
+        packageName: String(parsed.name || "").trim(),
+        productType: String(parsed.type || "").trim(),
+        days: String(parsed.days || "").trim(),
+      };
+    }).filter(item => item.packageName);
+  }
+
   function showGuideReminderForItems(parsedItems) {
     if (!Array.isArray(parsedItems) || typeof PackageGuides === "undefined") return false;
     const matchedPackages = new Set();
@@ -5474,11 +5493,16 @@ const App = (() => {
     return true;
   }
 
-  function showBillRemindersForItems(parsedItems) {
+  async function showBillRemindersForCart(cartItems) {
     closeGuideReminder();
     closeStockReminder();
-    const hasGuide = showGuideReminderForItems(parsedItems);
-    const hasStock = showStockReminderForItems(parsedItems);
+    await Promise.all([
+      PackageGuides.ensureReady(),
+      StockOverflow.ensureReady(),
+    ]);
+    const reminderItems = buildBillReminderItems(cartItems);
+    const hasGuide = showGuideReminderForItems(reminderItems);
+    const hasStock = showStockReminderForItems(reminderItems);
     return hasGuide || hasStock;
   }
 
@@ -5490,7 +5514,7 @@ const App = (() => {
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill khách.");
-      showBillRemindersForItems(result.parsedItems);
+      await showBillRemindersForCart(cart);
     } else {
       flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
       showStatus("⚠️ Copy thất bại.");
@@ -5505,7 +5529,7 @@ const App = (() => {
     if (ok) {
       flashToastNearBtn(btn, "✅ Đã copy");
       showStatus("✅ Đã copy Bill (gọn) — không kèm note sản phẩm.");
-      showBillRemindersForItems(result.parsedItems);
+      await showBillRemindersForCart(cart);
     } else {
       flashToastNearBtn(btn, "⚠️ Lỗi", "#fee2e2");
       showStatus("⚠️ Copy thất bại.");
@@ -9556,7 +9580,7 @@ const App = (() => {
       const ok = await copyText(text);
       if (ok) {
         _draftViewStatus(`✅ Đã copy Bill của "${d.name}" vào clipboard. Paste vào Zalo/FB.`, "success");
-        showBillRemindersForItems(r.parsedItems);
+        await showBillRemindersForCart(d.cart || []);
       }
       else _draftViewStatus("⚠️ Copy thất bại — browser có thể chặn clipboard.", "error");
     } catch (e) {
@@ -11979,6 +12003,7 @@ const App = (() => {
     // Map key normalize → object { name, type, days } (giữ data gốc để hover hiển thị)
     let stockSet = new Set();
     let lastFetchAt = 0;
+    let readyPromise = null;
 
     // Normalize: lowercase + bỏ dấu + collapse whitespace
     function norm(s) {
@@ -12058,6 +12083,14 @@ const App = (() => {
       }
     }
 
+    function ensureReady() {
+      if (stockSet.size) return Promise.resolve();
+      if (!readyPromise) {
+        readyPromise = Promise.resolve(init()).finally(() => { readyPromise = null; });
+      }
+      return readyPromise;
+    }
+
     async function refresh() {
       try {
         const csvUrl = gsBuildCsvUrl(SHEET_URL, "0");
@@ -12080,7 +12113,7 @@ const App = (() => {
     function getSheetUrl() { return SHEET_URL; }
     function getCount() { return stockSet.size; }
 
-    return { init, refresh, check, getSheetUrl, getCount };
+    return { init, ensureReady, refresh, check, getSheetUrl, getCount };
   })();
 
   // ─── v10.8.21: PackageGuides — hướng dẫn gói (modal ảnh) ─────────────
@@ -12100,6 +12133,7 @@ const App = (() => {
     // prefix + type đã norm. prefixLen dùng để pick match dài nhất.
     let entries = [];
     let lastFetchAt = 0;
+    let readyPromise = null;
 
     function norm(s) {
       return String(s || "")
@@ -12195,6 +12229,14 @@ const App = (() => {
       }
     }
 
+    function ensureReady() {
+      if (entries.length) return Promise.resolve();
+      if (!readyPromise) {
+        readyPromise = Promise.resolve(init()).finally(() => { readyPromise = null; });
+      }
+      return readyPromise;
+    }
+
     async function refresh() {
       if (!SHEET_URL) return { ok: false, count: entries.length, error: "Chưa cấu hình URL hướng dẫn" };
       try {
@@ -12224,7 +12266,7 @@ const App = (() => {
 
     function getCount() { return entries.length; }
 
-    return { init, refresh, lookup, setSheetUrl, getImageUrl, getCount };
+    return { init, ensureReady, refresh, lookup, setSheetUrl, getImageUrl, getCount };
   })();
 
   // ─── Modal Xem hướng dẫn ─────────────
@@ -14136,14 +14178,8 @@ const App = (() => {
   // v10.8.25: Init StockOverflow + PackageGuides — phải đặt TRƯỚC `return` của IIFE
   // (code sau return không bao giờ chạy → SimGlobePkgGuides undefined ở phiên bản trước).
   window.SimGlobePkgGuides = PackageGuides;
-  (async () => {
-    await new Promise(r => setTimeout(r, 800));
-    StockOverflow.init();
-  })();
-  (async () => {
-    await new Promise(r => setTimeout(r, 1000));
-    PackageGuides.init();
-  })();
+  StockOverflow.ensureReady();
+  PackageGuides.ensureReady();
 
   /* ===== HÓA ĐƠN BÁN LẺ (v10.9.0) ===== */
   // Tạo ảnh hóa đơn bán lẻ từ giỏ hàng. Đơn giá CHƯA VAT (×10/11), VAT 10% = 1/11 FullVAT.
