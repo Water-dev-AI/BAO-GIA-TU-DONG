@@ -5,6 +5,10 @@
  Time zone: GMT+7. Format version: vMAJOR.MINOR.PATCH · DD/MM/YYYY · HH:MM
 ═══════════════════════════════════════════════════════════════════════════════
 
+ v10.9.119 · 26/09/2026 · (GMT+7)
+ - Banner cảnh báo hướng dẫn riêng và tồn kho không còn tự tắt sau 3 giây;
+   bắt buộc bấm dấu X của từng banner để đóng.
+
  v10.9.118 · 25/09/2026 · (GMT+7)
  - Fix cảnh báo tồn kho khi copy bill: đối chiếu bằng đúng tên/loại/ngày nguyên bản
    trong giỏ thay vì tên đã rút gọn của calc nên không còn bỏ sót gói có kbps/mbps.
@@ -1890,7 +1894,7 @@
     <button class="web-import-launch" onclick="App.webImportOpen()">🌐 Import WEB</button>
   </div>
   <div style="text-align:center;font-size:11px;color:var(--muted);margin:-8px 0 14px;letter-spacing:0.3px;">
-    Version 10.9.118
+    Version 10.9.119
   </div>
   <div class="sub">
     Copy từng dòng gói từ bảng giá → dán/thêm vào giỏ → nhập số lượng → chốt bill → tự tính giảm giá, ship/free ship và phân bố giảm giá ở dưới.<br>
@@ -5409,18 +5413,12 @@ const App = (() => {
     setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, 1800);
   }
 
-  let guideReminderTimer = null;
-  let stockReminderTimer = null;
   function closeGuideReminder() {
-    if (guideReminderTimer) clearTimeout(guideReminderTimer);
-    guideReminderTimer = null;
     const banner = document.getElementById("guideReminderBanner");
     if (banner) banner.classList.remove("show");
   }
 
   function closeStockReminder() {
-    if (stockReminderTimer) clearTimeout(stockReminderTimer);
-    stockReminderTimer = null;
     const banner = document.getElementById("stockReminderBanner");
     if (banner) banner.classList.remove("show");
   }
@@ -5457,11 +5455,9 @@ const App = (() => {
         ? `Đơn này có ${matchedPackages.size} gói cần hướng dẫn riêng`
         : "Đơn này có hướng dẫn riêng";
     }
-    if (guideReminderTimer) clearTimeout(guideReminderTimer);
     banner.classList.remove("show");
     void banner.offsetWidth;
     banner.classList.add("show");
-    guideReminderTimer = setTimeout(closeGuideReminder, 3000);
     return true;
   }
 
@@ -5485,11 +5481,9 @@ const App = (() => {
         ? `Đơn này có ${matchedPackages.size} gói đang có tồn kho`
         : "Đơn này có gói đang có tồn kho";
     }
-    if (stockReminderTimer) clearTimeout(stockReminderTimer);
     banner.classList.remove("show");
     void banner.offsetWidth;
     banner.classList.add("show");
-    stockReminderTimer = setTimeout(closeStockReminder, 3000);
     return true;
   }
 
