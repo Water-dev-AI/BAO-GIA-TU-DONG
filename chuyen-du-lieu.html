@@ -1,0 +1,284 @@
+<!doctype html>
+<!--
+ Chuyển dữ liệu Combo Bill giữa hai địa chỉ web (GMT+7).
+ Version 1.0.0 · 20/10/2026 — Bản đầu: xuất/nhập localStorage của Combo Bill
+ (đơn nháp local, giỏ, cài đặt, cache tùy chọn) ra file JSON.
+
+ Vì sao cần: trình duyệt lưu dữ liệu theo từng tên miền. Combo Bill chạy ở
+ github.io và ở muaesim.com là hai kho riêng, không tự thấy nhau. File này đặt ở cả
+ hai nơi: mở ở bản cũ để TẢI FILE, mở ở bản mới để NHẬP FILE.
+ Không gửi dữ liệu đi đâu; mọi thao tác chỉ trong trình duyệt.
+-->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Chuyển dữ liệu Combo Bill</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --card: #fff; --text: #101828; --muted: #475467; --line: #e4e7ec;
+    --brand: #7f56d9; --brand-dark: #6941c6; --ok: #027a48; --ok-bg: #ecfdf3;
+    --warn: #b54708; --warn-bg: #fffaeb; --err: #b42318; --err-bg: #fef3f2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  p { margin: 0 0 10px; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .origin { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: #f2f4f7; padding: 2px 6px; border-radius: 6px; }
+  button, .file { appearance: none; border: 0; border-radius: 99px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  .primary { background: var(--brand); color: #fff; }
+  .primary:hover { background: var(--brand-dark); }
+  .secondary { background: #fff; color: var(--brand-dark); border: 1px solid #d6bbfb; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  label.check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.key { font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .tag.data { background: #f4ebff; color: var(--brand-dark); }
+  .tag.cache { background: #f2f4f7; color: var(--muted); }
+  .tag.same { background: var(--ok-bg); color: var(--ok); }
+  .tag.diff { background: var(--warn-bg); color: var(--warn); }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-top: 12px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .msg.warn { background: var(--warn-bg); color: var(--warn); }
+  .msg.err { background: var(--err-bg); color: var(--err); }
+  ol { padding-left: 20px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chuyển dữ liệu Combo Bill</h1>
+  <p class="sub">Đang mở tại <span class="origin" id="origin"></span>. Dữ liệu chỉ nằm trong trình duyệt này, không gửi đi đâu.</p>
+
+  <section class="card">
+    <h2>Cách dùng</h2>
+    <ol>
+      <li>Mở trang này ở <b>bản cũ</b> (github.io) → bấm <b>Tải file dữ liệu</b>.</li>
+      <li>Mở trang này ở <b>bản mới</b> (muaesim.com, cùng trình duyệt hoặc máy khác) → chọn file vừa tải → <b>Nhập vào trình duyệt này</b>.</li>
+      <li>Mở lại Combo Bill ở bản mới, kiểm tra đơn nháp và danh sách bảng giá.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>1. Tải dữ liệu đang có ở địa chỉ này</h2>
+    <p id="exportSummary">Đang đọc…</p>
+    <label class="check"><input type="checkbox" id="exportCache">
+      <span>Kèm dữ liệu cache (bảng giá đã tải, tồn kho, hướng dẫn, VAT tạm). Không bắt buộc — Combo Bill tự tải lại.</span></label>
+    <div class="row">
+      <button class="primary" id="btnExport">Tải file dữ liệu</button>
+    </div>
+    <div class="msg" id="exportMsg"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Nhập file dữ liệu vào địa chỉ này</h2>
+    <div class="row">
+      <input type="file" id="importFile" accept="application/json,.json">
+    </div>
+    <div id="importPreview"></div>
+    <label class="check"><input type="checkbox" id="importCache">
+      <span>Nhập cả dữ liệu cache có trong file.</span></label>
+    <label class="check"><input type="checkbox" id="importOverwrite">
+      <span>Ghi đè mục đang có ở đây. Nếu bỏ chọn, chỉ thêm mục còn thiếu. Trước khi ghi, trang tự tải một file sao lưu dữ liệu hiện tại.</span></label>
+    <div class="row">
+      <button class="primary" id="btnImport" disabled>Nhập vào trình duyệt này</button>
+    </div>
+    <div class="msg" id="importMsg"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var FORMAT = "muaesim-combo-bill-localstorage";
+  var PREFIXES = ["combo_bill_", "simglobe_", "vat_cache_", "__combo_bill_"];
+  // Khóa cache: Combo Bill tự dựng lại được nên mặc định không chuyển.
+  var CACHE_KEYS = [
+    "combo_bill_country_index_v4", "combo_bill_country_index_v4_meta",
+    "combo_bill_quick_sheets_shared_v1", "simglobe_stock_overflow_cache",
+    "simglobe_pkg_guides_cache", "simglobe_aux_update_meta_v1",
+    "simglobe_aux_asset_state_v1", "vat_cache_v1"
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var pendingImport = null;
+
+  $("origin").textContent = location.origin + location.pathname.replace(/[^/]*$/, "");
+
+  function isComboKey(key) {
+    for (var i = 0; i < PREFIXES.length; i++) {
+      if (key.indexOf(PREFIXES[i]) === 0) { return true; }
+    }
+    return false;
+  }
+
+  function isCacheKey(key) {
+    return CACHE_KEYS.indexOf(key) !== -1 || /cache|_index_|_meta$/.test(key);
+  }
+
+  function readLocal(includeCache) {
+    var items = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!isComboKey(key)) { continue; }
+      if (!includeCache && isCacheKey(key)) { continue; }
+      items[key] = localStorage.getItem(key);
+    }
+    return items;
+  }
+
+  function size(text) {
+    var bytes = new Blob([text || ""]).size;
+    return bytes > 1024 ? (bytes / 1024).toFixed(1) + " KB" : bytes + " B";
+  }
+
+  function draftCount(items) {
+    try {
+      var drafts = JSON.parse(items.combo_bill_drafts_v3 || "null");
+      if (Array.isArray(drafts)) { return drafts.length; }
+      if (drafts && typeof drafts === "object") { return Object.keys(drafts).length; }
+    } catch (e) {}
+    return 0;
+  }
+
+  function stamp() {
+    var d = new Date();
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
+  }
+
+  function download(items, label) {
+    var payload = {
+      format: FORMAT,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      source: location.origin + location.pathname,
+      items: items
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "combo-bill-" + label + "-" + stamp() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function show(id, kind, text) {
+    var el = $(id);
+    el.className = "msg show " + kind;
+    el.textContent = text;
+  }
+
+  function refreshSummary() {
+    var all = readLocal(true);
+    var data = readLocal(false);
+    var keys = Object.keys(all);
+    if (!keys.length) {
+      $("exportSummary").textContent = "Không thấy dữ liệu Combo Bill nào ở địa chỉ này.";
+      $("btnExport").disabled = true;
+      return;
+    }
+    $("btnExport").disabled = false;
+    $("exportSummary").textContent = Object.keys(data).length + " mục dữ liệu chính (" +
+      draftCount(all) + " đơn nháp local) và " + (keys.length - Object.keys(data).length) + " mục cache.";
+  }
+
+  $("btnExport").addEventListener("click", function () {
+    var items = readLocal($("exportCache").checked);
+    download(items, "du-lieu");
+    show("exportMsg", "ok", "Đã tạo file với " + Object.keys(items).length + " mục. Kiểm tra thư mục Tải về (Downloads).");
+  });
+
+  $("importFile").addEventListener("change", function (event) {
+    var file = event.target.files && event.target.files[0];
+    pendingImport = null;
+    $("btnImport").disabled = true;
+    $("importPreview").innerHTML = "";
+    $("importMsg").className = "msg";
+    if (!file) { return; }
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      var payload;
+      try { payload = JSON.parse(reader.result); } catch (e) {
+        show("importMsg", "err", "File không phải JSON hợp lệ.");
+        return;
+      }
+      if (!payload || payload.format !== FORMAT || typeof payload.items !== "object") {
+        show("importMsg", "err", "File không phải file dữ liệu Combo Bill do trang này tạo.");
+        return;
+      }
+      pendingImport = payload;
+      renderPreview(payload);
+      $("btnImport").disabled = false;
+    };
+    reader.readAsText(file);
+  });
+
+  function renderPreview(payload) {
+    var keys = Object.keys(payload.items).filter(isComboKey).sort();
+    var rows = keys.map(function (key) {
+      var current = localStorage.getItem(key);
+      var state = current === null ? "" : (current === payload.items[key]
+        ? '<span class="tag same">giống</span>' : '<span class="tag diff">đang có, khác</span>');
+      var kind = isCacheKey(key) ? '<span class="tag cache">cache</span>' : '<span class="tag data">dữ liệu</span>';
+      var safeKey = key.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]; });
+      return "<tr><td class=\"key\">" + safeKey + "</td><td>" + kind + "</td><td>" + size(payload.items[key]) +
+        "</td><td>" + state + "</td></tr>";
+    }).join("");
+    $("importPreview").innerHTML =
+      "<p style=\"margin-top:12px\">File từ <span class=\"origin\"></span> lúc " +
+      new Date(payload.exportedAt).toLocaleString("vi-VN") + ": " + keys.length + " mục, " +
+      draftCount(payload.items) + " đơn nháp local.</p>" +
+      "<table><thead><tr><th>Khóa</th><th>Loại</th><th>Dung lượng</th><th>Ở đây</th></tr></thead><tbody>" +
+      rows + "</tbody></table>";
+    $("importPreview").querySelector(".origin").textContent = payload.source || "?";
+  }
+
+  $("btnImport").addEventListener("click", function () {
+    if (!pendingImport) { return; }
+    var includeCache = $("importCache").checked;
+    var overwrite = $("importOverwrite").checked;
+
+    // Sao lưu toàn bộ dữ liệu Combo Bill hiện có trước khi ghi.
+    var before = readLocal(true);
+    if (Object.keys(before).length) { download(before, "sao-luu-truoc-khi-nhap"); }
+
+    var written = 0, skipped = 0, failed = [];
+    Object.keys(pendingImport.items).filter(isComboKey).forEach(function (key) {
+      if (!includeCache && isCacheKey(key)) { skipped++; return; }
+      if (!overwrite && localStorage.getItem(key) !== null) { skipped++; return; }
+      try {
+        localStorage.setItem(key, pendingImport.items[key]);
+        written++;
+      } catch (e) {
+        failed.push(key);
+      }
+    });
+
+    refreshSummary();
+    renderPreview(pendingImport);
+    if (failed.length) {
+      show("importMsg", "err", "Đã ghi " + written + " mục, lỗi " + failed.length + " mục (bộ nhớ đầy?): " + failed.join(", "));
+    } else {
+      show("importMsg", "ok", "Đã ghi " + written + " mục, bỏ qua " + skipped + " mục. Mở lại Combo Bill để kiểm tra.");
+    }
+  });
+
+  refreshSummary();
+})();
+</script>
+</body>
+</html>
